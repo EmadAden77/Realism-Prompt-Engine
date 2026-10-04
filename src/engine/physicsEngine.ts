@@ -6,6 +6,7 @@
 
 import { MICRO_LOCATIONS, getMicroLocation, MicroLocation, SceneFamilyId } from '../data/microLocations';
 import { OUTFITS, OutfitItem } from '../data/clothingOutfits';
+import { deriveBackgroundRealism, BackgroundRealismState } from './backgroundRealism';
 
 // --- TYPES ---
 export type CaptureType = 'front-selfie' | 'mirror-selfie' | 'third-person-candid';
@@ -85,6 +86,7 @@ export interface DerivedPhysicalState {
   exposureBehavior: string;
   motionBehavior: string;
   disorderBehavior: string;
+  backgroundRealism: BackgroundRealismState;
 }
 
 // Backward-compatible interface for existing App.tsx consumers
@@ -721,88 +723,42 @@ function calculateDetailedPhysicalState(
     backgroundDepth = 'deep street perspective (> 25m vanishing point)';
   }
 
-  // Scene-aware Saudi Daily Life Background Elements (Section 8, 9)
-  // MANDATORY RESTRAINT RULE (Section 19): Visibility determines inclusion!
-  const baseBg = microLoc ? [...microLoc.backgroundElements] : [];
-  let visibleEnvironment = '';
-
-  if (framingClass === 'tight') {
-    // TIGHT: Face/head dominate. Only immediate near-field surface behind head!
-    if (familyId === 'car' && !isOutdoor) {
-      visibleEnvironment = 'vehicle headrest and patterned fabric backrest immediately behind head';
-    } else if (familyId === 'military-base') {
-      visibleEnvironment = 'plain beige interior wall with acoustic suspended ceiling border immediately behind subject';
-    } else if (familyId === 'saudi-outdoor') {
-      visibleEnvironment = 'textured cream-finish villa boundary wall immediately behind subject';
-    } else {
-      visibleEnvironment = baseBg[0] || 'neutral wall surface immediately behind head';
-    }
-  } else if (framingClass === 'medium') {
-    // MEDIUM: Head and upper chest. 1-2 relevant background surfaces.
-    if (familyId === 'car' && !isOutdoor) {
-      visibleEnvironment = 'car interior bucket seat, side window showing faint outdoor daylight, and portion of passenger headrest';
-    } else if (familyId === 'military-base') {
-      visibleEnvironment = 'office wall with mounted split AC indoor unit, corner of laminate bookcase, and acoustic ceiling tiles';
-    } else if (familyId === 'saudi-outdoor') {
-      visibleEnvironment = 'cream-painted villa boundary wall, residential metal gate section, and edge of asphalt roadway';
-    } else {
-      visibleEnvironment = baseBg.slice(0, 2).join(', ');
-    }
-  } else {
-    // WIDE: Expansive depth.
-    if (familyId === 'car' && !isOutdoor) {
-      visibleEnvironment = 'interior cabin with bucket seat, steering wheel rim, instrument console, and side window showing realistic parking lot';
-    } else if (familyId === 'military-base') {
-      visibleEnvironment = 'functional administrative office with wooden laminate desk, desktop PC monitor edge, wire conduits, and official correspondence folder';
-    } else if (familyId === 'saudi-outdoor') {
-      visibleEnvironment = 'ordinary Saudi residential street with asphalt roadway, concrete curbs, textured villa boundary walls, metal vehicle gate, and wall-mounted electrical utility box';
-    } else {
-      visibleEnvironment = baseBg.slice(0, 3).join(', ');
-    }
-  }
-
-  // --- 6. Activity Density & Contextual Secondary People & Vehicles (Section 10, 11) ---
+  // --- 5. Scene-aware Background Realism ---
+  // Visibility is derived from the actual micro-location and selfie geometry.
   const activityDensity = deriveActivityDensity(familyId, state.subScene, state.timeOfDay, framingClass);
-  const visiblePeople: string[] = [];
-  const visibleVehicles: string[] = [];
-  let motionBehavior = 'static resting scene, zero abrupt motion blur';
+  const backgroundRealism = deriveBackgroundRealism({
+    familyId,
+    subScene: state.subScene,
+    timeOfDay: state.timeOfDay,
+    framingClass,
+    activityDensity,
+    isOutdoor,
+    lightingMode: state.lightingMode,
+    microLoc
+  });
 
-  if (framingClass !== 'tight') {
-    // Vehicles in outdoor/parking scenes
-    if (isOutdoor || (familyId === 'car' && state.subScene.includes('خارج'))) {
-      if (activityDensity === 'minimal' || activityDensity === 'light' || activityDensity === 'moderate') {
-        visibleVehicles.push('an ordinary modern family SUV parked along the curb in the midground');
-      }
-      if (activityDensity === 'moderate') {
-        visibleVehicles.push('a common white sedan slowly moving in the far traffic lane');
-        motionBehavior = 'subtle vehicular motion in distant background lane';
-      }
-    }
-
-    // Secondary background humans (subtle, secondary to subject)
-    if (activityDensity === 'light' || activityDensity === 'moderate') {
-      if (familyId === 'saudi-outdoor') {
-        visiblePeople.push('one distant pedestrian in ordinary casual attire walking along the sidewalk in far background');
-        motionBehavior = 'subtle distant pedestrian walking pace in background';
-      } else if (familyId === 'military-base' && state.subScene.includes('ممر')) {
-        visiblePeople.push('an administrative colleague walking past the corridor intersection in the far background');
-      } else if (familyId === 'gym') {
-        visiblePeople.push('one other gym member resting on a bench press in the secondary midground');
-      }
-    }
+  let visibleEnvironment = backgroundRealism.environmentalSurfaces.join(', ');
+  if (!visibleEnvironment) {
+    visibleEnvironment = microLoc?.environmentPrompt
+      || (isOutdoor
+        ? 'ordinary Saudi exterior surface physically visible within the selfie field of view'
+        : 'ordinary interior surface physically visible immediately behind the subject');
   }
 
-  // --- 7. Mild Everyday Disorder (Section 12: Lived-in, NOT messy) ---
-  let disorderBehavior = '';
-  if (familyId === 'military-base') {
-    disorderBehavior = 'subtle administrative daily-use markers: neatly arranged stack of papers, desktop PC mouse and USB cable, subtle wall scuff near door jamb';
-  } else if (familyId === 'car') {
-    disorderBehavior = 'subtle daily vehicle markers: phone charging cable plugged into console port, faint speck of road dust on dashboard texture, slight hand reflection on steering wheel leather';
-  } else if (familyId === 'saudi-outdoor') {
-    disorderBehavior = 'ordinary street reality: faint dusty tire marks on asphalt, small hairline expansion seam on concrete curb, minor sun fading on gate latch';
-  } else {
-    disorderBehavior = 'natural human lived-in markers: authentic garment wear creases at elbow folds, resting fabric drape without artificial digital perfection';
-  }
+  const visiblePeople = backgroundRealism.allowsHumans
+    ? [...backgroundRealism.humanBehavior]
+    : [];
+
+  const visibleVehicles = backgroundRealism.allowsVehicles
+    ? [...backgroundRealism.vehicleBehavior]
+    : [];
+
+  const motionBehavior = backgroundRealism.motionRules.join('; ')
+    || 'static resting scene, zero abrupt motion blur';
+
+  const disorderBehavior = backgroundRealism.allowsMildDisorder
+    ? backgroundRealism.mildDisorderElements.join('; ')
+    : 'restrained ordinary wear only; no decorative clutter';
 
   // --- 8. Physical Lighting Causality (Section 16) ---
   const lightSources: string[] = [];
@@ -848,6 +804,14 @@ function calculateDetailedPhysicalState(
     exposureBehavior = XIAOMI_15_ULTRA_FRONT_CAMERA_PROFILE.getExposureBehavior(false, isMidday, isHighContrast);
   }
 
+  // Merge only scene-appropriate background practicals. The main subject lighting
+  // remains authoritative, so background sources cannot invent a conflicting exposure.
+  for (const backgroundLight of backgroundRealism.lightSources) {
+    if (!lightSources.includes(backgroundLight)) {
+      lightSources.push(backgroundLight);
+    }
+  }
+
   // --- 9. Physical Reflections (Section 17) ---
   const reflectionState: string[] = [];
   if (state.glassesMode === 'wear_glasses') {
@@ -884,7 +848,8 @@ function calculateDetailedPhysicalState(
     reflectionState,
     exposureBehavior,
     motionBehavior,
-    disorderBehavior
+    disorderBehavior,
+    backgroundRealism
   };
 }
 
@@ -941,6 +906,12 @@ function calculateDerivedState(
 
   if (microLoc?.spatialBehavior) derived.contactPhysics.push(microLoc.spatialBehavior);
   if (microLoc?.lightingHints) derived.environmentalLightBehavior += `; location-specific light cues: ${microLoc.lightingHints}`;
+
+  derived.realismConstraints.push(
+    `Background visibility: ${physics.backgroundRealism.visibilityClass}; ${physics.backgroundRealism.depthLayers.join('; ')}`,
+    `Background occlusion: ${physics.backgroundRealism.occlusionRules.join('; ')}`,
+    `Background population: humans=${physics.backgroundRealism.humanDensity}, vehicles=${physics.backgroundRealism.vehicleDensity}. ${physics.backgroundRealism.realismGuards.join('; ')}`
+  );
 
   if (state.lensCondition === 'smudged-lens') {
     derived.lensEffects += '; slight localized fingerprint haze causing restrained flare/bloom near strong practical lights and a small local loss of micro-contrast';
