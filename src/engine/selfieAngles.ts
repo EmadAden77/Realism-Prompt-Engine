@@ -1,4 +1,13 @@
 import { SceneFamilyId } from '../data/microLocations';
+import {
+  BackgroundMode,
+  BackgroundControlDensity,
+  BackgroundDisorderControl,
+  BackgroundActivityControl,
+  BackgroundPresenceControl,
+  BackgroundCompositionGoal,
+  deriveAngleIntentFromBackground
+} from './backgroundRealism';
 
 export type SelfieAngleMode = 'manual' | 'gemini-smart';
 export type SelfieAngleRisk = 'low' | 'medium' | 'high';
@@ -58,6 +67,14 @@ export interface SelfieAngleContext {
   manualAngle: SelfieLegacyAngle;
   timeOfDay?: 'morning' | 'midday' | 'afternoon' | 'sunset' | 'night';
   lightingMode?: string;
+  backgroundAutoAngle?: boolean;
+  backgroundMode?: BackgroundMode;
+  backgroundHumans?: BackgroundControlDensity;
+  backgroundVehicles?: BackgroundControlDensity;
+  backgroundDisorder?: BackgroundDisorderControl;
+  backgroundActivity?: BackgroundActivityControl;
+  backgroundPresence?: BackgroundPresenceControl;
+  backgroundCompositionGoal?: BackgroundCompositionGoal;
   mode?: SelfieAngleMode;
   advice?: SelfieAngleAdvice;
 }
@@ -349,6 +366,46 @@ function compatibilityScore(preset: SelfieAnglePreset, context: SelfieAngleConte
   if (context.framing === 'half-body' && preset.family === 'environmental') score += 25;
   if (context.framing === 'head-shoulders' && preset.id.includes('close')) score += 20;
 
+  if (context.backgroundAutoAngle !== false) {
+    const backgroundIntent = deriveAngleIntentFromBackground({
+      backgroundMode: context.backgroundMode,
+      backgroundHumans: context.backgroundHumans,
+      backgroundVehicles: context.backgroundVehicles,
+      backgroundDisorder: context.backgroundDisorder,
+      backgroundActivity: context.backgroundActivity,
+      backgroundPresence: context.backgroundPresence,
+      backgroundCompositionGoal: context.backgroundCompositionGoal
+    });
+
+    if (backgroundIntent.preferredAngleBias === 'off-axis') {
+      if (preset.family === 'off-axis' || preset.family === 'environmental') score += 35;
+      if (preset.legacyAngle === 'slightly-off-center') score += 20;
+    } else if (backgroundIntent.preferredAngleBias === 'centered') {
+      if (preset.family === 'natural' || preset.legacyAngle === 'eye-level') score += 30;
+      if (preset.family === 'environmental') score -= 20;
+    } else if (backgroundIntent.preferredAngleBias === 'slightly-high') {
+      if (preset.legacyAngle === 'slightly-high') score += 25;
+    }
+
+    if (backgroundIntent.backgroundPriority === 'high') {
+      if (preset.family === 'environmental' || preset.family === 'off-axis') score += 25;
+      if (preset.distanceCm >= 53) score += 15;
+      if (preset.id.includes('close')) score -= 30;
+    } else if (backgroundIntent.backgroundPriority === 'low') {
+      if (preset.id.includes('close') || preset.family === 'natural') score += 25;
+      if (preset.distanceCm <= 50) score += 10;
+    }
+
+    if (backgroundIntent.preferredDistanceBias === 'far' && preset.distanceCm >= 53) score += 18;
+    if (backgroundIntent.preferredDistanceBias === 'near' && preset.distanceCm <= 50) score += 18;
+
+    if (isCarInteriorSelfieContext(context) && preset.family === 'vehicle') {
+      if (backgroundIntent.backgroundPriority === 'high' && preset.carFocus === 'cabin-context') score += 45;
+      if (backgroundIntent.facePriority === 'high' && preset.carFocus === 'face-priority') score += 45;
+      if (backgroundIntent.backgroundPriority === 'low' && preset.carFocus === 'cabin-context') score -= 25;
+    }
+  }
+
   return score;
 }
 
@@ -412,9 +469,24 @@ export function resolveSelfieAngleGeometry(context: SelfieAngleContext): Resolve
       original.heightOffsetCm !== heightOffsetCm;
   }
 
+  const backgroundIntent = context.backgroundAutoAngle !== false
+    ? deriveAngleIntentFromBackground({
+        backgroundMode: context.backgroundMode,
+        backgroundHumans: context.backgroundHumans,
+        backgroundVehicles: context.backgroundVehicles,
+        backgroundDisorder: context.backgroundDisorder,
+        backgroundActivity: context.backgroundActivity,
+        backgroundPresence: context.backgroundPresence,
+        backgroundCompositionGoal: context.backgroundCompositionGoal
+      })
+    : null;
+
   const reasonAR = adviceAccepted
     ? (context.advice?.reasonAR?.slice(0, 2) ?? ['اختار Gemini زاوية متوافقة مع المشهد.'])
-    : ['تم اختيار أفضل زاوية محليًا لأن اقتراح Gemini غير متوفر أو غير متوافق مع الفيزياء.'];
+    : [
+        'تم اختيار أفضل زاوية محليًا لأن اقتراح Gemini غير متوفر أو غير متوافق مع الفيزياء.',
+        ...(backgroundIntent?.reasonAR.slice(0, 1) ?? [])
+      ].slice(0, 2);
 
   return {
     mode: 'gemini-smart',
