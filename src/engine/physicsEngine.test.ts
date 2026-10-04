@@ -530,16 +530,22 @@ assert(
 );
 
 console.log('▶ Test 22: Midday Saudi outdoor lighting has directional sun plus real bounce');
+const streetMiddayState: SceneState = {
+  ...streetWideState,
+  timeOfDay: 'midday',
+  lightingMode: 'ضوء نهاري طبيعي'
+};
+const resolvedStreetMidday = resolveScene(streetMiddayState);
 assert(
-  resolvedStreetWide.physicalState.lightingCausality.primarySource.name.includes('midday sun'),
+  resolvedStreetMidday.physicalState.lightingCausality.primarySource.name.includes('midday sun'),
   'Midday Saudi outdoor scene must use high-angle sun as primary source'
 );
 assert(
-  resolvedStreetWide.physicalState.lightingCausality.bounceSurfaces.some(s => /asphalt|wall/i.test(s)),
+  resolvedStreetMidday.physicalState.lightingCausality.bounceSurfaces.some(s => /asphalt|wall/i.test(s)),
   'Midday outdoor scene must include real wall/asphalt bounce surfaces'
 );
 assert(
-  resolvedStreetWide.physicalState.lightingCausality.inverseSquareBehavior.includes('do not misuse inverse-square'),
+  resolvedStreetMidday.physicalState.lightingCausality.inverseSquareBehavior.includes('do not misuse inverse-square'),
   'Sunlight must not be modeled as a near-field inverse-square source'
 );
 
