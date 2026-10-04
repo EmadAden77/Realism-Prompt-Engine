@@ -1148,6 +1148,9 @@ export default function PhysFrameApp() {
           yawOffsetDeg: Number(data.yawOffsetDeg) || 0,
           rollOffsetDeg: Number(data.rollOffsetDeg) || 0,
           distanceOffsetCm: Number(data.distanceOffsetCm) || 0,
+          carFocus: ['face-priority', 'cabin-context', 'balanced'].includes(data.carFocus)
+            ? data.carFocus
+            : undefined,
           reasonAR: Array.isArray(data.reasonAR) ? data.reasonAR.slice(0, 2) : [],
           confidence: Number(data.confidence) || 0,
           cacheKey: key
@@ -2609,9 +2612,37 @@ export default function PhysFrameApp() {
                         </div>
                       </div>
 
+                      {state.sceneFamily === 'car' && selfieAngleDecision.carFocus && (
+                        <div className="mt-2 grid grid-cols-2 gap-1.5 text-[9px]">
+                          <div className="bg-white/5 rounded-lg p-2">
+                            <div className="text-[var(--text-muted)] mb-0.5">هدف الزاوية</div>
+                            <div className="font-bold text-white">
+                              {selfieAngleDecision.carFocus === 'face-priority'
+                                ? 'أولوية الوجه'
+                                : selfieAngleDecision.carFocus === 'cabin-context'
+                                  ? 'إظهار المقصورة'
+                                  : 'متوازن'}
+                            </div>
+                          </div>
+                          <div className="bg-white/5 rounded-lg p-2">
+                            <div className="text-[var(--text-muted)] mb-0.5">موضع الهاتف</div>
+                            <div className="font-bold text-white leading-relaxed">
+                              {selfieAngleDecision.phonePlacement || 'داخل المقصورة ضمن مجال الذراع'}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="text-[9px] leading-relaxed text-[var(--text-muted)] mt-2">
                         {selfieAngleDecision.reasonAR.slice(0, 2).join(' ')}
                       </div>
+
+                      {state.sceneFamily === 'car' && selfieAngleDecision.carClearanceAdjusted && (
+                        <div className="text-[9px] text-[#F0C77E] mt-2 flex items-start gap-1.5">
+                          <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
+                          <span>تم تقييد الزاوية تلقائيًا لتجنب المقود أو الزجاج أو السقف أو أجزاء المقصورة.</span>
+                        </div>
+                      )}
 
                       {selfieAngleReasoningError && (
                         <div className="text-[9px] text-[#E9A6A0] mt-2">
