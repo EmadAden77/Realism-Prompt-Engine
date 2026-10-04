@@ -42,13 +42,13 @@ function createGeminiClient() {
   });
 }
 
-// Resilient helper to call Gemini with multi-model fallback (gemini-3.5-flash -> gemini-3.1-flash-lite -> gemini-3.8-flash)
+// Resilient helper to call Gemini with multi-model fallback (gemini-3.8-flash -> gemini-3.5-flash -> gemini-3.1-flash-lite)
 async function callGeminiWithFallback(params: {
   contents: any;
   config?: any;
   preferredModels?: string[];
 }) {
-  const models = params.preferredModels || ['gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-3.8-flash'];
+  const models = params.preferredModels || ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'];
   const ai = createGeminiClient();
   let lastError: any = null;
 
@@ -60,6 +60,7 @@ async function callGeminiWithFallback(params: {
         config: params.config,
       });
       if (response && response.text) {
+        console.info("[PhysFrame] Gemini model " + model + " succeeded.");
         return response;
       }
     } catch (err: any) {
@@ -145,7 +146,7 @@ app.post('/api/ai/analyze-face', async (req, res) => {
     const cleanBase64 = imageBase64.replace(/^data:image\/[a-zA-Z+]+;base64,/, '');
 
     const response = await callGeminiWithFallback({
-      preferredModels: ['gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-3.8-flash'],
+      preferredModels: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
       contents: {
         parts: [
           {
@@ -251,7 +252,7 @@ app.post('/api/ai/direct-scene', async (req, res) => {
     const { userVibe, currentFamily, referenceDescription } = req.body;
 
     const response = await callGeminiWithFallback({
-      preferredModels: ['gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-3.8-flash'],
+      preferredModels: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
       contents: `You are a Saudi cinematic director and physical photography realism expert.
 Your mission is to invent a hyper-authentic, believable Saudi lifestyle/work scenario that looks 100% like an unedited raw photo taken spontaneously on an iPhone or Android phone by an ordinary person in Saudi Arabia.
 No tourist cliches, no floating studio lighting, no AI-slop perfection.
@@ -486,7 +487,7 @@ app.post('/api/ai/audit-realism', async (req, res) => {
     const { sceneState, promptText } = req.body;
 
     const response = await callGeminiWithFallback({
-      preferredModels: ['gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-3.8-flash'],
+      preferredModels: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
       contents: `You are an elite AI Image Realism Auditor and anti-slop evaluator.
 Examine this generation configuration and prompt:
 Configuration: ${JSON.stringify(sceneState, null, 2)}
@@ -573,7 +574,7 @@ app.post('/api/ai/enhance-prompt', async (req, res) => {
 
   try {
     const response = await callGeminiWithFallback({
-      preferredModels: ['gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-3.8-flash'],
+      preferredModels: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
       contents: `You are a master prompt engineering specialist for photorealistic AI imagery.
 Refine this prompt for ${targetEngine} to improve natural photographic realism without changing any physical facts already resolved by the local engine.
 Preserve all core identity restrictions, eyeglasses rules, outfit, location, camera geometry, lighting causality, and focal-length constraints exactly.
