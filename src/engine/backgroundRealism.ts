@@ -601,6 +601,8 @@ export function deriveBackgroundRealism(
     backgroundPresence === 'auto' ? autoPresence : backgroundPresence;
 
   const cappedByFraming =
+    backgroundHumans === 'high' ||
+    backgroundVehicles === 'high' ||
     densityRank[densityFromControl(backgroundHumans, autoHumanDensity)] > densityRank[physicalHumanMax] ||
     densityRank[densityFromControl(backgroundVehicles, autoVehicleDensity)] > densityRank[physicalVehicleMax] ||
     (backgroundDisorder !== 'auto' && disorderRank[disorderFromControl(backgroundDisorder, defaultDisorder)] > disorderRank[physicalDisorderMax]) ||
