@@ -26,15 +26,22 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-// Shared Gemini client initialized server-side with telemetry header
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
+// Gemini is initialized lazily inside requests so a missing key never crashes
+// the whole Vercel function before health checks or static routes can respond.
+function createGeminiClient() {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY is not configured');
+  }
+  return new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      },
     },
-  },
-});
+  });
+}
 
 // Resilient helper to call Gemini with multi-model fallback (gemini-3.5-flash -> gemini-3.1-flash-lite -> gemini-3.8-flash)
 async function callGeminiWithFallback(params: {
@@ -43,6 +50,7 @@ async function callGeminiWithFallback(params: {
   preferredModels?: string[];
 }) {
   const models = params.preferredModels || ['gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-3.8-flash'];
+  const ai = createGeminiClient();
   let lastError: any = null;
 
   for (const model of models) {
