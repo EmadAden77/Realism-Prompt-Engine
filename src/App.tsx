@@ -36,6 +36,12 @@ import {
 import { MICRO_LOCATIONS, getMicroLocation, MicroLocation } from './data/microLocations';
 import { OUTFITS, OutfitItem } from './data/clothingOutfits';
 import { resolveScene, validateScene, validatePrompt, ResolvedScene, ValidationResult, DerivedPhysicalState } from './engine/physicsEngine';
+import {
+  BackgroundMode,
+  BackgroundControlDensity,
+  BackgroundDisorderControl,
+  BackgroundGeminiAdvice
+} from './engine/backgroundRealism';
 
 // --- TYPES ---
 type CaptureType = 'front-selfie' | 'mirror-selfie' | 'third-person-candid';
@@ -86,6 +92,14 @@ interface SceneState {
   atmosphericCondition: AtmosphericCondition;
   foregroundObstruction: ForegroundObstruction;
   muscleFatigue: MuscleFatigue;
+
+  // Fixed scene-aware background controls
+  backgroundMode: BackgroundMode;
+  backgroundHumans: BackgroundControlDensity;
+  backgroundVehicles: BackgroundControlDensity;
+  backgroundDisorder: BackgroundDisorderControl;
+  backgroundGeminiAssist: boolean;
+  backgroundGeminiAdvice?: BackgroundGeminiAdvice;
 }
 
 interface DerivedSceneState {
@@ -763,6 +777,9 @@ const buildSemanticScene = (
       : `Ordinary realistic setting in Saudi Arabia.`;
     visibleEnvironmentText = `Location: ${locationLabel ? `${locationLabel} - ` : ''}${state.subScene || ''}. Environmental setting: ${microDetails} Visible background elements: ${derived.visibleBackgroundElements.join(', ')}.`;
   }
+  if (physicalState?.backgroundRealism) {
+    visibleEnvironmentText += ` Background control: humans=${physicalState.backgroundRealism.humanDensity}, vehicles=${physicalState.backgroundRealism.vehicleDensity}, disorder=${physicalState.backgroundRealism.disorderLevel}. User controls remain subject to physical FOV limits.`;
+  }
   visibleEnvironmentText += ` Authentic everyday Saudi life, strictly NO iconic landmarks or tourist stereotypes.`;
 
   const styleConstraintsList = [...derived.realismConstraints];
@@ -878,6 +895,36 @@ const combineRealismScores = (localScore: number, geminiScore?: number): number 
   return Math.max(0, Math.min(99, Math.round(localScore * 0.60 + boundedGemini * 0.40)));
 };
 
+const buildBackgroundReasoningKey = (state: SceneState): string => JSON.stringify({
+  sceneFamily: state.sceneFamily,
+  subScene: state.subScene,
+  timeOfDay: state.timeOfDay,
+  captureType: state.captureType,
+  framing: state.framing,
+  cameraAngle: state.cameraAngle,
+  lightingMode: state.lightingMode,
+  backgroundMode: state.backgroundMode,
+  backgroundHumans: state.backgroundHumans,
+  backgroundVehicles: state.backgroundVehicles,
+  backgroundDisorder: state.backgroundDisorder
+});
+
+const BACKGROUND_DENSITY_LABELS: Record<string, string> = {
+  none: 'بدون',
+  sparse: 'قليل',
+  light: 'خفيف',
+  moderate: 'متوسط',
+  auto: 'تلقائي'
+};
+
+const BACKGROUND_DISORDER_LABELS: Record<string, string> = {
+  none: 'بدون',
+  'very-clean': 'نظيف جدًا',
+  light: 'خفيف',
+  moderate: 'متوسط',
+  auto: 'تلقائي'
+};
+
 // --- DEFAULT STATE ---
 const DEFAULT_STATE: SceneState = {
   referenceImageId: '1000236308.png',
@@ -902,7 +949,12 @@ const DEFAULT_STATE: SceneState = {
   muscleFatigue: 'none',
   glassesMode: 'match_reference',
   lightingIntensity: 70,
-  shadowDepth: 60
+  shadowDepth: 60,
+  backgroundMode: 'auto',
+  backgroundHumans: 'auto',
+  backgroundVehicles: 'auto',
+  backgroundDisorder: 'auto',
+  backgroundGeminiAssist: true
 };
 
 export default function PhysFrameApp() {
@@ -938,6 +990,10 @@ export default function PhysFrameApp() {
   const [isEnhancingPrompt, setIsEnhancingPrompt] = useState(false);
   const [enhancedPrompts, setEnhancedPrompts] = useState<{ chatgpt?: string; gemini?: string }>({});
   const [useEnhancedPrompt, setUseEnhancedPrompt] = useState(false);
+
+  const [isBackgroundReasoning, setIsBackgroundReasoning] = useState(false);
+  const [backgroundReasoningError, setBackgroundReasoningError] = useState<string | null>(null);
+  const backgroundReasoningCacheRef = useRef<Map<string, BackgroundGeminiAdvice>>(new Map());
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -986,6 +1042,10 @@ export default function PhysFrameApp() {
   }, [state, isLoaded]);
 
   const activeFamily = state.sceneFamily ? SCENE_FAMILIES[state.sceneFamily] : null;
+  const backgroundReasoningKey = buildBackgroundReasoningKey(state);
+  const backgroundDecision = state.sceneFamily
+    ? resolveScene(state as any).physicalState.backgroundRealism
+    : null;
 
   useEffect(() => {
     if (state.sceneFamily) {
@@ -995,6 +1055,96 @@ export default function PhysFrameApp() {
       }
     }
   }, [state.sceneFamily, state.lightingMode, state.timeOfDay, state.captureType, state.activity, state.foregroundObstruction]);
+
+  useEffect(() => {
+    if (!state.sceneFamily || !state.backgroundGeminiAssist || state.backgroundMode === 'off') {
+      setIsBackgroundReasoning(false);
+      setBackgroundReasoningError(null);
+      return;
+    }
+
+    const key = backgroundReasoningKey;
+
+    // Never apply advice from a previous scene/configuration.
+    if (state.backgroundGeminiAdvice?.cacheKey && state.backgroundGeminiAdvice.cacheKey !== key) {
+      setState(prev => ({ ...prev, backgroundGeminiAdvice: undefined }));
+      return;
+    }
+
+    if (state.backgroundGeminiAdvice?.cacheKey === key) return;
+
+    const cached = backgroundReasoningCacheRef.current.get(key);
+    if (cached) {
+      setState(prev => ({ ...prev, backgroundGeminiAdvice: cached }));
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        setIsBackgroundReasoning(true);
+        setBackgroundReasoningError(null);
+
+        const localState = {
+          ...state,
+          backgroundGeminiAssist: false,
+          backgroundGeminiAdvice: undefined
+        };
+        const localDecision = resolveScene(localState as any).physicalState.backgroundRealism;
+
+        const res = await fetch('/api/ai/background-reasoning', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            sceneState: state,
+            localLimits: {
+              visibilityClass: localDecision.visibilityClass,
+              humanDensity: localDecision.humanDensity,
+              vehicleDensity: localDecision.vehicleDensity,
+              disorderLevel: localDecision.disorderLevel,
+              fovAllowsBackgroundLife: localDecision.fovAllowsBackgroundLife,
+              decisionReasons: localDecision.decisionReasons
+            }
+          })
+        });
+
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null);
+          throw new Error(payload?.error || `Gemini background reasoning HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+        const advice: BackgroundGeminiAdvice = {
+          humanDensity: data.humanDensity,
+          vehicleDensity: data.vehicleDensity,
+          disorderLevel: data.disorderLevel,
+          reasonAR: Array.isArray(data.reasonAR) ? data.reasonAR.slice(0, 2) : [],
+          confidence: Number(data.confidence) || 0,
+          cacheKey: key
+        };
+
+        backgroundReasoningCacheRef.current.set(key, advice);
+        setState(prev => (
+          buildBackgroundReasoningKey(prev) === key
+            ? { ...prev, backgroundGeminiAdvice: advice }
+            : prev
+        ));
+      } catch (err: any) {
+        if (err?.name !== 'AbortError') {
+          console.warn('Background Gemini reasoning failed:', err);
+          setBackgroundReasoningError(err?.message || 'تعذر تحليل الخلفية بواسطة Gemini');
+        }
+      } finally {
+        if (!controller.signal.aborted) setIsBackgroundReasoning(false);
+      }
+    }, 850);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [backgroundReasoningKey, state.backgroundGeminiAssist, state.backgroundMode, state.sceneFamily]);
 
   const handleSceneSelect = (familyId: SceneFamilyId) => {
     const family = SCENE_FAMILIES[familyId];
@@ -2262,6 +2412,156 @@ export default function PhysFrameApp() {
                     <option value="slightly-low">زاوية الكاميرا: أسفل قليلًا</option>
                     <option value="slightly-off-center">زاوية الكاميرا: خارج المنتصف (عفوي)</option>
                   </select>
+                </section>
+
+                {/* Fixed Scene-Aware Background Controls */}
+                <section className="bg-gradient-to-b from-[#181B1E] to-[var(--bg-card)] p-4 rounded-2xl border border-[var(--border-accent)] shadow-lg">
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-[var(--accent)]/15 flex items-center justify-center text-[var(--accent)]">
+                        <Layers className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-white text-xs">الواقعية الخلفية</h3>
+                        <p className="text-[10px] text-[var(--text-muted)]">تحكم ثابت بالبشر والسيارات والفوضى مع تقييد تلقائي حسب زاوية السيلفي والـFOV</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setState({
+                        ...state,
+                        backgroundGeminiAssist: !state.backgroundGeminiAssist,
+                        backgroundGeminiAdvice: undefined
+                      })}
+                      className={`shrink-0 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-colors ${state.backgroundGeminiAssist ? 'bg-[#1C2B20] border-[#355F3D] text-[#8FD29B]' : 'bg-white/5 border-white/10 text-[var(--text-muted)]'}`}
+                    >
+                      Gemini {state.backgroundGeminiAssist ? 'ON' : 'OFF'}
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-1.5 mb-3">
+                    {[
+                      { id: 'auto', label: 'ذكي' },
+                      { id: 'restricted', label: 'مقيّد' },
+                      { id: 'active', label: 'نشط' },
+                      { id: 'off', label: 'مغلق' }
+                    ].map(option => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => setState({
+                          ...state,
+                          backgroundMode: option.id as BackgroundMode,
+                          backgroundGeminiAdvice: undefined
+                        })}
+                        className={`py-2 rounded-lg text-[10px] font-bold border transition-colors ${state.backgroundMode === option.id ? 'bg-[var(--accent)]/15 border-[var(--accent)] text-[var(--accent)]' : 'border-[var(--border)] text-[var(--text-muted)] hover:bg-white/5'}`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-[10px] text-[var(--text-muted)] block mb-1">البشر</label>
+                      <select
+                        value={state.backgroundHumans}
+                        onChange={e => setState({
+                          ...state,
+                          backgroundHumans: e.target.value as BackgroundControlDensity,
+                          backgroundGeminiAdvice: undefined
+                        })}
+                        disabled={state.backgroundMode === 'off'}
+                        className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white disabled:opacity-40"
+                      >
+                        <option value="auto">تلقائي</option>
+                        <option value="none">بدون</option>
+                        <option value="sparse">قليل</option>
+                        <option value="moderate">متوسط</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-[var(--text-muted)] block mb-1">السيارات</label>
+                      <select
+                        value={state.backgroundVehicles}
+                        onChange={e => setState({
+                          ...state,
+                          backgroundVehicles: e.target.value as BackgroundControlDensity,
+                          backgroundGeminiAdvice: undefined
+                        })}
+                        disabled={state.backgroundMode === 'off'}
+                        className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white disabled:opacity-40"
+                      >
+                        <option value="auto">تلقائي</option>
+                        <option value="none">بدون</option>
+                        <option value="sparse">قليل</option>
+                        <option value="moderate">متوسط</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-[var(--text-muted)] block mb-1">الفوضى</label>
+                      <select
+                        value={state.backgroundDisorder}
+                        onChange={e => setState({
+                          ...state,
+                          backgroundDisorder: e.target.value as BackgroundDisorderControl,
+                          backgroundGeminiAdvice: undefined
+                        })}
+                        disabled={state.backgroundMode === 'off'}
+                        className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white disabled:opacity-40"
+                      >
+                        <option value="auto">تلقائي</option>
+                        <option value="very-clean">نظيف جدًا</option>
+                        <option value="light">خفيف</option>
+                        <option value="moderate">متوسط</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {backgroundDecision && (
+                    <div className="mt-3 bg-black/20 rounded-xl border border-white/5 p-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-bold text-white">القرار النهائي للخلفية</span>
+                        <span className="text-[9px] text-[var(--text-muted)]">
+                          {isBackgroundReasoning ? 'Gemini يحلل المشهد...' : backgroundDecision.geminiApplied ? 'Gemini + Physics' : 'Physics'}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-1.5 text-[10px]">
+                        <div className="bg-white/5 rounded-lg p-2 text-center">
+                          <div className="text-[var(--text-muted)] mb-0.5">البشر</div>
+                          <div className="font-bold text-[#F3EFE7]">{BACKGROUND_DENSITY_LABELS[backgroundDecision.humanDensity]}</div>
+                        </div>
+                        <div className="bg-white/5 rounded-lg p-2 text-center">
+                          <div className="text-[var(--text-muted)] mb-0.5">السيارات</div>
+                          <div className="font-bold text-[#F3EFE7]">{BACKGROUND_DENSITY_LABELS[backgroundDecision.vehicleDensity]}</div>
+                        </div>
+                        <div className="bg-white/5 rounded-lg p-2 text-center">
+                          <div className="text-[var(--text-muted)] mb-0.5">الفوضى</div>
+                          <div className="font-bold text-[#F3EFE7]">{BACKGROUND_DISORDER_LABELS[backgroundDecision.disorderLevel]}</div>
+                        </div>
+                      </div>
+
+                      <div className="text-[9px] leading-relaxed text-[var(--text-muted)]">
+                        {backgroundDecision.decisionReasons.slice(0, 2).join(' ')}
+                      </div>
+
+                      {backgroundDecision.cappedByFraming && (
+                        <div className="text-[9px] text-[#F0C77E] flex items-start gap-1.5">
+                          <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
+                          <span>تم تخفيض بعض اختياراتك لأن الكادر أو زاوية التصوير لا تسمح بها فعليًا.</span>
+                        </div>
+                      )}
+
+                      {backgroundReasoningError && state.backgroundGeminiAssist && (
+                        <div className="text-[9px] text-[#E9A6A0]">
+                          {backgroundReasoningError} المحرك المحلي مستمر بدون تعطيل.
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </section>
 
                 {/* Clothing & Attire */}
