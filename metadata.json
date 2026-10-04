@@ -1,0 +1,8 @@
+{
+  "name": "Remix PhysFrame - Realism Prompt Engine",
+  "description": "Advanced anti-AI realism prompt generator and physical scene director powered by Gemini intelligence.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
