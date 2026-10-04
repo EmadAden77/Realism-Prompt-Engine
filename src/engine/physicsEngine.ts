@@ -660,6 +660,8 @@ function calculateDetailedPhysicalState(
     activity: state.activity,
     framing: state.framing,
     manualAngle: state.cameraAngle,
+    timeOfDay: state.timeOfDay,
+    lightingMode: state.lightingMode,
     mode: state.cameraAngleMode ?? 'manual',
     advice: state.selfieAngleAdvice
   });
@@ -963,6 +965,9 @@ function calculateDerivedState(
       physics.selfieAngle
         ? `Selfie angle director: preset=${physics.selfieAngle.presetId}, source=${physics.selfieAngle.source}, risk=${physics.selfieAngle.risk}; ${physics.selfieAngle.reasonAR.join(' ')}`
         : 'Selfie angle director: not applicable to this capture topology',
+      physics.selfieAngle?.phonePlacement
+        ? `In-car phone placement: ${physics.selfieAngle.phonePlacement}; cabin guards: ${physics.selfieAngle.cabinGuards?.join('; ') || 'standard cabin clearance'}`
+        : 'In-car phone placement: not applicable',
       `Visible anatomical region: ${physics.visibleBodyRegion}`,
       `Background depth plane: ${physics.backgroundDepth}`,
       `Sensor exposure: ${physics.exposureBehavior}`,
