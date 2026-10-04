@@ -42,7 +42,7 @@ const carNightState: SceneState = {
   lightingMode: 'ضوء نهاري طبيعي', // Contradiction: daytime light at night!
   environmentRealism: 'عادية وطبيعية',
   realismStyle: 'anti-ai-raw',
-  lensCondition: 'modern-iphone',
+  lensCondition: 'xiaomi-clean',
   clothingCondition: 'worn-all-day',
   atmosphericCondition: 'neutral',
   foregroundObstruction: 'clean',
@@ -89,7 +89,7 @@ const streetWideState: SceneState = {
   lightingMode: 'ضوء نهاري طبيعي',
   environmentRealism: 'عادية وطبيعية',
   realismStyle: 'anti-ai-raw',
-  lensCondition: 'modern-iphone',
+  lensCondition: 'xiaomi-clean',
   clothingCondition: 'crisp',
   atmosphericCondition: 'neutral',
   foregroundObstruction: 'clean',
@@ -136,7 +136,7 @@ const officeCorridorState: SceneState = {
   lightingMode: 'إضاءة ممرات متوازية',
   environmentRealism: 'رسمية ومنظمة',
   realismStyle: 'anti-ai-raw',
-  lensCondition: 'modern-iphone',
+  lensCondition: 'xiaomi-clean',
   clothingCondition: 'worn-all-day',
   atmosphericCondition: 'neutral',
   foregroundObstruction: 'clean',
@@ -172,7 +172,7 @@ const parkingState: SceneState = {
   lightingMode: 'ظل نهاري مع انعكاسات خفيفة',
   environmentRealism: 'عادية وطبيعية',
   realismStyle: 'anti-ai-raw',
-  lensCondition: 'modern-iphone',
+  lensCondition: 'xiaomi-clean',
   clothingCondition: 'crisp',
   atmosphericCondition: 'neutral',
   foregroundObstruction: 'clean',
@@ -207,7 +207,7 @@ const bedroomState: SceneState = {
   lightingMode: 'إضاءة شاشة الهاتف فقط',
   environmentRealism: 'عادية وطبيعية',
   realismStyle: 'anti-ai-raw',
-  lensCondition: 'modern-iphone',
+  lensCondition: 'xiaomi-clean',
   clothingCondition: 'worn-all-day',
   atmosphericCondition: 'neutral',
   foregroundObstruction: 'clean',
@@ -243,7 +243,7 @@ const invalidMirrorState: SceneState = {
   lightingMode: 'ضوء نهاري طبيعي',
   environmentRealism: 'عادية وطبيعية',
   realismStyle: 'anti-ai-raw',
-  lensCondition: 'modern-iphone',
+  lensCondition: 'xiaomi-clean',
   clothingCondition: 'crisp',
   atmosphericCondition: 'neutral',
   foregroundObstruction: 'clean',
@@ -281,7 +281,7 @@ const driverPoseConflict: SceneState = {
   lightingMode: 'ساعة ذهبية (شروق/غروب)',
   environmentRealism: 'عادية وطبيعية',
   realismStyle: 'anti-ai-raw',
-  lensCondition: 'modern-iphone',
+  lensCondition: 'xiaomi-clean',
   clothingCondition: 'crisp',
   atmosphericCondition: 'neutral',
   foregroundObstruction: 'clean',
@@ -328,7 +328,7 @@ for (const fam of families) {
           lightingMode: time === 'night' ? 'إنارة شارع دافئة' : 'ضوء نهاري طبيعي',
           environmentRealism: 'عادية',
           realismStyle: 'anti-ai-raw',
-          lensCondition: 'modern-iphone',
+          lensCondition: 'xiaomi-clean',
           clothingCondition: 'worn-all-day',
           atmosphericCondition: 'neutral',
           foregroundObstruction: 'clean',
@@ -347,4 +347,39 @@ for (const fam of families) {
 }
 
 console.log(`  ✓ All ${combinationsTested} combinations resolved without physical contradictions!\n`);
+
+
+console.log('▶ Test 9: Xiaomi camera lock and front-selfie foreground topology');
+const cameraLockState: SceneState = {
+  ...streetWideState,
+  captureType: 'front-selfie',
+  lensCondition: 'modern-iphone',
+  foregroundObstruction: 'through-glass'
+};
+const resolvedCameraLock = resolveScene(cameraLockState);
+assert(resolvedCameraLock.state.lensCondition === 'xiaomi-clean', 'Legacy iPhone lens condition must normalize to Xiaomi clean front-camera profile');
+assert(resolvedCameraLock.state.foregroundObstruction === 'clean', 'Direct front selfie cannot place window glass between camera and face');
+assert(resolvedCameraLock.physicalState.opticalPerspective.includes('21mm'), 'Front-selfie optics must remain Xiaomi 15 Ultra 21mm equivalent');
+
+console.log('▶ Test 10: Phone-screen-only lighting causality');
+const phoneOnlyOverbright: SceneState = {
+  ...bedroomState,
+  lightingMode: 'إضاءة شاشة الهاتف فقط',
+  lightingIntensity: 95,
+  shadowDepth: 20
+};
+const resolvedPhoneOnly = resolveScene(phoneOnlyOverbright);
+assert(resolvedPhoneOnly.state.lightingIntensity <= 35, 'Phone-screen-only lighting must not create room-scale brightness');
+assert(resolvedPhoneOnly.state.shadowDepth >= 75, 'Phone-screen-only lighting must preserve deep falloff/shadows');
+
+console.log('▶ Test 11: Final prompt camera contamination purifier');
+const contaminatedPrompt = validatePrompt(
+  'Front selfie photographed with an iPhone front-camera using a 24mm-28mm eq wide lens.',
+  resolvedCameraLock,
+  ''
+);
+assert(!contaminatedPrompt.cleanPrompt.includes('24mm-28mm'), 'Wrong 24-28mm focal range must be removed from Xiaomi selfie prompt');
+assert(contaminatedPrompt.cleanPrompt.includes('21mm'), 'Final prompt must restore the 21mm equivalent Xiaomi camera lock');
+assert(contaminatedPrompt.cleanPrompt.includes('Xiaomi 15 Ultra front camera'), 'iPhone front-camera wording must be replaced');
+
 console.log('🎉 ALL AUTOMATED VALIDATION TESTS PASSED PERFECTLY!\n');

@@ -14,7 +14,7 @@ export type CameraAngle = 'eye-level' | 'slightly-high' | 'slightly-low' | 'slig
 export type TimeOfDay = 'morning' | 'midday' | 'afternoon' | 'sunset' | 'night';
 export type RealismStyle = 'anti-ai-raw' | 'photorealistic' | 'candid-snap';
 export type GlassesMode = 'wear_glasses' | 'no_glasses' | 'match_reference';
-export type LensCondition = 'modern-iphone' | 'budget-android' | 'smudged-lens';
+export type LensCondition = 'xiaomi-clean' | 'smudged-lens' | 'modern-iphone' | 'budget-android'; // legacy ids retained only for state migration
 export type ClothingCondition = 'crisp' | 'worn-all-day' | 'vintage-washed';
 export type AtmosphericCondition = 'neutral' | 'high-humidity' | 'dusty-haze' | 'breezy';
 export type ForegroundObstruction = 'clean' | 'through-glass' | 'foreground-clutter';
@@ -293,6 +293,27 @@ export function resolveScene(rawState: SceneState): ResolvedScene {
   const isNight = s.timeOfDay === 'night';
   const isDay = ['morning', 'midday', 'afternoon'].includes(s.timeOfDay);
 
+  // Canonical Xiaomi 15 Ultra front-camera lock.
+  if (s.captureType === 'front-selfie' && (s.lensCondition === 'modern-iphone' || s.lensCondition === 'budget-android')) {
+    issues.push({
+      type: 'contradiction',
+      field: 'lensCondition',
+      description: `Legacy lens profile (${s.lensCondition}) conflicts with the fixed Xiaomi 15 Ultra front-camera hardware lock.`,
+      autoResolvedBy: 'Normalized to the canonical clean Xiaomi 15 Ultra front-camera profile.'
+    });
+    s.lensCondition = 'xiaomi-clean';
+  }
+
+  if (s.captureType === 'front-selfie' && s.foregroundObstruction === 'through-glass') {
+    issues.push({
+      type: 'physical_impossibility',
+      field: 'foregroundObstruction',
+      description: 'Through-glass foreground obstruction is incompatible with a direct handheld front-camera selfie.',
+      autoResolvedBy: 'Removed the foreground glass layer while preserving physically plausible background reflections.'
+    });
+    s.foregroundObstruction = 'clean';
+  }
+
   // --- Step 2: RESOLVE Contradictions prioritizing User Intent ---
 
   // Check & Resolve 1: Capture Topology & Mirror Selfie in Mirror-less Environments
@@ -420,13 +441,38 @@ export function resolveScene(rawState: SceneState): ResolvedScene {
 
   // Check & Resolve 6: Atmospheric and Environmental Reality Alignment
   if (!isOutdoor && s.atmosphericCondition === 'breezy' && familyId !== 'car') {
-    // Indoor rooms with closed windows do not have wind
     issues.push({
       type: 'warning',
       field: 'atmosphericCondition',
-      description: 'Wind breeze requested in fully enclosed interior room without open windows.',
-      autoResolvedBy: 'Subdued to neutral still interior air with gentle split AC airflow.'
+      description: 'Outdoor-style wind motion requested in an enclosed interior scene.',
+      autoResolvedBy: 'Normalized to neutral indoor air; mild airflow is treated as local HVAC.'
     });
+    s.atmosphericCondition = 'neutral';
+  }
+
+  // Check & Resolve 7: Couple lighting sliders to physically causal lighting modes.
+  if (s.lightingMode === 'إضاءة شاشة الهاتف فقط') {
+    if (s.lightingIntensity > 35) {
+      issues.push({
+        type: 'warning',
+        field: 'lightingIntensity',
+        description: 'Phone-screen-only lighting cannot create a bright room-scale ambient level.',
+        autoResolvedBy: 'Clamped lighting intensity to 35% maximum for localized screen illumination.'
+      });
+      s.lightingIntensity = 35;
+    }
+    if (s.shadowDepth < 75) {
+      issues.push({
+        type: 'warning',
+        field: 'shadowDepth',
+        description: 'Phone-screen-only lighting requires rapid falloff and comparatively deep shadows.',
+        autoResolvedBy: 'Raised shadow depth to 75% minimum.'
+      });
+      s.shadowDepth = 75;
+    }
+  } else if (isOutdoor && s.timeOfDay === 'midday') {
+    if (s.lightingIntensity < 65) s.lightingIntensity = 65;
+    if (s.shadowDepth < 50) s.shadowDepth = 50;
   }
 
   // Step 3: VALIDATE AGAIN after resolution to ensure 100% physical validity
@@ -882,12 +928,23 @@ function calculateDerivedState(
       `Sensor exposure: ${physics.exposureBehavior}`,
       `Physical lived-in disorder: ${physics.disorderBehavior}`
     ],
-    lensEffects: XIAOMI_15_ULTRA_FRONT_CAMERA_PROFILE.depthOfField,
+    lensEffects: state.captureType === 'front-selfie'
+      ? `${XIAOMI_15_ULTRA_FRONT_CAMERA_PROFILE.depthOfField}; clean Xiaomi 15 Ultra front-camera optical response`
+      : state.captureType === 'mirror-selfie'
+        ? 'natural smartphone rear-camera optical response through a flat mirror, no synthetic portrait blur'
+        : 'natural handheld smartphone-camera optical response with realistic depth and no synthetic portrait blur',
     atmosphericEffects: 'Clean atmospheric clarity without artificial CGI fog or unrealistic haze.',
     muscleFatigueEffects: 'Resting facial muscle tone with natural ocular clarity.',
     lightingIntensityDescription,
     shadowDepthDescription
   };
+
+  if (microLoc?.spatialBehavior) derived.contactPhysics.push(microLoc.spatialBehavior);
+  if (microLoc?.lightingHints) derived.environmentalLightBehavior += `; location-specific light cues: ${microLoc.lightingHints}`;
+
+  if (state.lensCondition === 'smudged-lens') {
+    derived.lensEffects += '; slight localized fingerprint haze causing restrained flare/bloom near strong practical lights and a small local loss of micro-contrast';
+  }
 
   // Activity & sweat response
   if (state.sceneFamily === 'gym' && state.activity === 'بعد التمرين') {
@@ -920,8 +977,27 @@ function calculateDerivedState(
     derived.muscleFatigueEffects = 'Eyelid fatigue: relaxed upper eyelids partially lowering over pupils, subtle under-eye soft tissue heaviness.';
   } else if (state.muscleFatigue === 'bloodshot-sclera') {
     derived.muscleFatigueEffects = 'Ocular fatigue: delicate realistic blood vessels in sclera whites from extended wakefulness.';
+  } else if (state.muscleFatigue === 'pale-fatigued-skin') {
+    derived.muscleFatigueEffects = 'Fatigue pallor: slightly reduced facial flush with subtle under-eye darkness and natural uneven tired skin tone, without cosmetic smoothing.';
+    derived.skinResponse += ', subtle fatigue pallor and mild natural under-eye darkness';
   } else if (state.muscleFatigue === 'full-exhaustion') {
     derived.muscleFatigueEffects = 'Physical exhaustion: heavy drooping eyelids, subtle under-eye circles, and faint ocular vascularity.';
+  }
+
+  if (state.foregroundObstruction === 'through-glass') {
+    derived.visibleBackgroundElements.unshift('subtle real glass surface artifacts in the foreground plane: faint reflection and restrained glare');
+    derived.realismConstraints.push('foreground glass must obey reflection geometry and cannot float independently of a real pane');
+  } else if (state.foregroundObstruction === 'foreground-clutter') {
+    derived.visibleBackgroundElements.unshift('one restrained, partially cropped everyday foreground object at the frame edge');
+  }
+
+  if (state.realismStyle === 'anti-ai-raw') {
+    derived.skinResponse += ', restrained pore detail, natural asymmetry, no beautification or plastic smoothing';
+    derived.fabricBehavior.push('small irregular weave/fold variation appropriate to the selected garment');
+    if (state.timeOfDay === 'night' || state.lightingIntensity <= 35) {
+      derived.lensEffects += '; fine low-light luminance noise in darker tonal regions with restrained computational noise reduction';
+    }
+    derived.realismConstraints.push('no synthetic DSLR bokeh', 'no studio-light substitution', 'no invented camera hardware');
   }
 
   return derived;
@@ -983,7 +1059,20 @@ export function validatePrompt(
     }
   }
 
-  // 4. Duplicate Phrase / Sentence Deduplication
+  // 4. Xiaomi 15 Ultra camera-lock contamination check
+  if (state.captureType === 'front-selfie') {
+    const wrongFocalPattern = /(?:24\s*mm\s*[-–]\s*28\s*mm|24\s*[-–]\s*28\s*mm|\b(?:24|25|26|27|28)\s*mm\b)(?:\s*(?:eq|equivalent))?/gi;
+    if (wrongFocalPattern.test(cleanPrompt)) {
+      contradictions.push('Non-Xiaomi front-camera focal length detected in a Xiaomi 15 Ultra front-selfie prompt.');
+      cleanPrompt = cleanPrompt.replace(wrongFocalPattern, 'approx 21mm equivalent');
+    }
+    if (/iPhone\s+front[- ]camera/gi.test(cleanPrompt)) {
+      contradictions.push('iPhone front-camera wording detected in a Xiaomi 15 Ultra front-selfie prompt.');
+      cleanPrompt = cleanPrompt.replace(/iPhone\s+front[- ]camera/gi, 'Xiaomi 15 Ultra front camera');
+    }
+  }
+
+  // 5. Duplicate Phrase / Sentence Deduplication
   const lines = cleanPrompt.split('\n');
   const seenLines = new Set<string>();
   const dedupedLines: string[] = [];

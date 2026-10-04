@@ -49,7 +49,7 @@ type SceneFamilyId = 'bedroom' | 'living-room' | 'saudi-outdoor' | 'gym' | 'car'
 export type GlassesMode = 'match_reference' | 'wear_glasses' | 'no_glasses';
 
 // Imperfection Types
-type LensCondition = 'modern-iphone' | 'budget-android' | 'smudged-lens';
+type LensCondition = 'xiaomi-clean' | 'smudged-lens';
 type ClothingCondition = 'crisp' | 'worn-all-day' | 'vintage-washed';
 type AtmosphericCondition = 'neutral' | 'high-humidity' | 'dusty-haze' | 'breezy';
 type ForegroundObstruction = 'clean' | 'through-glass' | 'foreground-clutter';
@@ -853,6 +853,17 @@ const buildNegativeConstraints = (state: SceneState, derived: DerivedSceneState)
   return neg;
 };
 
+const calculatePhysicalConsistencyScore = (validation: ValidationResult, promptContradictions: string[] = []): number => {
+  let score = 100;
+  for (const issue of validation.issues) {
+    if (issue.type === 'physical_impossibility') score -= 30;
+    else if (issue.type === 'contradiction') score -= 20;
+    else score -= 5;
+  }
+  score -= promptContradictions.length * 15;
+  return Math.max(0, Math.min(100, score));
+};
+
 // --- DEFAULT STATE ---
 const DEFAULT_STATE: SceneState = {
   referenceImageId: '1000236308.png',
@@ -870,7 +881,7 @@ const DEFAULT_STATE: SceneState = {
   lightingMode: '',
   environmentRealism: 'رسمية ومنظمة',
   realismStyle: 'anti-ai-raw',
-  lensCondition: 'modern-iphone',
+  lensCondition: 'xiaomi-clean',
   clothingCondition: 'crisp',
   atmosphericCondition: 'neutral',
   foregroundObstruction: 'clean',
@@ -924,6 +935,9 @@ export default function PhysFrameApp() {
         const savedState = localStorage.getItem('physframe_current_state');
         if (savedState) {
           const parsed = JSON.parse(savedState);
+          if (parsed.lensCondition === 'modern-iphone' || parsed.lensCondition === 'budget-android') {
+            parsed.lensCondition = 'xiaomi-clean';
+          }
           const validOutfit = OUTFITS.find(o => o.id === parsed.outfitId);
           if (!validOutfit) {
             parsed.outfitId = DEFAULT_STATE.outfitId;
@@ -1000,7 +1014,7 @@ export default function PhysFrameApp() {
         captureType: 'third-person-candid',
         framing: 'chest-up',
         cameraAngle: 'eye-level',
-        lensCondition: 'modern-iphone',
+        lensCondition: 'xiaomi-clean',
         clothingCondition: 'crisp',
         atmosphericCondition: 'neutral',
         foregroundObstruction: 'clean',
@@ -1030,7 +1044,7 @@ export default function PhysFrameApp() {
         captureType: 'front-selfie',
         framing: 'chest-up',
         cameraAngle: 'slightly-high',
-        lensCondition: 'modern-iphone',
+        lensCondition: 'xiaomi-clean',
         clothingCondition: 'worn-all-day',
         atmosphericCondition: 'dusty-haze',
         foregroundObstruction: 'clean',
@@ -1090,7 +1104,7 @@ export default function PhysFrameApp() {
         captureType: 'front-selfie',
         framing: 'chest-up',
         cameraAngle: 'eye-level',
-        lensCondition: 'modern-iphone',
+        lensCondition: 'xiaomi-clean',
         clothingCondition: 'worn-all-day',
         atmosphericCondition: 'neutral',
         foregroundObstruction: 'through-glass',
@@ -1120,7 +1134,7 @@ export default function PhysFrameApp() {
         captureType: 'third-person-candid',
         framing: 'chest-up',
         cameraAngle: 'eye-level',
-        lensCondition: 'modern-iphone',
+        lensCondition: 'xiaomi-clean',
         clothingCondition: 'worn-all-day',
         atmosphericCondition: 'breezy',
         foregroundObstruction: 'clean',
@@ -1150,7 +1164,7 @@ export default function PhysFrameApp() {
         captureType: 'third-person-candid',
         framing: 'half-body',
         cameraAngle: 'slightly-low',
-        lensCondition: 'modern-iphone',
+        lensCondition: 'xiaomi-clean',
         clothingCondition: 'crisp',
         atmosphericCondition: 'breezy',
         foregroundObstruction: 'clean',
@@ -1182,7 +1196,7 @@ export default function PhysFrameApp() {
     const expList = coherentExpressionByFamily[randomFamilyId] || ['e1', 'e2', 'e3'];
     const chosenExp = expList[Math.floor(Math.random() * expList.length)];
 
-    const lensOpts = ['modern-iphone', 'modern-iphone', 'modern-iphone', 'budget-android', 'smudged-lens'];
+    const lensOpts: LensCondition[] = ['xiaomi-clean', 'xiaomi-clean', 'xiaomi-clean', 'xiaomi-clean', 'smudged-lens'];
     const randLens = lensOpts[Math.floor(Math.random() * lensOpts.length)] as LensCondition;
 
     const clothingOpts = ['crisp', 'worn-all-day', 'worn-all-day', 'vintage-washed'];
@@ -1361,7 +1375,7 @@ export default function PhysFrameApp() {
         timeOfDay: 'midday',
         lightingMode: fam.allowedLighting[0],
         environmentRealism: fam.environmentRealism[0],
-        lensCondition: 'modern-iphone',
+        lensCondition: 'xiaomi-clean',
         clothingCondition: 'worn-all-day',
         atmosphericCondition: 'neutral',
         foregroundObstruction: 'clean',
@@ -1415,8 +1429,8 @@ export default function PhysFrameApp() {
 
       // Pure deterministic physical pipeline:
       // SceneState -> Physical Scene Resolver -> Physics Validator -> Consistency Validator -> Prompt Builder -> Final Validation
+      const initialValidation = validateScene(state as any);
       const resolved = resolveScene(state as any);
-      const postValidation = validateScene(resolved);
       const derived = resolved.derived;
       const semantic = buildSemanticScene(resolved.state as SceneState, derived, resolved.physicalState);
       const rawPrompt = buildPromptText(semantic, 'gemini');
@@ -1434,7 +1448,8 @@ export default function PhysFrameApp() {
 
       if (!res.ok) throw new Error('فشل فحص الواقعية');
       const data: RealismAuditResult = await res.json();
-      setAuditResult(data);
+      const physicalConsistencyScore = calculatePhysicalConsistencyScore(initialValidation, validatedPrompt.contradictionsFound);
+      setAuditResult({ ...data, realismScore: physicalConsistencyScore });
     } catch (err: any) {
       console.error(err);
       showToast(err.message || 'خطأ أثناء فحص الواقعية');
@@ -1455,30 +1470,20 @@ export default function PhysFrameApp() {
       // 1. Read current SceneState & run deterministic Physical Scene Resolver
       const resolved = resolveScene(state as any);
 
-      // 2. Validate the corrected scene
-      const postValidation = validateScene(resolved);
+      // 2. Commit the complete canonical resolved state in one pass.
+      const correctedState = resolved.state as SceneState;
+      const finalResolved = resolveScene(correctedState as any);
+      const postValidation = validateScene(finalResolved);
+      const finalState = finalResolved.state as SceneState;
 
-      // 3. Apply derived physical corrections while STRICTLY preserving all explicit user choices:
-      // (identity, selected person, clothing, glasses choice, hairstyle, expression, main location, micro-location, time of day, outfit)
-      const correctedState: SceneState = {
-        ...state,
-        cameraAngle: resolved.state.cameraAngle,
-        captureType: resolved.state.captureType,
-        lightingMode: resolved.state.lightingMode,
-        pose: resolved.state.pose,
-        foregroundObstruction: resolved.state.foregroundObstruction,
-        lightingIntensity: resolved.state.lightingIntensity,
-        shadowDepth: resolved.state.shadowDepth,
-      };
+      setState(finalState);
+      localStorage.setItem('physframe_current_state', JSON.stringify(finalState));
 
-      setState(correctedState);
-      localStorage.setItem('physframe_current_state', JSON.stringify(correctedState));
-
-      // 4. Re-compile prompt from the corrected resolved scene & physicalState
-      const derived = resolved.derived;
-      const semantic = buildSemanticScene(correctedState, derived, resolved.physicalState);
+      // 3. Re-compile only from the final canonical state.
+      const derived = finalResolved.derived;
+      const semantic = buildSemanticScene(finalState, derived, finalResolved.physicalState);
       const rawPrompt = buildPromptText(semantic, 'gemini');
-      const validatedPrompt = validatePrompt(rawPrompt, resolved, buildNegativeConstraints(correctedState, derived));
+      const validatedPrompt = validatePrompt(rawPrompt, finalResolved, buildNegativeConstraints(finalState, derived));
       const cleanPromptText = validatedPrompt.cleanPrompt;
 
       // Update enhanced prompt cache if active
@@ -1486,7 +1491,7 @@ export default function PhysFrameApp() {
         setEnhancedPrompts(prev => ({
           ...prev,
           gemini: cleanPromptText,
-          chatgpt: validatePrompt(buildPromptText(semantic, 'chatgpt'), resolved, buildNegativeConstraints(correctedState, derived)).cleanPrompt
+          chatgpt: validatePrompt(buildPromptText(semantic, 'chatgpt'), resolved, buildNegativeConstraints(finalState, derived)).cleanPrompt
         }));
       }
 
@@ -1495,15 +1500,17 @@ export default function PhysFrameApp() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sceneState: correctedState,
+          sceneState: finalState,
           promptText: cleanPromptText,
         }),
       });
 
       if (!res.ok) throw new Error('فشل تحديث تقرير الواقعية');
       const updatedAudit: RealismAuditResult = await res.json();
+      const physicalConsistencyScore = calculatePhysicalConsistencyScore(postValidation, validatedPrompt.contradictionsFound);
+      updatedAudit.realismScore = physicalConsistencyScore;
 
-      if (postValidation.isValid) {
+      if (postValidation.isValid && validatedPrompt.contradictionsFound.length === 0) {
         setAutoFixMessage('تم تصحيح التناقضات الفيزيائية وضبط زوايا الكادر والعدسة');
       } else {
         setAutoFixMessage('تم تطبيق كافة التحسينات الفيزيائية المتاحة');
@@ -1548,7 +1555,12 @@ export default function PhysFrameApp() {
 
       if (!res.ok) throw new Error('فشل تعزيز البرومبت');
       const data = await res.json();
-      setEnhancedPrompts(prev => ({ ...prev, [targetEngine]: data.enhancedPrompt }));
+      const enhancedValidated = validatePrompt(
+        data.enhancedPrompt || base,
+        resolved,
+        buildNegativeConstraints(resolved.state as SceneState, derived)
+      );
+      setEnhancedPrompts(prev => ({ ...prev, [targetEngine]: enhancedValidated.cleanPrompt }));
       setUseEnhancedPrompt(true);
       showToast('تم تعزيز البرومبت بميكرو-فيزياء العدسة ومسام البشرة');
     } catch (err: any) {
@@ -2366,9 +2378,8 @@ export default function PhysFrameApp() {
                          onChange={e => setState({ ...state, lensCondition: e.target.value as LensCondition })}
                          className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[var(--accent)] text-white"
                        >
-                         <option value="modern-iphone">عدسة نظيفة (معالجة آيفون قياسية بدون فلتر)</option>
-                         <option value="budget-android">معالجة كاميرا هاتف اقتصادي (تفاصيل خشنة)</option>
-                         <option value="smudged-lens">عدسة بها بصمات دهنية (توهج هالات الضوء الطبيعي)</option>
+                         <option value="xiaomi-clean">عدسة Xiaomi 15 Ultra الأمامية النظيفة (ثابتة)</option>
+                         <option value="smudged-lens">نفس عدسة Xiaomi 15 Ultra مع بصمة خفيفة واقعية</option>
                        </select>
                      </div>
 
@@ -2727,7 +2738,7 @@ export default function PhysFrameApp() {
                   </div>
                   <div>
                     <h3 className="font-bold text-sm text-white">تحليل ملامح الوجه الذكي</h3>
-                    <p className="text-[10px] text-[var(--accent)]">تم الفحص بواسطة Gemini 3.8 Flash</p>
+                    <p className="text-[10px] text-[var(--accent)]">تم الفحص بواسطة Gemini</p>
                   </div>
                 </div>
                 <button onClick={() => setShowFaceAnalysisModal(false)} className="text-[var(--text-muted)] hover:text-white p-1">
@@ -2890,7 +2901,7 @@ export default function PhysFrameApp() {
                   </div>
                   <div>
                     <h3 className="font-bold text-sm text-white">فحص الواقعية ومكافحة نمطية الـ AI</h3>
-                    <p className="text-[10px] text-[var(--text-muted)]">تدقيق فيزيائي مستقل بواسطة Gemini 3.8 Flash</p>
+                    <p className="text-[10px] text-[var(--text-muted)]">تدقيق نوعي بواسطة Gemini + تحقق فيزيائي محلي</p>
                   </div>
                 </div>
                 <button onClick={() => setShowAuditModal(false)} className="text-[var(--text-muted)] hover:text-white p-1">
@@ -2910,7 +2921,7 @@ export default function PhysFrameApp() {
                     {/* Score Card */}
                     <div className="bg-[#14181B] p-4 rounded-xl border border-white/10 flex items-center justify-between">
                       <div>
-                        <div className="text-xs text-[var(--text-muted)]">مقياس الواقعية الطبيعية</div>
+                        <div className="text-xs text-[var(--text-muted)]">مقياس الاتساق الفيزيائي</div>
                         <div className="text-lg font-extrabold text-white mt-0.5">{auditResult.verdictAR}</div>
                       </div>
                       <div className="w-16 h-16 rounded-full border-4 border-[var(--accent)] flex items-center justify-center font-black text-xl text-[var(--accent)] bg-[var(--accent)]/10 shadow-[0_0_12px_var(--accent-glow)]">

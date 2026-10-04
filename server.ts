@@ -259,7 +259,7 @@ ${OUTFITS.map(o => `- '${o.id}': ${o.labelAR} (${o.promptDescription}) [Category
 Available Anatomical Expressions:
 - 'e1' (Resting Neutral), 'e2' (Calm Serene), 'e3' (Duchenne Micro-Smile), 'e4' (Candid Half-Smile), 'e5' (Cognitive Focus), 'e6' (Commanding Gravitas), 'e7' (Sun Squint), 'e8' (Post-Shift Fatigue), 'e9' (Distant Pensive), 'e10' (Skeptical Brow Lift), 'e11' (Post-Workout Breathing), 'e12' (Friendly Smirk), 'e13' (Inquisitive Surprise), 'e14' (Full Genuine Laugh), 'e15' (Intense Analytical Brow Furrow), 'e16' (Contented Sigh), 'e17' (Bemused Incredulity), 'e18' (Drowsy Heavy Eyelids), 'e19' (Guarded Vigilance), 'e20' (Quiet Dignified Pride), 'e21' (Mild Discontent & Pebble Chin), 'e22' (Lip Bite in Concentration), 'e23' (Mid-Conversation Speech), 'e24' (Spiritual Tranquility), 'e25' (Playful Eye-Roll), 'e26' (Stoic Tactical Vigilance), 'e27' (Deep Inhale Fresh Air), 'e28' (Gentle Quizzical Inquisitiveness)
 
-Available Lens Conditions: 'modern-iphone', 'budget-android', 'smudged-lens'
+Available Lens Conditions: 'xiaomi-clean', 'smudged-lens'. For front-selfie, camera hardware is always Xiaomi 15 Ultra front camera; lensCondition changes surface cleanliness only, never device identity.
 Available Clothing Conditions: 'crisp', 'worn-all-day', 'vintage-washed'
 Available Atmospheric Conditions: 'neutral', 'high-humidity', 'dusty-haze', 'breezy'
 Available Foreground Obstructions: 'clean', 'through-glass', 'foreground-clutter'
@@ -359,7 +359,7 @@ Select completely coherent, physically realistic attributes and provide a vivid 
       timeOfDay: ['morning', 'midday', 'afternoon', 'sunset', 'night'].includes(parsed.timeOfDay) ? parsed.timeOfDay : 'midday',
       lightingMode: sanitizeItem(parsed.lightingMode, familyData.allowedLighting, familyData.allowedLighting[0]),
       environmentRealism: parsed.environmentRealism || 'طبيعي',
-      lensCondition: ['modern-iphone', 'budget-android', 'smudged-lens'].includes(parsed.lensCondition) ? parsed.lensCondition : 'modern-iphone',
+      lensCondition: parsed.lensCondition === 'smudged-lens' ? 'smudged-lens' : 'xiaomi-clean',
       clothingCondition: ['crisp', 'worn-all-day', 'vintage-washed'].includes(parsed.clothingCondition) ? parsed.clothingCondition : 'worn-all-day',
       atmosphericCondition: ['neutral', 'high-humidity', 'dusty-haze', 'breezy'].includes(parsed.atmosphericCondition) ? parsed.atmosphericCondition : 'neutral',
       foregroundObstruction: ['clean', 'through-glass', 'foreground-clutter'].includes(parsed.foregroundObstruction) ? parsed.foregroundObstruction : 'clean',
@@ -451,7 +451,7 @@ Select completely coherent, physically realistic attributes and provide a vivid 
       timeOfDay: sc.time,
       lightingMode: sc.lighting,
       environmentRealism: 'طبيعي',
-      lensCondition: 'modern-iphone',
+      lensCondition: 'xiaomi-clean',
       clothingCondition: 'worn-all-day',
       atmosphericCondition: 'neutral',
       foregroundObstruction: 'clean',
@@ -533,8 +533,8 @@ Return your assessment in Arabic.`,
   } catch (error: any) {
     console.warn('Audit realism API fallback triggered:', error?.message);
     return res.json({
-      realismScore: 94,
-      verdictAR: 'واقعية فيزيائية ممتازة ومضادة للكشف',
+      realismScore: 0,
+      verdictAR: 'تعذر تدقيق Gemini؛ تم الاعتماد على فحص الاتساق الفيزيائي المحلي',
       strengthsAR: [
         'تثبيت قيود النظارة ومنع تنعيم البشرة يحميان الهوية من التزييف البلاستيكي.',
         'إدراج فيزياء الأقمشة والتجاعيد يكسر نمطية الموديلات ثلاثية الأبعاد.',
@@ -560,13 +560,15 @@ app.post('/api/ai/enhance-prompt', async (req, res) => {
     const response = await callGeminiWithFallback({
       preferredModels: ['gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-3.8-flash'],
       contents: `You are a master prompt engineering specialist for photorealistic AI imagery.
-Refine this prompt for ${targetEngine} so that the output looks 100% indistinguishable from a candid photo captured by an iPhone or standard smartphone in everyday Saudi reality.
-Preserve all core identity restrictions, eyeglasses rules, outfit, and location elements exactly.
-Infuse tangible, sensory photographic realism:
-- Organic sensor grain matching high ISO mobile sensors.
-- Real light physics: asymmetric eye catchlights, subtle highlight roll-off without digital clipping, natural bounce light reflecting from fabrics onto neck/jaw.
-- Skin realism: microscopically visible vellus hairs, subtle skin micro-texture, pores, natural uneven melanin, no plastic/airbrushed sheen.
-- Lens physics: mild chromatic aberration at high-contrast edges, organic lens smudge flare if applicable, realistic wide-angle smartphone focal length (24mm-28mm eq).
+Refine this prompt for ${targetEngine} to improve natural photographic realism without changing any physical facts already resolved by the local engine.
+Preserve all core identity restrictions, eyeglasses rules, outfit, location, camera geometry, lighting causality, and focal-length constraints exactly.
+CAMERA HARD LOCK: if this is a direct front-camera selfie, the camera remains the Xiaomi 15 Ultra front camera at approximately 21mm equivalent, fixed f/2.0, with its wide smartphone perspective. Never substitute iPhone, generic Android, 24-28mm, DSLR, or another camera profile.
+Only add details that are causally supported by the scene:
+- Sensor noise only when low light/exposure makes it plausible; do not force a fixed ISO value.
+- Real light physics: restrained asymmetric catchlights, natural highlight roll-off, and physically sourced bounce light.
+- Skin realism: natural micro-texture and pores without beautification or exaggerated microscopic language.
+- Lens effects only when supported by lensCondition; do not invent chromatic aberration, flare, haze, or smudges when the lens is clean.
+- Prefer concise coherence over adding more photographic jargon.
 
 Original Prompt:
 """
@@ -579,7 +581,7 @@ Output the refined prompt text directly in clean English.`,
     return res.json({ enhancedPrompt: response.text?.trim() || basePrompt });
   } catch (error: any) {
     console.warn('Enhance prompt fallback:', error?.message);
-    const polishedFallback = `${basePrompt}\n\n[OPTICAL SENSOR MICRO-PHYSICS]\nNatural unsharpened smartphone sensor response matching ISO 640 mobile capture, subtle luminance chroma grain in shadow gradients, visible natural skin texture with micro-pores and peach fuzz on jawline, non-symmetrical eye catchlights reflecting ambient environment, slight optical softness at lens edges, zero artificial beautification or plastic subsurface scattering.`;
+    const polishedFallback = `${basePrompt}\n\n[REALISM PRESERVATION]\nPreserve the camera profile, focal length, lighting causality, identity geometry, and scene physics already specified above. Add only restrained natural skin texture and physically plausible sensor noise when supported by low light. Do not substitute camera hardware or add generic 24-28mm/iPhone optics.`;
     return res.json({ enhancedPrompt: polishedFallback });
   }
 });
