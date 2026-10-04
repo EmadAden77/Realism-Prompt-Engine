@@ -45,7 +45,7 @@ import {
   BackgroundCompositionGoal,
   BackgroundGeminiAdvice
 } from './engine/backgroundRealism';
-import { SelfieAngleAdvice, SelfieAngleMode } from './engine/selfieAngles';
+import { getEligibleSelfieAngles, SelfieAngleAdvice, SelfieAngleMode } from './engine/selfieAngles';
 
 // --- TYPES ---
 type CaptureType = 'front-selfie' | 'mirror-selfie' | 'third-person-candid';
@@ -963,6 +963,47 @@ const buildSelfieAngleReasoningKey = (state: SceneState): string => JSON.stringi
     : 'disabled'
 });
 
+const buildEligibleSelfieAngleCatalog = (state: SceneState) => {
+  const eligible = getEligibleSelfieAngles({
+    captureType: state.captureType,
+    sceneFamily: state.sceneFamily,
+    subScene: state.subScene,
+    pose: state.pose,
+    activity: state.activity,
+    framing: state.framing,
+    manualAngle: state.cameraAngle,
+    timeOfDay: state.timeOfDay,
+    lightingMode: state.lightingMode,
+    backgroundAutoAngle: state.backgroundAutoAngle,
+    backgroundMode: state.backgroundMode,
+    backgroundHumans: state.backgroundHumans,
+    backgroundVehicles: state.backgroundVehicles,
+    backgroundDisorder: state.backgroundDisorder,
+    backgroundActivity: state.backgroundActivity,
+    backgroundPresence: state.backgroundPresence,
+    backgroundCompositionGoal: state.backgroundCompositionGoal,
+    mode: 'gemini-smart'
+  });
+
+  return eligible.map(angle => ({
+    id: angle.id,
+    labelAR: angle.labelAR,
+    family: angle.family,
+    pitchDeg: angle.pitchDeg,
+    yawDeg: angle.yawDeg,
+    rollDeg: angle.rollDeg,
+    heightOffsetCm: angle.heightOffsetCm,
+    distanceCm: angle.distanceCm,
+    risk: angle.risk,
+    intent: angle.intent,
+    carFocus: angle.carFocus ?? 'balanced',
+    carSeat: angle.carSeat ?? null,
+    phonePlacement: angle.phonePlacement ?? null,
+    cabinGuards: angle.cabinGuards ?? [],
+    allowedMicroVariation: angle.variation
+  }));
+};
+
 const BACKGROUND_DENSITY_LABELS: Record<string, string> = {
   none: 'بدون',
   sparse: 'قليل',
@@ -1188,11 +1229,19 @@ export default function PhysFrameApp() {
         setIsSelfieAngleReasoning(true);
         setSelfieAngleReasoningError(null);
 
+        const eligibleAngles = buildEligibleSelfieAngleCatalog(state);
+        if (!eligibleAngles.length) {
+          throw new Error('لا توجد زاوية سيلفي متوافقة مع الفيزياء الحالية.');
+        }
+
         const res = await fetch('/api/ai/selfie-angle', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           signal: controller.signal,
-          body: JSON.stringify({ sceneState: state })
+          body: JSON.stringify({
+            sceneState: state,
+            eligibleAngles
+          })
         });
 
         if (!res.ok) {

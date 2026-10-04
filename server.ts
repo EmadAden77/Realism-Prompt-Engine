@@ -5,7 +5,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { MICRO_LOCATIONS } from './src/data/microLocations.ts';
 import { OUTFITS } from './src/data/clothingOutfits.ts';
-import { getEligibleSelfieAngles } from './src/engine/selfieAngles.ts';
 
 dotenv.config();
 
@@ -48,7 +47,62 @@ function createGeminiClient() {
   });
 }
 
-// Resilient helper to call Gemini with multi-model fallback (gemini-3.8-flash -> gemini-3.5-flash -> gemini-3.1-flash-lite)
+// Adaptive Gemini fallback with per-model circuit breaking.
+// A model hitting quota or temporary overload is cooled down inside a warm function
+// so repeated requests do not waste latency retrying a model that is known to be unavailable.
+const geminiModelCooldownUntil = new Map<string, number>();
+
+const getGeminiErrorText = (error: any): string =>
+  String(error?.message || error || '');
+
+const getGeminiStatus = (error: any): number => {
+  const direct = Number(error?.status);
+  if (Number.isFinite(direct) && direct > 0) return direct;
+  const text = getGeminiErrorText(error);
+  const match = text.match(/"code"\s*:\s*(\d{3})/);
+  return match ? Number(match[1]) : 0;
+};
+
+const getRetryDelayMs = (error: any, fallbackMs: number): number => {
+  const text = getGeminiErrorText(error);
+  const jsonSeconds = text.match(/"retryDelay"\s*:\s*"?(\d+)s"?/);
+  if (jsonSeconds) {
+    return Math.min(24 * 60 * 60 * 1000, Math.max(1_000, Number(jsonSeconds[1]) * 1000));
+  }
+  return fallbackMs;
+};
+
+const classifyGeminiError = (error: any) => {
+  const text = getGeminiErrorText(error);
+  const status = getGeminiStatus(error);
+
+  if (/API_KEY_INVALID|API key not valid|Gemini API key is not configured/i.test(text)) {
+    return { kind: 'configuration' as const, status, cooldownMs: 0 };
+  }
+  if (status === 429 || /RESOURCE_EXHAUSTED|quota exceeded|rate limit/i.test(text)) {
+    return {
+      kind: 'quota' as const,
+      status: status || 429,
+      cooldownMs: getRetryDelayMs(error, 15 * 60 * 1000)
+    };
+  }
+  if (status === 503 || /UNAVAILABLE|high demand|overloaded/i.test(text)) {
+    return {
+      kind: 'overloaded' as const,
+      status: status || 503,
+      cooldownMs: getRetryDelayMs(error, 45 * 1000)
+    };
+  }
+  if (status === 404 || /not found|unsupported model/i.test(text)) {
+    return {
+      kind: 'model-unavailable' as const,
+      status: status || 404,
+      cooldownMs: 30 * 60 * 1000
+    };
+  }
+  return { kind: 'other' as const, status, cooldownMs: 0 };
+};
+
 async function callGeminiWithFallback(params: {
   contents: any;
   config?: any;
@@ -57,25 +111,50 @@ async function callGeminiWithFallback(params: {
   const models = params.preferredModels || ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'];
   const ai = createGeminiClient();
   let lastError: any = null;
+  const now = Date.now();
 
-  for (const model of models) {
+  const activeModels = models.filter(model => (geminiModelCooldownUntil.get(model) || 0) <= now);
+  const candidates = activeModels.length
+    ? activeModels
+    : [...models].sort(
+        (a, b) => (geminiModelCooldownUntil.get(a) || 0) - (geminiModelCooldownUntil.get(b) || 0)
+      ).slice(0, 1);
+
+  for (const model of candidates) {
     try {
       const response = await ai.models.generateContent({
         model,
         contents: params.contents,
         config: params.config,
       });
+
       if (response && response.text) {
-        console.info("[PhysFrame] Gemini model " + model + " succeeded.");
+        geminiModelCooldownUntil.delete(model);
+        console.info(`[PhysFrame] Gemini model ${model} succeeded.`);
         return response;
       }
+
+      lastError = new Error(`Gemini model ${model} returned an empty response`);
     } catch (err: any) {
-      console.warn(`[PhysFrame] Model ${model} failed, trying next fallback. Error:`, err?.message || err);
+      const failure = classifyGeminiError(err);
       lastError = err;
+
+      if (failure.kind === 'configuration') {
+        console.error(`[PhysFrame] Gemini configuration failure on ${model}; fallback stopped.`);
+        throw err;
+      }
+
+      if (failure.cooldownMs > 0) {
+        geminiModelCooldownUntil.set(model, Date.now() + failure.cooldownMs);
+      }
+
+      console.warn(
+        `[PhysFrame] Gemini model ${model} failed (${failure.kind}${failure.status ? `/${failure.status}` : ''}); trying next fallback.`
+      );
     }
   }
 
-  throw lastError || new Error('All model attempts failed');
+  throw lastError || new Error('All Gemini model attempts failed or are temporarily unavailable');
 }
 
 // Scene dictionaries for validation and local fallback
@@ -497,52 +576,97 @@ app.post('/api/ai/selfie-angle', async (req, res) => {
       return res.status(400).json({ error: 'Smart selfie angle selection applies only to front-camera selfies.' });
     }
 
-    const context = {
-      captureType: 'front-selfie' as const,
-      sceneFamily: sceneState.sceneFamily || null,
-      subScene: String(sceneState.subScene || ''),
-      pose: String(sceneState.pose || ''),
-      activity: String(sceneState.activity || ''),
-      framing: sceneState.framing || 'chest-up',
-      manualAngle: sceneState.cameraAngle || 'eye-level',
-      timeOfDay: sceneState.timeOfDay || 'midday',
-      lightingMode: String(sceneState.lightingMode || ''),
-      backgroundAutoAngle: sceneState.backgroundAutoAngle !== false,
-      backgroundMode: sceneState.backgroundMode,
-      backgroundHumans: sceneState.backgroundHumans,
-      backgroundVehicles: sceneState.backgroundVehicles,
-      backgroundDisorder: sceneState.backgroundDisorder,
-      backgroundActivity: sceneState.backgroundActivity,
-      backgroundPresence: sceneState.backgroundPresence,
-      backgroundCompositionGoal: sceneState.backgroundCompositionGoal,
-      mode: 'gemini-smart' as const
+    // IMPORTANT ARCHITECTURE BOUNDARY:
+    // The deterministic selfie engine runs in the client bundle. Server routes must not
+    // import client engine modules, because one transitive ESM resolution failure would
+    // crash every Gemini API route at function startup. The client sends only the
+    // already-eligible angle catalog; the server validates a narrow safe schema and
+    // Gemini can choose only from that catalog. The client re-validates the returned ID
+    // again through its local physics engine before applying it.
+    const rawCatalog = Array.isArray(req.body?.eligibleAngles) ? req.body.eligibleAngles : [];
+
+    const finite = (value: unknown, min: number, max: number): number | null => {
+      const number = Number(value);
+      return Number.isFinite(number) && number >= min && number <= max ? number : null;
     };
 
-    const eligible = getEligibleSelfieAngles(context);
-    if (!eligible.length) {
-      return res.status(422).json({ error: 'No physically eligible selfie angle exists for this scene/framing.' });
+    const safeText = (value: unknown, max = 240): string =>
+      typeof value === 'string' ? value.slice(0, max) : '';
+
+    const safeStringArray = (value: unknown, maxItems = 8, maxLength = 180): string[] =>
+      Array.isArray(value)
+        ? value
+            .filter(item => typeof item === 'string')
+            .slice(0, maxItems)
+            .map(item => String(item).slice(0, maxLength))
+        : [];
+
+    const angleCatalog = rawCatalog
+      .slice(0, 64)
+      .map((angle: any) => {
+        const pitchDeg = finite(angle?.pitchDeg, -25, 15);
+        const yawDeg = finite(angle?.yawDeg, -25, 25);
+        const rollDeg = finite(angle?.rollDeg, -4, 4);
+        const heightOffsetCm = finite(angle?.heightOffsetCm, -15, 25);
+        const distanceCm = finite(angle?.distanceCm, 38, 72);
+        const variationPitch = finite(angle?.allowedMicroVariation?.pitchDeg, 0, 5);
+        const variationYaw = finite(angle?.allowedMicroVariation?.yawDeg, 0, 6);
+        const variationRoll = finite(angle?.allowedMicroVariation?.rollDeg, 0, 3);
+        const variationDistance = finite(angle?.allowedMicroVariation?.distanceCm, 0, 6);
+
+        if (
+          typeof angle?.id !== 'string' ||
+          !/^[a-z0-9_\-]{3,80}$/i.test(angle.id) ||
+          pitchDeg === null ||
+          yawDeg === null ||
+          rollDeg === null ||
+          heightOffsetCm === null ||
+          distanceCm === null ||
+          variationPitch === null ||
+          variationYaw === null ||
+          variationRoll === null ||
+          variationDistance === null
+        ) {
+          return null;
+        }
+
+        return {
+          id: angle.id,
+          labelAR: safeText(angle.labelAR, 100),
+          family: safeText(angle.family, 40),
+          pitchDeg,
+          yawDeg,
+          rollDeg,
+          heightOffsetCm,
+          distanceCm,
+          risk: ['low', 'medium', 'high'].includes(angle.risk) ? angle.risk : 'medium',
+          intent: safeText(angle.intent, 240),
+          carFocus: ['face-priority', 'cabin-context', 'balanced'].includes(angle.carFocus)
+            ? angle.carFocus
+            : 'balanced',
+          carSeat: ['driver', 'front-passenger', 'rear-passenger', 'either'].includes(angle.carSeat)
+            ? angle.carSeat
+            : null,
+          phonePlacement: safeText(angle.phonePlacement, 240) || null,
+          cabinGuards: safeStringArray(angle.cabinGuards),
+          allowedMicroVariation: {
+            pitchDeg: variationPitch,
+            yawDeg: variationYaw,
+            rollDeg: variationRoll,
+            distanceCm: variationDistance
+          }
+        };
+      })
+      .filter(Boolean);
+
+    if (!angleCatalog.length) {
+      return res.status(422).json({
+        error: 'No validated physically eligible selfie angles were supplied by the local engine.'
+      });
     }
 
-    const angleCatalog = eligible.map(angle => ({
-      id: angle.id,
-      labelAR: angle.labelAR,
-      family: angle.family,
-      pitchDeg: angle.pitchDeg,
-      yawDeg: angle.yawDeg,
-      rollDeg: angle.rollDeg,
-      heightOffsetCm: angle.heightOffsetCm,
-      distanceCm: angle.distanceCm,
-      risk: angle.risk,
-      intent: angle.intent,
-      carFocus: angle.carFocus || 'balanced',
-      carSeat: angle.carSeat || null,
-      phonePlacement: angle.phonePlacement || null,
-      cabinGuards: angle.cabinGuards || [],
-      allowedMicroVariation: angle.variation
-    }));
-
     const response = await callGeminiWithFallback({
-      preferredModels: ['gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'],
+      preferredModels: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
       contents: `You are the Camera Director for a physically constrained Xiaomi 15 Ultra front-camera selfie engine.
 
 Choose EXACTLY ONE angle from the supplied eligible catalog. Never invent a new angle ID.
@@ -628,9 +752,9 @@ Return the exact carFocus associated with the selected catalog item (or "balance
     });
 
     const parsed = JSON.parse(response.text || '{}');
-    const selected = eligible.find(angle => angle.id === parsed.angleId);
+    const selected = angleCatalog.find((angle: any) => angle?.id === parsed.angleId) as any;
     if (!selected) {
-      throw new Error('Gemini selected an angle outside the eligible physical catalog');
+      throw new Error('Gemini selected an angle outside the validated physical catalog');
     }
 
     const numberOrZero = (value: unknown) => {
@@ -665,7 +789,7 @@ app.post('/api/ai/background-reasoning', async (req, res) => {
 
     const response = await callGeminiWithFallback({
       // Background reasoning is latency-sensitive.
-      preferredModels: ['gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'],
+      preferredModels: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
       contents: `You are a scene-context reasoner for a photorealistic Saudi smartphone selfie prompt engine.
 
 Your task is NOT to redesign the scene. Decide only how much secondary background life is contextually plausible.
@@ -771,7 +895,7 @@ app.post('/api/ai/audit-realism', async (req, res) => {
     const response = await callGeminiWithFallback({
       // Audit is latency-sensitive. 3.5 Flash is currently succeeding while 3.8 Flash
       // is frequently returning 503 high-demand responses in production.
-      preferredModels: ['gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'],
+      preferredModels: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
       contents: `You are an elite AI Image Realism Auditor and anti-slop evaluator.
 Examine this generation configuration and prompt:
 Configuration: ${JSON.stringify(sceneState, null, 2)}
