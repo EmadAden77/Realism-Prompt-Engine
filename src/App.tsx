@@ -148,6 +148,9 @@ interface RealismAuditResult {
   strengthsAR: string[];
   risksAR: string[];
   recommendationsAR: string[];
+  localScore?: number;
+  geminiScore?: number;
+  scoreMode?: 'local' | 'composite';
 }
 
 interface DirectedSceneResult {
@@ -854,14 +857,25 @@ const buildNegativeConstraints = (state: SceneState, derived: DerivedSceneState)
 };
 
 const calculatePhysicalConsistencyScore = (validation: ValidationResult, promptContradictions: string[] = []): number => {
-  let score = 100;
+  // This is a pre-generation consistency score, not proof that a rendered image is "100% real".
+  // Start below 100 to preserve uncertainty that can only be assessed after rendering.
+  let score = 96;
+
   for (const issue of validation.issues) {
-    if (issue.type === 'physical_impossibility') score -= 30;
-    else if (issue.type === 'contradiction') score -= 20;
-    else score -= 5;
+    if (issue.type === 'physical_impossibility') score -= 28;
+    else if (issue.type === 'contradiction') score -= 18;
+    else score -= 4;
   }
-  score -= promptContradictions.length * 15;
-  return Math.max(0, Math.min(100, score));
+
+  score -= promptContradictions.length * 12;
+  return Math.max(0, Math.min(96, score));
+};
+
+const combineRealismScores = (localScore: number, geminiScore?: number): number => {
+  if (typeof geminiScore !== 'number' || !Number.isFinite(geminiScore)) return localScore;
+  const boundedGemini = Math.max(0, Math.min(100, geminiScore));
+  // Deterministic physics remains authoritative; Gemini adds qualitative visual-risk judgment.
+  return Math.max(0, Math.min(99, Math.round(localScore * 0.60 + boundedGemini * 0.40)));
 };
 
 // --- DEFAULT STATE ---
@@ -1511,6 +1525,8 @@ export default function PhysFrameApp() {
       // Always show a deterministic local result immediately.
       const localAudit: RealismAuditResult = {
         realismScore: physicalConsistencyScore,
+        localScore: physicalConsistencyScore,
+        scoreMode: 'local',
         verdictAR: physicalConsistencyScore >= 90
           ? 'اتساق فيزيائي محلي ممتاز'
           : physicalConsistencyScore >= 75
@@ -1547,11 +1563,16 @@ export default function PhysFrameApp() {
 
         const data: RealismAuditResult = await res.json();
 
-        // Preserve deterministic score; Gemini may enrich wording/recommendations only.
+        const geminiScore = Number(data.realismScore);
+        const overallScore = combineRealismScores(physicalConsistencyScore, geminiScore);
+
         setAuditResult({
           ...localAudit,
           ...data,
-          realismScore: physicalConsistencyScore
+          realismScore: overallScore,
+          localScore: physicalConsistencyScore,
+          geminiScore: Number.isFinite(geminiScore) ? Math.max(0, Math.min(100, geminiScore)) : undefined,
+          scoreMode: 'composite'
         });
 
         if (data.verdictAR?.includes('تعذر تدقيق Gemini')) {
@@ -1614,35 +1635,70 @@ export default function PhysFrameApp() {
         }));
       }
 
-      // 5. Re-run Gemini Realism Review with the corrected scene & purified prompt
-      const res = await fetch('/api/ai/audit-realism', {
+      // 4. Auto-Fix succeeds locally and immediately. Gemini must never block correction.
+      const physicalConsistencyScore = calculatePhysicalConsistencyScore(postValidation, validatedPrompt.contradictionsFound);
+      const localFixedAudit: RealismAuditResult = {
+        realismScore: physicalConsistencyScore,
+        localScore: physicalConsistencyScore,
+        scoreMode: 'local',
+        verdictAR: physicalConsistencyScore >= 90
+          ? 'تم التصحيح: اتساق فيزيائي محلي ممتاز'
+          : physicalConsistencyScore >= 75
+            ? 'تم التصحيح مع بقاء ملاحظات محدودة'
+            : 'تم تطبيق التصحيحات المتاحة وتبقى نقاط تحتاج مراجعة',
+        strengthsAR: [
+          'تم اعتماد الحالة المصححة الكاملة دفعة واحدة.',
+          'تمت إعادة بناء هندسة الكاميرا والإضاءة والخلفية من الحالة النهائية نفسها.',
+          'تم تنظيف تناقضات البرومبت بعد التصحيح.'
+        ],
+        risksAR: validatedPrompt.contradictionsFound,
+        recommendationsAR: validatedPrompt.contradictionsFound.length > 0
+          ? ['راجع الملاحظات المتبقية قبل التوليد.']
+          : ['المشهد جاهز للتوليد من ناحية الاتساق الفيزيائي المحلي.']
+      };
+
+      if (postValidation.isValid && validatedPrompt.contradictionsFound.length === 0) {
+        setAutoFixMessage('تم التصحيح الكامل محليًا ✓');
+      } else {
+        setAutoFixMessage('تم تطبيق جميع التصحيحات الفيزيائية المتاحة ✓');
+      }
+
+      setAuditResult(localFixedAudit);
+      setAutoFixStatus('success');
+      showToast('تم التصحيح الفيزيائي فورًا ✓');
+
+      // Gemini re-audit is secondary and runs without blocking the Auto-Fix button.
+      void fetch('/api/ai/audit-realism', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sceneState: finalState,
           promptText: cleanPromptText,
         }),
-      });
+      })
+        .then(async res => {
+          if (!res.ok) throw new Error(`Gemini audit HTTP ${res.status}`);
+          const updatedAudit: RealismAuditResult = await res.json();
+          if (updatedAudit.verdictAR?.includes('تعذر تدقيق Gemini')) return;
 
-      if (!res.ok) throw new Error('فشل تحديث تقرير الواقعية');
-      const updatedAudit: RealismAuditResult = await res.json();
-      const physicalConsistencyScore = calculatePhysicalConsistencyScore(postValidation, validatedPrompt.contradictionsFound);
-      updatedAudit.realismScore = physicalConsistencyScore;
-
-      if (postValidation.isValid && validatedPrompt.contradictionsFound.length === 0) {
-        setAutoFixMessage('تم تصحيح التناقضات الفيزيائية وضبط زوايا الكادر والعدسة');
-      } else {
-        setAutoFixMessage('تم تطبيق كافة التحسينات الفيزيائية المتاحة');
-      }
-
-      setAuditResult(updatedAudit);
-      setAutoFixStatus('success');
-      showToast('تم التصحيح الفيزيائي وتحديث فحص الواقعية ✓');
+          const geminiScore = Number(updatedAudit.realismScore);
+          setAuditResult({
+            ...localFixedAudit,
+            ...updatedAudit,
+            realismScore: combineRealismScores(physicalConsistencyScore, geminiScore),
+            localScore: physicalConsistencyScore,
+            geminiScore: Number.isFinite(geminiScore) ? Math.max(0, Math.min(100, geminiScore)) : undefined,
+            scoreMode: 'composite'
+          });
+        })
+        .catch(err => {
+          console.warn('Gemini re-audit skipped after successful local Auto-Fix:', err);
+        });
 
       // Restore normal button state after a short delay
       setTimeout(() => {
         setAutoFixStatus('idle');
-      }, 3000);
+      }, 1800);
     } catch (err: any) {
       console.error(err);
       setAutoFixStatus('idle');
@@ -3054,8 +3110,17 @@ export default function PhysFrameApp() {
                     {/* Score Card */}
                     <div className="bg-[#14181B] p-4 rounded-xl border border-white/10 flex items-center justify-between">
                       <div>
-                        <div className="text-xs text-[var(--text-muted)]">مقياس الاتساق الفيزيائي</div>
+                        <div className="text-xs text-[var(--text-muted)]">
+                          {auditResult.scoreMode === 'composite' ? 'مقياس الواقعية الإجمالي' : 'مقياس الاتساق الفيزيائي المحلي'}
+                        </div>
                         <div className="text-lg font-extrabold text-white mt-0.5">{auditResult.verdictAR}</div>
+                        {(typeof auditResult.localScore === 'number' || typeof auditResult.geminiScore === 'number') && (
+                          <div className="text-[10px] text-[var(--text-muted)] mt-1">
+                            {typeof auditResult.localScore === 'number' && <span>محلي {auditResult.localScore}%</span>}
+                            {typeof auditResult.localScore === 'number' && typeof auditResult.geminiScore === 'number' && <span> • </span>}
+                            {typeof auditResult.geminiScore === 'number' && <span>Gemini {auditResult.geminiScore}%</span>}
+                          </div>
+                        )}
                       </div>
                       <div className="w-16 h-16 rounded-full border-4 border-[var(--accent)] flex items-center justify-center font-black text-xl text-[var(--accent)] bg-[var(--accent)]/10 shadow-[0_0_12px_var(--accent-glow)]">
                         {auditResult.realismScore}%
