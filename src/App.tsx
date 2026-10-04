@@ -40,6 +40,9 @@ import {
   BackgroundMode,
   BackgroundControlDensity,
   BackgroundDisorderControl,
+  BackgroundActivityControl,
+  BackgroundPresenceControl,
+  BackgroundCompositionGoal,
   BackgroundGeminiAdvice
 } from './engine/backgroundRealism';
 import { SelfieAngleAdvice, SelfieAngleMode } from './engine/selfieAngles';
@@ -99,6 +102,10 @@ interface SceneState {
   backgroundHumans: BackgroundControlDensity;
   backgroundVehicles: BackgroundControlDensity;
   backgroundDisorder: BackgroundDisorderControl;
+  backgroundActivity: BackgroundActivityControl;
+  backgroundPresence: BackgroundPresenceControl;
+  backgroundCompositionGoal: BackgroundCompositionGoal;
+  backgroundAutoAngle: boolean;
   backgroundGeminiAssist: boolean;
   backgroundGeminiAdvice?: BackgroundGeminiAdvice;
 
@@ -927,7 +934,11 @@ const buildBackgroundReasoningKey = (state: SceneState): string => JSON.stringif
   backgroundMode: state.backgroundMode,
   backgroundHumans: state.backgroundHumans,
   backgroundVehicles: state.backgroundVehicles,
-  backgroundDisorder: state.backgroundDisorder
+  backgroundDisorder: state.backgroundDisorder,
+  backgroundActivity: state.backgroundActivity,
+  backgroundPresence: state.backgroundPresence,
+  backgroundCompositionGoal: state.backgroundCompositionGoal,
+  backgroundAutoAngle: state.backgroundAutoAngle
 });
 
 const buildSelfieAngleReasoningKey = (state: SceneState): string => JSON.stringify({
@@ -939,9 +950,17 @@ const buildSelfieAngleReasoningKey = (state: SceneState): string => JSON.stringi
   framing: state.framing,
   timeOfDay: state.timeOfDay,
   lightingMode: state.lightingMode,
-  backgroundMode: state.backgroundMode,
-  backgroundHumans: state.backgroundHumans,
-  backgroundVehicles: state.backgroundVehicles
+  backgroundAngleLink: state.backgroundAutoAngle
+    ? {
+        mode: state.backgroundMode,
+        humans: state.backgroundHumans,
+        vehicles: state.backgroundVehicles,
+        disorder: state.backgroundDisorder,
+        activity: state.backgroundActivity,
+        presence: state.backgroundPresence,
+        compositionGoal: state.backgroundCompositionGoal
+      }
+    : 'disabled'
 });
 
 const BACKGROUND_DENSITY_LABELS: Record<string, string> = {
@@ -955,8 +974,30 @@ const BACKGROUND_DENSITY_LABELS: Record<string, string> = {
 const BACKGROUND_DISORDER_LABELS: Record<string, string> = {
   none: 'بدون',
   'very-clean': 'نظيف جدًا',
-  light: 'خفيف',
-  moderate: 'متوسط',
+  light: 'طبيعي/خفيف',
+  moderate: 'مستخدم/متوسط',
+  auto: 'تلقائي'
+};
+
+const BACKGROUND_ACTIVITY_LABELS: Record<string, string> = {
+  calm: 'هادئ',
+  natural: 'طبيعي',
+  active: 'نشط',
+  auto: 'تلقائي'
+};
+
+const BACKGROUND_PRESENCE_LABELS: Record<string, string> = {
+  low: 'ضعيف',
+  balanced: 'متوازن',
+  visible: 'واضح',
+  strong: 'قوي',
+  auto: 'تلقائي'
+};
+
+const BACKGROUND_GOAL_LABELS: Record<string, string> = {
+  'face-priority': 'أولوية الوجه',
+  balanced: 'متوازن',
+  'background-priority': 'إظهار الخلفية',
   auto: 'تلقائي'
 };
 
@@ -989,6 +1030,10 @@ const DEFAULT_STATE: SceneState = {
   backgroundHumans: 'auto',
   backgroundVehicles: 'auto',
   backgroundDisorder: 'auto',
+  backgroundActivity: 'auto',
+  backgroundPresence: 'auto',
+  backgroundCompositionGoal: 'auto',
+  backgroundAutoAngle: true,
   backgroundGeminiAssist: true,
   cameraAngleMode: 'gemini-smart'
 };
@@ -1038,6 +1083,20 @@ export default function PhysFrameApp() {
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const updateBackgroundControls = (patch: Partial<SceneState>) => {
+    setState(prev => ({
+      ...prev,
+      ...patch,
+      backgroundGeminiAdvice: undefined,
+      ...(prev.backgroundAutoAngle
+        ? {
+            cameraAngleMode: 'gemini-smart' as SelfieAngleMode,
+            selfieAngleAdvice: undefined
+          }
+        : {})
+    }));
   };
 
   useEffect(() => {
@@ -1180,7 +1239,8 @@ export default function PhysFrameApp() {
     selfieAngleReasoningKey,
     state.cameraAngleMode,
     state.captureType,
-    state.sceneFamily
+    state.sceneFamily,
+    state.backgroundAutoAngle
   ]);
 
 
@@ -1231,6 +1291,9 @@ export default function PhysFrameApp() {
               humanDensity: localDecision.humanDensity,
               vehicleDensity: localDecision.vehicleDensity,
               disorderLevel: localDecision.disorderLevel,
+              activityLevel: localDecision.activityLevel,
+              presenceLevel: localDecision.presenceLevel,
+              compositionGoal: localDecision.compositionGoal,
               fovAllowsBackgroundLife: localDecision.fovAllowsBackgroundLife,
               decisionReasons: localDecision.decisionReasons
             }
@@ -2662,21 +2725,40 @@ export default function PhysFrameApp() {
                       </div>
                       <div>
                         <h3 className="font-bold text-white text-xs">الواقعية الخلفية</h3>
-                        <p className="text-[10px] text-[var(--text-muted)]">تحكم ثابت بالبشر والسيارات والفوضى مع تقييد تلقائي حسب زاوية السيلفي والـFOV</p>
+                        <p className="text-[10px] text-[var(--text-muted)]">البشر والسيارات والفوضى والنشاط وحضور الخلفية مرتبطة تلقائيًا بزاوية السيلفي والـFOV</p>
                       </div>
                     </div>
                     <button
                       type="button"
-                      onClick={() => setState({
-                        ...state,
-                        backgroundGeminiAssist: !state.backgroundGeminiAssist,
-                        backgroundGeminiAdvice: undefined
+                      onClick={() => updateBackgroundControls({
+                        backgroundGeminiAssist: !state.backgroundGeminiAssist
                       })}
                       className={`shrink-0 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-colors ${state.backgroundGeminiAssist ? 'bg-[#1C2B20] border-[#355F3D] text-[#8FD29B]' : 'bg-white/5 border-white/10 text-[var(--text-muted)]'}`}
                     >
                       Gemini {state.backgroundGeminiAssist ? 'ON' : 'OFF'}
                     </button>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setState(prev => ({
+                      ...prev,
+                      backgroundAutoAngle: !prev.backgroundAutoAngle,
+                      selfieAngleAdvice: undefined,
+                      ...(!prev.backgroundAutoAngle
+                        ? { cameraAngleMode: 'gemini-smart' as SelfieAngleMode }
+                        : {})
+                    }))}
+                    className={`w-full mb-3 px-3 py-2.5 rounded-xl border flex items-center justify-between gap-3 text-right transition-colors ${state.backgroundAutoAngle ? 'bg-[var(--accent)]/10 border-[var(--accent)]/50' : 'bg-white/5 border-white/10'}`}
+                  >
+                    <div>
+                      <div className="text-[10px] font-bold text-white">ربط الخلفية بزاوية السيلفي تلقائيًا</div>
+                      <div className="text-[9px] text-[var(--text-muted)] mt-0.5">أي تغيير هنا يعيد اختيار Pitch / Yaw / Roll / المسافة تلقائيًا</div>
+                    </div>
+                    <span className={`text-[10px] font-bold ${state.backgroundAutoAngle ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}>
+                      {state.backgroundAutoAngle ? 'ON' : 'OFF'}
+                    </span>
+                  </button>
 
                   <div className="grid grid-cols-4 gap-1.5 mb-3">
                     {[
@@ -2688,10 +2770,8 @@ export default function PhysFrameApp() {
                       <button
                         key={option.id}
                         type="button"
-                        onClick={() => setState({
-                          ...state,
-                          backgroundMode: option.id as BackgroundMode,
-                          backgroundGeminiAdvice: undefined
+                        onClick={() => updateBackgroundControls({
+                          backgroundMode: option.id as BackgroundMode
                         })}
                         className={`py-2 rounded-lg text-[10px] font-bold border transition-colors ${state.backgroundMode === option.id ? 'bg-[var(--accent)]/15 border-[var(--accent)] text-[var(--accent)]' : 'border-[var(--border)] text-[var(--text-muted)] hover:bg-white/5'}`}
                       >
@@ -2705,10 +2785,8 @@ export default function PhysFrameApp() {
                       <label className="text-[10px] text-[var(--text-muted)] block mb-1">البشر</label>
                       <select
                         value={state.backgroundHumans}
-                        onChange={e => setState({
-                          ...state,
-                          backgroundHumans: e.target.value as BackgroundControlDensity,
-                          backgroundGeminiAdvice: undefined
+                        onChange={e => updateBackgroundControls({
+                          backgroundHumans: e.target.value as BackgroundControlDensity
                         })}
                         disabled={state.backgroundMode === 'off'}
                         className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white disabled:opacity-40"
@@ -2716,7 +2794,9 @@ export default function PhysFrameApp() {
                         <option value="auto">تلقائي</option>
                         <option value="none">بدون</option>
                         <option value="sparse">قليل</option>
+                        <option value="light">خفيف</option>
                         <option value="moderate">متوسط</option>
+                        <option value="high">مرتفع</option>
                       </select>
                     </div>
 
@@ -2724,10 +2804,8 @@ export default function PhysFrameApp() {
                       <label className="text-[10px] text-[var(--text-muted)] block mb-1">السيارات</label>
                       <select
                         value={state.backgroundVehicles}
-                        onChange={e => setState({
-                          ...state,
-                          backgroundVehicles: e.target.value as BackgroundControlDensity,
-                          backgroundGeminiAdvice: undefined
+                        onChange={e => updateBackgroundControls({
+                          backgroundVehicles: e.target.value as BackgroundControlDensity
                         })}
                         disabled={state.backgroundMode === 'off'}
                         className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white disabled:opacity-40"
@@ -2735,7 +2813,9 @@ export default function PhysFrameApp() {
                         <option value="auto">تلقائي</option>
                         <option value="none">بدون</option>
                         <option value="sparse">قليل</option>
+                        <option value="light">خفيف</option>
                         <option value="moderate">متوسط</option>
+                        <option value="high">مرتفع</option>
                       </select>
                     </div>
 
@@ -2743,18 +2823,72 @@ export default function PhysFrameApp() {
                       <label className="text-[10px] text-[var(--text-muted)] block mb-1">الفوضى</label>
                       <select
                         value={state.backgroundDisorder}
-                        onChange={e => setState({
-                          ...state,
-                          backgroundDisorder: e.target.value as BackgroundDisorderControl,
-                          backgroundGeminiAdvice: undefined
+                        onChange={e => updateBackgroundControls({
+                          backgroundDisorder: e.target.value as BackgroundDisorderControl
                         })}
                         disabled={state.backgroundMode === 'off'}
                         className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white disabled:opacity-40"
                       >
                         <option value="auto">تلقائي</option>
                         <option value="very-clean">نظيف جدًا</option>
-                        <option value="light">خفيف</option>
-                        <option value="moderate">متوسط</option>
+                        <option value="natural">طبيعي</option>
+                        <option value="lived-in">مستخدم/معاش</option>
+                        <option value="light">فوضى خفيفة</option>
+                        <option value="moderate">فوضى متوسطة</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 mt-2">
+                    <div>
+                      <label className="text-[10px] text-[var(--text-muted)] block mb-1">نشاط المشهد</label>
+                      <select
+                        value={state.backgroundActivity}
+                        onChange={e => updateBackgroundControls({
+                          backgroundActivity: e.target.value as BackgroundActivityControl
+                        })}
+                        disabled={state.backgroundMode === 'off'}
+                        className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white disabled:opacity-40"
+                      >
+                        <option value="auto">تلقائي</option>
+                        <option value="calm">هادئ</option>
+                        <option value="natural">طبيعي</option>
+                        <option value="active">نشط</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-[var(--text-muted)] block mb-1">حضور الخلفية</label>
+                      <select
+                        value={state.backgroundPresence}
+                        onChange={e => updateBackgroundControls({
+                          backgroundPresence: e.target.value as BackgroundPresenceControl
+                        })}
+                        disabled={state.backgroundMode === 'off'}
+                        className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white disabled:opacity-40"
+                      >
+                        <option value="auto">تلقائي</option>
+                        <option value="low">ضعيف</option>
+                        <option value="balanced">متوازن</option>
+                        <option value="visible">واضح</option>
+                        <option value="strong">قوي</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-[var(--text-muted)] block mb-1">هدف اللقطة</label>
+                      <select
+                        value={state.backgroundCompositionGoal}
+                        onChange={e => updateBackgroundControls({
+                          backgroundCompositionGoal: e.target.value as BackgroundCompositionGoal
+                        })}
+                        disabled={state.backgroundMode === 'off'}
+                        className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white disabled:opacity-40"
+                      >
+                        <option value="auto">تلقائي</option>
+                        <option value="face-priority">أولوية الوجه</option>
+                        <option value="balanced">متوازن</option>
+                        <option value="background-priority">إظهار الخلفية</option>
                       </select>
                     </div>
                   </div>
@@ -2783,8 +2917,35 @@ export default function PhysFrameApp() {
                         </div>
                       </div>
 
+                      <div className="grid grid-cols-3 gap-1.5 text-[10px]">
+                        <div className="bg-white/5 rounded-lg p-2 text-center">
+                          <div className="text-[var(--text-muted)] mb-0.5">النشاط</div>
+                          <div className="font-bold text-[#F3EFE7]">{BACKGROUND_ACTIVITY_LABELS[backgroundDecision.activityLevel]}</div>
+                        </div>
+                        <div className="bg-white/5 rounded-lg p-2 text-center">
+                          <div className="text-[var(--text-muted)] mb-0.5">الحضور</div>
+                          <div className="font-bold text-[#F3EFE7]">{BACKGROUND_PRESENCE_LABELS[backgroundDecision.presenceLevel]}</div>
+                        </div>
+                        <div className="bg-white/5 rounded-lg p-2 text-center">
+                          <div className="text-[var(--text-muted)] mb-0.5">هدف اللقطة</div>
+                          <div className="font-bold text-[#F3EFE7]">{BACKGROUND_GOAL_LABELS[backgroundDecision.compositionGoal]}</div>
+                        </div>
+                      </div>
+
+                      {state.captureType === 'front-selfie' && state.backgroundAutoAngle && selfieAngleDecision && (
+                        <div className="bg-[var(--accent)]/5 border border-[var(--accent)]/20 rounded-lg p-2.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[9px] text-[var(--text-muted)]">زاوية السيلفي المرتبطة بالخلفية</span>
+                            <span className="text-[10px] font-bold text-[var(--accent)]">{selfieAngleDecision.presetLabelAR}</span>
+                          </div>
+                          <div className="text-[9px] text-[var(--text-muted)] mt-1">
+                            {backgroundDecision.angleIntent.reasonAR.slice(0, 1).join(' ')}
+                          </div>
+                        </div>
+                      )}
+
                       <div className="text-[9px] leading-relaxed text-[var(--text-muted)]">
-                        {backgroundDecision.decisionReasons.slice(0, 2).join(' ')}
+                        {backgroundDecision.decisionReasons.slice(0, 3).join(' ')}
                       </div>
 
                       {backgroundDecision.cappedByFraming && (
