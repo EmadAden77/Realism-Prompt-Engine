@@ -64,6 +64,14 @@ export interface ActivityDefinition {
 
 const COMMON_ACTIVITIES: ActivityDefinition[] = [
   {
+    labelAR: 'واقف بشكل طبيعي',
+    prompt: 'standing naturally without performing a staged action',
+    mechanics: 'weight distributed naturally with slight left-right asymmetry, arms resting without mannequin stiffness',
+    gaze: 'casual gaze toward the phone lens or slightly past it',
+    tags: ['standing', 'static'],
+    families: ['military-base','saudi-outdoor','living-room','bedroom','gym']
+  },
+  {
     labelAR: 'واقف فقط',
     prompt: 'standing naturally without performing a staged action',
     mechanics: 'weight distributed naturally with slight left-right asymmetry, arms resting without mannequin stiffness',
@@ -155,6 +163,8 @@ const COMMON_ACTIVITIES: ActivityDefinition[] = [
 
 const FAMILY_ACTIVITIES: Record<SceneFamilyId, ActivityDefinition[]> = {
   'bedroom': [
+    { labelAR:'جالس', prompt:'sitting naturally in the bedroom', mechanics:'pelvis fully supported with relaxed posture and grounded limbs', gaze:'relaxed natural gaze', tags:['seated'], families:['bedroom'] },
+    { labelAR:'مسترخٍ', prompt:'relaxing naturally in the room', mechanics:'reduced muscular tension with body weight visibly supported by furniture or bed', gaze:'soft unfixed gaze', tags:['relaxed'], families:['bedroom'] },
     { labelAR:'جالس بهدوء', prompt:'sitting quietly in the bedroom', mechanics:'pelvis fully supported with relaxed lumbar posture', gaze:'relaxed natural gaze', tags:['seated'], families:['bedroom'] },
     { labelAR:'جالس على حافة السرير', prompt:'sitting naturally on the edge of the bed', mechanics:'pelvis compresses mattress edge with feet grounded and knees naturally bent', gaze:'casual lens or off-camera gaze', tags:['seated','bed'], families:['bedroom'] },
     { labelAR:'مسترخٍ', prompt:'relaxing quietly in the room', mechanics:'reduced muscular tension with supported body weight', gaze:'soft unfixed gaze', tags:['relaxed'], families:['bedroom'] },
@@ -186,6 +196,7 @@ const FAMILY_ACTIVITIES: Record<SceneFamilyId, ActivityDefinition[]> = {
     { labelAR:'يقف في طابور', prompt:'waiting naturally in a short queue', mechanics:'compact standing posture respecting personal space with subtle weight shift', gaze:'forward toward service point', tags:['waiting'], families:['saudi-outdoor'] }
   ],
   'military-base': [
+    { labelAR:'واقف بثبات واعتزاز', prompt:'standing with calm dignified professional composure', mechanics:'upright posture with grounded feet and restrained shoulder tension, no theatrical stance', gaze:'steady professional gaze', tags:['standing','work'], families:['military-base'] },
     { labelAR:'عمل مكتبي', prompt:'performing ordinary administrative desk work', mechanics:'forearms naturally supported by desk with chair and desk occlusion', gaze:'attention on documents or screen', tags:['work','seated'], families:['military-base'] },
     { labelAR:'يراجع ملفًا', prompt:'reviewing an administrative file', mechanics:'file supported by desk or one hand with natural page handling', gaze:'eyes directed to file pages', tags:['work','reading'], families:['military-base'] },
     { labelAR:'يحمل أوراقًا', prompt:'carrying a small stack of work papers', mechanics:'papers supported against gravity with one forearm or hand', gaze:'forward corridor gaze', tags:['work','standing'], families:['military-base'] },
@@ -208,6 +219,8 @@ const FAMILY_ACTIVITIES: Record<SceneFamilyId, ActivityDefinition[]> = {
     { labelAR:'يتمدد بخفة', prompt:'doing a light recovery stretch', mechanics:'gentle joint range without exaggerated flexibility or bodybuilding pose', gaze:'attention on stretch', tags:['sport','motion'], families:['gym'] }
   ],
   'car': [
+    { labelAR:'خلف المقود والسيارة متوقفة', prompt:'sitting behind the steering wheel while the vehicle is fully stationary', mechanics:'seat-supported torso with natural steering-wheel clearance and no driving-motion pose', gaze:'road-ahead or brief lens glance', tags:['car','driver'], families:['car'] },
+    { labelAR:'جالس بهدوء داخل السيارة', prompt:'sitting quietly inside the stationary vehicle', mechanics:'back supported by seat with relaxed hands and natural cabin contact', gaze:'relaxed cabin or exterior gaze', tags:['car','relaxed'], families:['car'] },
     { labelAR:'جالس في مقعد السائق', prompt:'sitting naturally in the driver seat while the vehicle is stationary', mechanics:'back supported by seat with steering-wheel clearance and grounded lower body', gaze:'natural lens, dashboard, or road-ahead gaze', tags:['car','driver'], families:['car'] },
     { labelAR:'جالس في مقعد الراكب', prompt:'sitting naturally in the front passenger seat', mechanics:'back supported by passenger seat with dashboard and door clearance', gaze:'relaxed forward or side-window gaze', tags:['car','passenger'], families:['car'] },
     { labelAR:'جالس في المقعد الخلفي', prompt:'sitting naturally in the rear seat', mechanics:'back supported by rear seat with front-seat occlusion in depth', gaze:'relaxed cabin gaze', tags:['car','rear'], families:['car'] },
