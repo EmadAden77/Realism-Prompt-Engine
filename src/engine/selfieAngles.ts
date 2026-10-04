@@ -206,36 +206,9 @@ export function chooseDeterministicSelfieAngle(context: SelfieAngleContext): Sel
 export function resolveSelfieAngleGeometry(context: SelfieAngleContext): ResolvedSelfieAngle | null {
   if (context.captureType !== 'front-selfie') return null;
 
-  if ((context.mode ?? 'manual') === 'manual') {
-    const manualPreset = {
-      'eye-level': SELFIE_ANGLE_LIBRARY.find(x => x.id === 'eye_natural_center')!,
-      'slightly-high': SELFIE_ANGLE_LIBRARY.find(x => x.id === 'high_soft_center')!,
-      'slightly-low': SELFIE_ANGLE_LIBRARY.find(x => x.id === 'low_soft_center')!,
-      'slightly-off-center': SELFIE_ANGLE_LIBRARY.find(x => x.id === 'offaxis_right_12')!
-    }[context.manualAngle];
-
-    const [minDistance, maxDistance] = framingDistanceLimits[context.framing];
-    const distanceCm = clamp(manualPreset.distanceCm, minDistance, maxDistance);
-
-    return {
-      mode: 'manual',
-      presetId: manualPreset.id,
-      presetLabelAR: manualPreset.labelAR,
-      legacyAngle: context.manualAngle,
-      pitchDeg: manualPreset.pitchDeg,
-      yawDeg: manualPreset.yawDeg,
-      rollDeg: manualPreset.rollDeg,
-      heightOffsetCm: manualPreset.heightOffsetCm,
-      distanceCm,
-      armMechanics: describeArmMechanics(distanceCm, context.pose),
-      cameraPosition: describeCameraPosition(manualPreset.heightOffsetCm),
-      cameraDirection: describeDirection(manualPreset.pitchDeg, manualPreset.yawDeg, manualPreset.rollDeg),
-      risk: manualPreset.risk,
-      source: 'manual',
-      adviceAccepted: false,
-      reasonAR: ['تم استخدام زاوية المستخدم اليدوية ضمن حدود السيلفي الأمامي.']
-    };
-  }
+  // Manual mode is intentionally left to the legacy physics path so this feature
+  // cannot change established camera distances/angles for existing users.
+  if ((context.mode ?? 'manual') === 'manual') return null;
 
   const fallback = chooseDeterministicSelfieAngle(context);
   const eligibleIds = new Set(getEligibleSelfieAngles(context).map(x => x.id));
