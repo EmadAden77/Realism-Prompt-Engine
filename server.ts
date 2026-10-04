@@ -17,10 +17,15 @@ const port = Number(process.env.PORT) || 3000;
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+const getGeminiApiKey = () =>
+  process.env.GEMINI_API_KEY ||
+  process.env.GeminiAPIKey2 ||
+  '';
+
 app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
-    geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
+    geminiConfigured: Boolean(getGeminiApiKey()),
     runtime: process.env.VERCEL ? 'vercel' : 'node'
   });
 });
@@ -28,9 +33,9 @@ app.get('/api/health', (_req, res) => {
 // Gemini is initialized lazily inside requests so a missing key never crashes
 // the whole Vercel function before health checks or static routes can respond.
 function createGeminiClient() {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = getGeminiApiKey();
   if (!apiKey) {
-    throw new Error('GEMINI_API_KEY is not configured');
+    throw new Error('Gemini API key is not configured');
   }
   return new GoogleGenAI({
     apiKey,
