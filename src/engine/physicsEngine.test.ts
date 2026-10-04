@@ -12,6 +12,7 @@ import {
   XIAOMI_15_ULTRA_FRONT_CAMERA_PROFILE
 } from './physicsEngine';
 import { MICRO_LOCATIONS, SceneFamilyId } from '../data/microLocations';
+import { SELFIE_ANGLE_LIBRARY } from './selfieAngles';
 
 function assert(condition: boolean, message: string) {
   if (!condition) {
@@ -607,6 +608,131 @@ assert(
   'Resolved normal scene must have zero hard plausibility blockers'
 );
 
-console.log('  ✓ Scene Plausibility + Lighting Causality V1 regression suite passed!\n');
+console.log('▶ Test 27: Smart selfie library is broad and has unique IDs');
+assert(SELFIE_ANGLE_LIBRARY.length >= 30, 'Smart selfie angle library must contain at least 30 physically designed angles');
+assert(
+  new Set(SELFIE_ANGLE_LIBRARY.map(angle => angle.id)).size === SELFIE_ANGLE_LIBRARY.length,
+  'Every selfie angle preset ID must be unique'
+);
+assert(
+  SELFIE_ANGLE_LIBRARY.every(angle => Math.abs(angle.rollDeg) <= 3),
+  'Base selfie roll must stay within natural handheld micro-tilt and never become a dramatic Dutch angle'
+);
+
+console.log('▶ Test 28: Gemini angle advice is accepted only inside the eligible catalog');
+const smartCafeState: SceneState = {
+  ...cafeMediumState,
+  captureType: 'front-selfie',
+  pose: 'جالس على كرسي',
+  activity: 'جالس في المقهى',
+  cameraAngleMode: 'gemini-smart',
+  selfieAngleAdvice: {
+    angleId: 'cafe_seated_diagonal',
+    pitchOffsetDeg: -1,
+    yawOffsetDeg: 2,
+    rollOffsetDeg: 1,
+    distanceOffsetCm: 2,
+    reasonAR: ['الجلوس في المقهى يناسب زاوية قطرية خفيفة.'],
+    confidence: 93
+  }
+};
+const resolvedSmartCafe = resolveScene(smartCafeState);
+assert(resolvedSmartCafe.physicalState.selfieAngle?.source === 'gemini', 'Eligible Gemini angle must be accepted');
+assert(resolvedSmartCafe.physicalState.selfieAngle?.presetId === 'cafe_seated_diagonal', 'Expected café angle preset must be used');
+assert(
+  (resolvedSmartCafe.physicalState.selfieAngle?.distanceCm ?? 0) >= 47 &&
+  (resolvedSmartCafe.physicalState.selfieAngle?.distanceCm ?? 0) <= 58,
+  'Smart chest-up selfie distance must remain inside physical framing limits'
+);
+
+console.log('▶ Test 29: Excessive Gemini micro-variation is clamped locally');
+const excessiveVariationState: SceneState = {
+  ...smartCafeState,
+  selfieAngleAdvice: {
+    angleId: 'cafe_seated_diagonal',
+    pitchOffsetDeg: -50,
+    yawOffsetDeg: 60,
+    rollOffsetDeg: 20,
+    distanceOffsetCm: 40,
+    reasonAR: ['اختبار تجاوز الحدود'],
+    confidence: 99
+  }
+};
+const resolvedExcessive = resolveScene(excessiveVariationState);
+assert(
+  Math.abs(resolvedExcessive.physicalState.selfieAngle?.rollDeg ?? 99) <= 3,
+  'Local physics must clamp Gemini roll to the preset micro-variation limit'
+);
+assert(
+  (resolvedExcessive.physicalState.selfieAngle?.distanceCm ?? 0) <= 58,
+  'Local physics must clamp Gemini distance to chest-up arm-reach limits'
+);
+assert(
+  Math.abs(resolvedExcessive.physicalState.selfieAngle?.yawDeg ?? 99) <= 16,
+  'Local physics must clamp excessive Gemini yaw variation'
+);
+
+console.log('▶ Test 30: Ineligible Gemini angle falls back to deterministic physics');
+const invalidCarAdviceState: SceneState = {
+  ...carNightState,
+  captureType: 'front-selfie',
+  cameraAngleMode: 'gemini-smart',
+  selfieAngleAdvice: {
+    angleId: 'lying_overhead_restrained',
+    pitchOffsetDeg: 0,
+    yawOffsetDeg: 0,
+    rollOffsetDeg: 0,
+    distanceOffsetCm: 0,
+    reasonAR: ['زاوية غير مناسبة عمدًا للاختبار'],
+    confidence: 99
+  }
+};
+const resolvedInvalidCarAdvice = resolveScene(invalidCarAdviceState);
+assert(
+  resolvedInvalidCarAdvice.physicalState.selfieAngle?.source === 'local-fallback',
+  'Ineligible Gemini angle must be rejected and replaced by local deterministic fallback'
+);
+assert(
+  resolvedInvalidCarAdvice.physicalState.selfieAngle?.presetId?.startsWith('car_') === true,
+  'Car fallback should select a vehicle-compatible selfie angle'
+);
+
+console.log('▶ Test 31: Reclined bedroom pose gets a physically compatible smart angle');
+const smartReclinedState: SceneState = {
+  ...bedroomState,
+  cameraAngleMode: 'gemini-smart',
+  selfieAngleAdvice: undefined
+};
+const resolvedSmartReclined = resolveScene(smartReclinedState);
+assert(
+  resolvedSmartReclined.physicalState.selfieAngle?.source === 'local-fallback',
+  'Smart mode must remain functional locally when Gemini advice is absent'
+);
+assert(
+  Boolean(
+    resolvedSmartReclined.physicalState.selfieAngle?.presetId?.includes('reclined') ||
+    resolvedSmartReclined.physicalState.selfieAngle?.presetId?.includes('lying')
+  ),
+  'Reclined bedroom pose should select a reclined/lying-compatible angle locally'
+);
+
+console.log('▶ Test 32: Wide smart selfie preserves Xiaomi arm-reach geometry');
+const smartWideState: SceneState = {
+  ...streetWideState,
+  cameraAngleMode: 'gemini-smart',
+  selfieAngleAdvice: undefined
+};
+const resolvedSmartWide = resolveScene(smartWideState);
+assert(
+  (resolvedSmartWide.physicalState.selfieAngle?.distanceCm ?? 0) >= 62 &&
+  (resolvedSmartWide.physicalState.selfieAngle?.distanceCm ?? 0) <= 70,
+  'Half-body smart selfie must remain within maximum functional Xiaomi selfie reach'
+);
+assert(
+  resolvedSmartWide.physicalState.armReach.includes('functional maximum selfie reach'),
+  'Wide smart selfie must retain near-maximum physical arm extension mechanics'
+);
+
+console.log('  ✓ Gemini Smart Selfie Angle Director regression suite passed!\n');
 
 console.log('🎉 ALL AUTOMATED VALIDATION TESTS PASSED PERFECTLY!\n');

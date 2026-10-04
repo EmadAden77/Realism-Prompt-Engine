@@ -42,6 +42,7 @@ import {
   BackgroundDisorderControl,
   BackgroundGeminiAdvice
 } from './engine/backgroundRealism';
+import { SelfieAngleAdvice, SelfieAngleMode } from './engine/selfieAngles';
 
 // --- TYPES ---
 type CaptureType = 'front-selfie' | 'mirror-selfie' | 'third-person-candid';
@@ -100,6 +101,10 @@ interface SceneState {
   backgroundDisorder: BackgroundDisorderControl;
   backgroundGeminiAssist: boolean;
   backgroundGeminiAdvice?: BackgroundGeminiAdvice;
+
+  // Smart Xiaomi selfie camera director
+  cameraAngleMode: SelfieAngleMode;
+  selfieAngleAdvice?: SelfieAngleAdvice;
 }
 
 interface DerivedSceneState {
@@ -711,7 +716,13 @@ const buildSemanticScene = (
     const opticsText = physicalState?.opticalPerspective || '21mm wide-angle mobile front-camera perspective';
     const distText = physicalState?.cameraDistance || derived.cameraDistance;
     const posText = physicalState?.cameraPosition || state.cameraAngle;
-    captureMechanics = `Smartphone front-camera capture. Camera profile: ${opticsText}. Framing: ${state.framing} (distance: ${distText}). Angle: ${posText}. Handheld mechanics: ${physicalState?.armReach || derived.contactPhysics.find(p => p.includes('arm')) || 'dominant arm holding smartphone off-camera'}. Capturing phone is NOT visible in frame.`;
+    const directionText = physicalState
+      ? `${physicalState.cameraPitch}, ${physicalState.cameraYaw}, ${physicalState.cameraRoll}`
+      : state.cameraAngle;
+    const smartAngleText = physicalState?.selfieAngle
+      ? ` Selected selfie geometry: ${physicalState.selfieAngle.presetLabelAR} (${physicalState.selfieAngle.source}), ${physicalState.selfieAngle.cameraDirection}.`
+      : '';
+    captureMechanics = `Smartphone front-camera capture. Camera profile: ${opticsText}. Framing: ${state.framing} (distance: ${distText}). Position: ${posText}. Direction: ${directionText}.${smartAngleText} Handheld mechanics: ${physicalState?.armReach || derived.contactPhysics.find(p => p.includes('arm')) || 'dominant arm holding smartphone off-camera'}. Capturing phone is NOT visible in frame.`;
   } else if (state.captureType === 'mirror-selfie') {
     captureMechanics = `Smartphone mirror selfie. Framing: ${state.framing}. Distance: ${physicalState?.cameraDistance || 'approx 85cm'}. ${physicalState?.opticalPerspective || ''} ${derived.reflectionRules.join('. ')}`;
   } else {
@@ -910,11 +921,27 @@ const buildBackgroundReasoningKey = (state: SceneState): string => JSON.stringif
   captureType: state.captureType,
   framing: state.framing,
   cameraAngle: state.cameraAngle,
+  cameraAngleMode: state.cameraAngleMode,
+  selfieAngleId: state.selfieAngleAdvice?.angleId,
   lightingMode: state.lightingMode,
   backgroundMode: state.backgroundMode,
   backgroundHumans: state.backgroundHumans,
   backgroundVehicles: state.backgroundVehicles,
   backgroundDisorder: state.backgroundDisorder
+});
+
+const buildSelfieAngleReasoningKey = (state: SceneState): string => JSON.stringify({
+  sceneFamily: state.sceneFamily,
+  subScene: state.subScene,
+  activity: state.activity,
+  pose: state.pose,
+  captureType: state.captureType,
+  framing: state.framing,
+  timeOfDay: state.timeOfDay,
+  lightingMode: state.lightingMode,
+  backgroundMode: state.backgroundMode,
+  backgroundHumans: state.backgroundHumans,
+  backgroundVehicles: state.backgroundVehicles
 });
 
 const BACKGROUND_DENSITY_LABELS: Record<string, string> = {
@@ -962,7 +989,8 @@ const DEFAULT_STATE: SceneState = {
   backgroundHumans: 'auto',
   backgroundVehicles: 'auto',
   backgroundDisorder: 'auto',
-  backgroundGeminiAssist: true
+  backgroundGeminiAssist: true,
+  cameraAngleMode: 'gemini-smart'
 };
 
 export default function PhysFrameApp() {
@@ -1002,6 +1030,10 @@ export default function PhysFrameApp() {
   const [isBackgroundReasoning, setIsBackgroundReasoning] = useState(false);
   const [backgroundReasoningError, setBackgroundReasoningError] = useState<string | null>(null);
   const backgroundReasoningCacheRef = useRef<Map<string, BackgroundGeminiAdvice>>(new Map());
+
+  const [isSelfieAngleReasoning, setIsSelfieAngleReasoning] = useState(false);
+  const [selfieAngleReasoningError, setSelfieAngleReasoningError] = useState<string | null>(null);
+  const selfieAngleReasoningCacheRef = useRef<Map<string, SelfieAngleAdvice>>(new Map());
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -1051,9 +1083,10 @@ export default function PhysFrameApp() {
 
   const activeFamily = state.sceneFamily ? SCENE_FAMILIES[state.sceneFamily] : null;
   const backgroundReasoningKey = buildBackgroundReasoningKey(state);
-  const backgroundDecision = state.sceneFamily
-    ? resolveScene(state as any).physicalState.backgroundRealism
-    : null;
+  const selfieAngleReasoningKey = buildSelfieAngleReasoningKey(state);
+  const currentResolvedPreview = state.sceneFamily ? resolveScene(state as any) : null;
+  const backgroundDecision = currentResolvedPreview?.physicalState.backgroundRealism ?? null;
+  const selfieAngleDecision = currentResolvedPreview?.physicalState.selfieAngle ?? null;
 
   useEffect(() => {
     if (state.sceneFamily) {
@@ -1063,6 +1096,90 @@ export default function PhysFrameApp() {
       }
     }
   }, [state.sceneFamily, state.lightingMode, state.timeOfDay, state.captureType, state.activity, state.foregroundObstruction]);
+
+  useEffect(() => {
+    if (
+      !state.sceneFamily ||
+      state.captureType !== 'front-selfie' ||
+      state.cameraAngleMode !== 'gemini-smart'
+    ) {
+      setIsSelfieAngleReasoning(false);
+      setSelfieAngleReasoningError(null);
+      return;
+    }
+
+    const key = selfieAngleReasoningKey;
+
+    if (state.selfieAngleAdvice?.cacheKey && state.selfieAngleAdvice.cacheKey !== key) {
+      setState(prev => ({ ...prev, selfieAngleAdvice: undefined }));
+      return;
+    }
+
+    if (state.selfieAngleAdvice?.cacheKey === key) return;
+
+    const cached = selfieAngleReasoningCacheRef.current.get(key);
+    if (cached) {
+      setState(prev => ({ ...prev, selfieAngleAdvice: cached }));
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        setIsSelfieAngleReasoning(true);
+        setSelfieAngleReasoningError(null);
+
+        const res = await fetch('/api/ai/selfie-angle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({ sceneState: state })
+        });
+
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null);
+          throw new Error(payload?.error || `Gemini selfie angle HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+        const advice: SelfieAngleAdvice = {
+          angleId: String(data.angleId || ''),
+          pitchOffsetDeg: Number(data.pitchOffsetDeg) || 0,
+          yawOffsetDeg: Number(data.yawOffsetDeg) || 0,
+          rollOffsetDeg: Number(data.rollOffsetDeg) || 0,
+          distanceOffsetCm: Number(data.distanceOffsetCm) || 0,
+          reasonAR: Array.isArray(data.reasonAR) ? data.reasonAR.slice(0, 2) : [],
+          confidence: Number(data.confidence) || 0,
+          cacheKey: key
+        };
+
+        selfieAngleReasoningCacheRef.current.set(key, advice);
+        setState(prev => (
+          buildSelfieAngleReasoningKey(prev) === key
+            ? { ...prev, selfieAngleAdvice: advice }
+            : prev
+        ));
+      } catch (err: any) {
+        if (err?.name !== 'AbortError') {
+          console.warn('Gemini selfie angle reasoning failed:', err);
+          setSelfieAngleReasoningError(err?.message || 'تعذر اختيار زاوية Gemini');
+        }
+      } finally {
+        if (!controller.signal.aborted) setIsSelfieAngleReasoning(false);
+      }
+    }, 700);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [
+    selfieAngleReasoningKey,
+    state.cameraAngleMode,
+    state.captureType,
+    state.sceneFamily
+  ]);
+
 
   useEffect(() => {
     if (!state.sceneFamily || !state.backgroundGeminiAssist || state.backgroundMode === 'off') {
@@ -2418,16 +2535,91 @@ export default function PhysFrameApp() {
                       ))}
                    </div>
 
+                   {state.captureType === 'front-selfie' && (
+                     <div className="grid grid-cols-2 gap-2 mb-3">
+                       <button
+                         type="button"
+                         onClick={() => setState({
+                           ...state,
+                           cameraAngleMode: 'gemini-smart',
+                           selfieAngleAdvice: undefined
+                         })}
+                         className={`py-2 rounded-xl text-[11px] font-bold border transition-colors ${state.cameraAngleMode === 'gemini-smart' ? 'bg-[var(--accent)]/15 border-[var(--accent)] text-[var(--accent)]' : 'border-[var(--border)] text-[var(--text-muted)]'}`}
+                       >
+                         Gemini زاوية ذكية
+                       </button>
+                       <button
+                         type="button"
+                         onClick={() => setState({ ...state, cameraAngleMode: 'manual' })}
+                         className={`py-2 rounded-xl text-[11px] font-bold border transition-colors ${state.cameraAngleMode === 'manual' ? 'bg-white/10 border-white/20 text-white' : 'border-[var(--border)] text-[var(--text-muted)]'}`}
+                       >
+                         تحكم يدوي
+                       </button>
+                     </div>
+                   )}
+
                    <select
                      value={state.cameraAngle}
-                     onChange={e => setState({ ...state, cameraAngle: e.target.value as CameraAngle })}
-                     className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-xl px-3.5 py-2 text-xs text-[#F3EFE7] focus:outline-none focus:border-[var(--accent)]"
+                     onChange={e => setState({
+                       ...state,
+                       cameraAngle: e.target.value as CameraAngle,
+                       selfieAngleAdvice: undefined
+                     })}
+                     disabled={state.captureType === 'front-selfie' && state.cameraAngleMode === 'gemini-smart'}
+                     className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-xl px-3.5 py-2 text-xs text-[#F3EFE7] focus:outline-none focus:border-[var(--accent)] disabled:opacity-45"
                    >
                     <option value="eye-level">زاوية الكاميرا: مستوى العين الطبيعي</option>
                     <option value="slightly-high">زاوية الكاميرا: أعلى قليلًا (سيلفي علوي)</option>
                     <option value="slightly-low">زاوية الكاميرا: أسفل قليلًا</option>
                     <option value="slightly-off-center">زاوية الكاميرا: خارج المنتصف (عفوي)</option>
                   </select>
+
+                  {state.captureType === 'front-selfie' && state.cameraAngleMode === 'gemini-smart' && selfieAngleDecision && (
+                    <div className="mt-3 rounded-xl border border-white/5 bg-black/20 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <div className="text-[10px] text-[var(--text-muted)]">الزاوية النهائية</div>
+                          <div className="text-xs font-bold text-white mt-0.5">{selfieAngleDecision.presetLabelAR}</div>
+                        </div>
+                        <span className="text-[9px] text-[var(--accent)]">
+                          {isSelfieAngleReasoning
+                            ? 'Gemini يحلل...'
+                            : selfieAngleDecision.source === 'gemini'
+                              ? 'Gemini + Physics'
+                              : 'Physics fallback'}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-4 gap-1.5 mt-2 text-center">
+                        <div className="bg-white/5 rounded-lg p-1.5">
+                          <div className="text-[9px] text-[var(--text-muted)]">Pitch</div>
+                          <div className="text-[10px] font-bold text-white">{selfieAngleDecision.pitchDeg.toFixed(0)}°</div>
+                        </div>
+                        <div className="bg-white/5 rounded-lg p-1.5">
+                          <div className="text-[9px] text-[var(--text-muted)]">Yaw</div>
+                          <div className="text-[10px] font-bold text-white">{selfieAngleDecision.yawDeg.toFixed(0)}°</div>
+                        </div>
+                        <div className="bg-white/5 rounded-lg p-1.5">
+                          <div className="text-[9px] text-[var(--text-muted)]">Roll</div>
+                          <div className="text-[10px] font-bold text-white">{selfieAngleDecision.rollDeg.toFixed(0)}°</div>
+                        </div>
+                        <div className="bg-white/5 rounded-lg p-1.5">
+                          <div className="text-[9px] text-[var(--text-muted)]">المسافة</div>
+                          <div className="text-[10px] font-bold text-white">{Math.round(selfieAngleDecision.distanceCm)}cm</div>
+                        </div>
+                      </div>
+
+                      <div className="text-[9px] leading-relaxed text-[var(--text-muted)] mt-2">
+                        {selfieAngleDecision.reasonAR.slice(0, 2).join(' ')}
+                      </div>
+
+                      {selfieAngleReasoningError && (
+                        <div className="text-[9px] text-[#E9A6A0] mt-2">
+                          {selfieAngleReasoningError} تم استخدام أفضل زاوية محلية بدون تعطيل المحرك.
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </section>
 
                 {/* Fixed Scene-Aware Background Controls */}

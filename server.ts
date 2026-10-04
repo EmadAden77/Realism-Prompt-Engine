@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { MICRO_LOCATIONS } from './src/data/microLocations.ts';
 import { OUTFITS } from './src/data/clothingOutfits.ts';
+import { getEligibleSelfieAngles } from './src/engine/selfieAngles.ts';
 
 dotenv.config();
 
@@ -482,6 +483,137 @@ Select completely coherent, physically realistic attributes and provide a vivid 
       shadowDepth: 60,
       storyAR: sc.story,
       directorNoteAR: sc.note,
+    });
+  }
+});
+
+// 3. Gemini Selfie Camera Director: selects from a bounded physical angle library.
+// Gemini chooses contextually; the local physics engine remains authoritative.
+app.post('/api/ai/selfie-angle', async (req, res) => {
+  try {
+    const sceneState = req.body?.sceneState || {};
+
+    if (sceneState.captureType !== 'front-selfie') {
+      return res.status(400).json({ error: 'Smart selfie angle selection applies only to front-camera selfies.' });
+    }
+
+    const context = {
+      captureType: 'front-selfie' as const,
+      sceneFamily: sceneState.sceneFamily || null,
+      subScene: String(sceneState.subScene || ''),
+      pose: String(sceneState.pose || ''),
+      activity: String(sceneState.activity || ''),
+      framing: sceneState.framing || 'chest-up',
+      manualAngle: sceneState.cameraAngle || 'eye-level',
+      mode: 'gemini-smart' as const
+    };
+
+    const eligible = getEligibleSelfieAngles(context);
+    if (!eligible.length) {
+      return res.status(422).json({ error: 'No physically eligible selfie angle exists for this scene/framing.' });
+    }
+
+    const angleCatalog = eligible.map(angle => ({
+      id: angle.id,
+      labelAR: angle.labelAR,
+      family: angle.family,
+      pitchDeg: angle.pitchDeg,
+      yawDeg: angle.yawDeg,
+      rollDeg: angle.rollDeg,
+      heightOffsetCm: angle.heightOffsetCm,
+      distanceCm: angle.distanceCm,
+      risk: angle.risk,
+      intent: angle.intent,
+      allowedMicroVariation: angle.variation
+    }));
+
+    const response = await callGeminiWithFallback({
+      preferredModels: ['gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'],
+      contents: `You are the Camera Director for a physically constrained Xiaomi 15 Ultra front-camera selfie engine.
+
+Choose EXACTLY ONE angle from the supplied eligible catalog. Never invent a new angle ID.
+
+SCENE:
+${JSON.stringify({
+  sceneFamily: sceneState.sceneFamily,
+  subScene: sceneState.subScene,
+  activity: sceneState.activity,
+  pose: sceneState.pose,
+  framing: sceneState.framing,
+  timeOfDay: sceneState.timeOfDay,
+  lightingMode: sceneState.lightingMode,
+  backgroundMode: sceneState.backgroundMode,
+  backgroundHumans: sceneState.backgroundHumans,
+  backgroundVehicles: sceneState.backgroundVehicles
+}, null, 2)}
+
+ELIGIBLE PHYSICALLY-BOUNDED SELFIE ANGLES:
+${JSON.stringify(angleCatalog, null, 2)}
+
+Selection priorities:
+1. The person's actual pose/body support and available space.
+2. Natural one-arm selfie mechanics with Xiaomi 15 Ultra front-camera perspective.
+3. The selected framing and what background can physically enter the FOV.
+4. Avoid repetitive centered angles when a subtle off-axis angle is more natural.
+5. Prefer low-risk angles unless the scene specifically benefits from a medium-risk angle.
+6. Never choose cinematic bird-eye, 90-degree profile, dramatic Dutch angle, DSLR, ARRI, 35mm, 85mm, or impossible floating-camera geometry.
+7. Roll is only natural handheld micro-tilt, never a dramatic Dutch angle.
+8. Return micro-variation offsets only; the local engine will clamp them to the preset's allowed range.
+
+Return one or two concise Arabic reasons explaining why the angle fits this exact pose and scene.`,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            angleId: { type: Type.STRING },
+            pitchOffsetDeg: { type: Type.INTEGER },
+            yawOffsetDeg: { type: Type.INTEGER },
+            rollOffsetDeg: { type: Type.INTEGER },
+            distanceOffsetCm: { type: Type.INTEGER },
+            reasonAR: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            },
+            confidence: { type: Type.INTEGER }
+          },
+          required: [
+            'angleId',
+            'pitchOffsetDeg',
+            'yawOffsetDeg',
+            'rollOffsetDeg',
+            'distanceOffsetCm',
+            'reasonAR',
+            'confidence'
+          ]
+        }
+      }
+    });
+
+    const parsed = JSON.parse(response.text || '{}');
+    const selected = eligible.find(angle => angle.id === parsed.angleId);
+    if (!selected) {
+      throw new Error('Gemini selected an angle outside the eligible physical catalog');
+    }
+
+    const numberOrZero = (value: unknown) => {
+      const number = Number(value);
+      return Number.isFinite(number) ? number : 0;
+    };
+
+    return res.json({
+      angleId: selected.id,
+      pitchOffsetDeg: numberOrZero(parsed.pitchOffsetDeg),
+      yawOffsetDeg: numberOrZero(parsed.yawOffsetDeg),
+      rollOffsetDeg: numberOrZero(parsed.rollOffsetDeg),
+      distanceOffsetCm: numberOrZero(parsed.distanceOffsetCm),
+      reasonAR: Array.isArray(parsed.reasonAR) ? parsed.reasonAR.slice(0, 2) : [],
+      confidence: Math.max(0, Math.min(100, numberOrZero(parsed.confidence)))
+    });
+  } catch (error: any) {
+    console.warn('Selfie angle reasoning failed:', error?.message || error);
+    return res.status(503).json({
+      error: 'تعذر اختيار زاوية Gemini الآن. سيستخدم المحرك أفضل زاوية محلية متوافقة مع الفيزياء.'
     });
   }
 });

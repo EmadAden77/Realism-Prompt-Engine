@@ -16,6 +16,12 @@ import {
 } from './backgroundRealism';
 import { deriveLightingCausality, LightingCausalityState } from './lightingCausality';
 import { evaluateScenePlausibility, ScenePlausibilityState } from './scenePlausibility';
+import {
+  resolveSelfieAngleGeometry,
+  ResolvedSelfieAngle,
+  SelfieAngleAdvice,
+  SelfieAngleMode
+} from './selfieAngles';
 
 // --- TYPES ---
 export type CaptureType = 'front-selfie' | 'mirror-selfie' | 'third-person-candid';
@@ -72,6 +78,10 @@ export interface SceneState {
   backgroundDisorder?: BackgroundDisorderControl;
   backgroundGeminiAssist?: boolean;
   backgroundGeminiAdvice?: BackgroundGeminiAdvice;
+
+  // Gemini-assisted selfie camera direction. Local physics always validates/caps it.
+  cameraAngleMode?: SelfieAngleMode;
+  selfieAngleAdvice?: SelfieAngleAdvice;
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -84,6 +94,7 @@ export interface DerivedPhysicalState {
   cameraDirection: string;
   cameraPitch: string;
   cameraYaw: string;
+  cameraRoll: string;
   armReach: string;
   bodyOrientation: string;
   visibleBodyRegion: string;
@@ -106,6 +117,7 @@ export interface DerivedPhysicalState {
   backgroundRealism: BackgroundRealismState;
   lightingCausality: LightingCausalityState;
   plausibility: ScenePlausibilityState;
+  selfieAngle: ResolvedSelfieAngle | null;
 }
 
 // Backward-compatible interface for existing App.tsx consumers
@@ -640,6 +652,20 @@ function calculateDetailedPhysicalState(
 ): DerivedPhysicalState {
   const familyId = state.sceneFamily || 'saudi-outdoor';
 
+  const selfieAngle = resolveSelfieAngleGeometry({
+    captureType: state.captureType,
+    sceneFamily: state.sceneFamily,
+    subScene: state.subScene,
+    pose: state.pose,
+    activity: state.activity,
+    framing: state.framing,
+    manualAngle: state.cameraAngle,
+    mode: state.cameraAngleMode ?? 'manual',
+    advice: state.selfieAngleAdvice
+  });
+
+  const effectiveCameraAngle = selfieAngle?.legacyAngle ?? state.cameraAngle;
+
   // --- 1. Camera Distance, Arm Reach & Optics ---
   let cameraDistance = 'approx 52cm';
   let distanceCm = 52;
@@ -649,7 +675,12 @@ function calculateDetailedPhysicalState(
 
   if (state.captureType === 'front-selfie') {
     // FIXED XIAOMI 15 ULTRA FRONT CAMERA OPTICS (21mm eq, ~90° FOV)
-    if (framingClass === 'tight') {
+    // Smart mode may refine the exact handheld distance, but only inside framing-safe limits.
+    if (selfieAngle) {
+      distanceCm = selfieAngle.distanceCm;
+      cameraDistance = `approx ${Math.round(distanceCm)}cm (physically bounded handheld selfie reach)`;
+      armReach = selfieAngle.armMechanics;
+    } else if (framingClass === 'tight') {
       distanceCm = 42;
       cameraDistance = 'approx 40-42cm (close handheld reach)';
       armReach = 'dominant arm flexed at elbow (~65° flexion) holding smartphone near chin-to-eye height off-camera (phone NOT in frame)';
@@ -680,13 +711,20 @@ function calculateDetailedPhysicalState(
     opticalPerspective = 'candid observer perspective: balanced architectural proportions, natural depth compression without wide-angle arm distortion';
   }
 
-  // --- 2. Camera Angles (Yaw, Pitch, Height, Direction) ---
+  // --- 2. Camera Angles (Yaw, Pitch, Roll, Height, Direction) ---
   let cameraPosition = 'eye-level (+0cm vertical offset)';
   let cameraPitch = '0° pitch (frontal orthogonal)';
   let cameraYaw = '0° yaw';
+  let cameraRoll = '0° roll';
   let cameraDirection = 'facing subject face frontally';
 
-  if (state.cameraAngle === 'slightly-high') {
+  if (selfieAngle && state.captureType === 'front-selfie') {
+    cameraPosition = selfieAngle.cameraPosition;
+    cameraPitch = `${selfieAngle.pitchDeg.toFixed(1)}° pitch`;
+    cameraYaw = `${selfieAngle.yawDeg.toFixed(1)}° yaw`;
+    cameraRoll = `${selfieAngle.rollDeg.toFixed(1)}° roll`;
+    cameraDirection = selfieAngle.cameraDirection;
+  } else if (state.cameraAngle === 'slightly-high') {
     cameraPosition = 'elevated slightly above eye-line (+18cm relative height)';
     cameraPitch = '-14° downward tilt pointing toward subject face and jawline';
     cameraDirection = 'aiming down from elevated arm posture';
@@ -698,6 +736,7 @@ function calculateDetailedPhysicalState(
     cameraPosition = 'eye-level (+5cm)';
     cameraYaw = '18° horizontal yaw (candid asymmetric handheld angle)';
     cameraPitch = '-5° subtle pitch';
+    cameraRoll = '1° natural handheld roll';
     cameraDirection = 'held slightly to the side with natural single-handed grip';
   }
 
@@ -713,7 +752,7 @@ function calculateDetailedPhysicalState(
     visibleBodyRegion = 'head down to waistband, full torso, and upper hip line';
   }
 
-  if (state.pose.includes('مستند') || state.cameraAngle === 'slightly-off-center') {
+  if (state.pose.includes('مستند') || effectiveCameraAngle === 'slightly-off-center') {
     bodyOrientation = 'torso angled approximately 20° - 30° relative to camera line of sight';
   } else if (familyId === 'car' && !isOutdoor) {
     bodyOrientation = 'seated forward in contoured vehicle bucket seat with backrest and headrest support';
@@ -760,7 +799,7 @@ function calculateDetailedPhysicalState(
     subScene: state.subScene,
     timeOfDay: state.timeOfDay,
     framingClass,
-    cameraAngle: state.cameraAngle,
+    cameraAngle: effectiveCameraAngle,
     captureType: state.captureType,
     activityDensity,
     isOutdoor,
@@ -842,7 +881,7 @@ function calculateDetailedPhysicalState(
     subScene: state.subScene,
     captureType: state.captureType,
     framingClass,
-    cameraAngle: state.cameraAngle,
+    cameraAngle: effectiveCameraAngle,
     pose: state.pose,
     foregroundObstruction: state.foregroundObstruction,
     isOutdoor,
@@ -859,6 +898,7 @@ function calculateDetailedPhysicalState(
     cameraDirection,
     cameraPitch,
     cameraYaw,
+    cameraRoll,
     armReach,
     bodyOrientation,
     visibleBodyRegion,
@@ -880,7 +920,8 @@ function calculateDetailedPhysicalState(
     disorderBehavior,
     backgroundRealism,
     lightingCausality,
-    plausibility
+    plausibility,
+    selfieAngle
   };
 }
 
@@ -918,7 +959,10 @@ function calculateDerivedState(
     realismConstraints: [
       `Camera optics: ${physics.fieldOfView}`,
       `Camera perspective: ${physics.opticalPerspective}`,
-      `Camera position: ${physics.cameraPosition}, ${physics.cameraPitch}, ${physics.cameraYaw}`,
+      `Camera position: ${physics.cameraPosition}, ${physics.cameraPitch}, ${physics.cameraYaw}, ${physics.cameraRoll}`,
+      physics.selfieAngle
+        ? `Selfie angle director: preset=${physics.selfieAngle.presetId}, source=${physics.selfieAngle.source}, risk=${physics.selfieAngle.risk}; ${physics.selfieAngle.reasonAR.join(' ')}`
+        : 'Selfie angle director: not applicable to this capture topology',
       `Visible anatomical region: ${physics.visibleBodyRegion}`,
       `Background depth plane: ${physics.backgroundDepth}`,
       `Sensor exposure: ${physics.exposureBehavior}`,
