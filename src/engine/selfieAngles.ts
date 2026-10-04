@@ -4,6 +4,8 @@ export type SelfieAngleMode = 'manual' | 'gemini-smart';
 export type SelfieAngleRisk = 'low' | 'medium' | 'high';
 export type SelfieLegacyAngle = 'eye-level' | 'slightly-high' | 'slightly-low' | 'slightly-off-center';
 export type SelfieFraming = 'head-shoulders' | 'chest-up' | 'half-body';
+export type CarSelfieFocus = 'face-priority' | 'cabin-context' | 'balanced';
+export type CarSeatRole = 'driver' | 'front-passenger' | 'rear-passenger' | 'either';
 
 export interface SelfieAnglePreset {
   id: string;
@@ -25,6 +27,11 @@ export interface SelfieAnglePreset {
   sceneFamilies?: SceneFamilyId[];
   poseKeywords?: string[];
   subSceneKeywords?: string[];
+  lightingKeywords?: string[];
+  carFocus?: CarSelfieFocus;
+  carSeat?: CarSeatRole;
+  phonePlacement?: string;
+  cabinGuards?: string[];
   risk: SelfieAngleRisk;
   intent: string;
 }
@@ -37,6 +44,7 @@ export interface SelfieAngleAdvice {
   distanceOffsetCm: number;
   reasonAR: string[];
   confidence?: number;
+  carFocus?: CarSelfieFocus;
   cacheKey?: string;
 }
 
@@ -48,6 +56,8 @@ export interface SelfieAngleContext {
   activity: string;
   framing: SelfieFraming;
   manualAngle: SelfieLegacyAngle;
+  timeOfDay?: 'morning' | 'midday' | 'afternoon' | 'sunset' | 'night';
+  lightingMode?: string;
   mode?: SelfieAngleMode;
   advice?: SelfieAngleAdvice;
 }
@@ -69,6 +79,11 @@ export interface ResolvedSelfieAngle {
   source: 'manual' | 'gemini' | 'local-fallback';
   adviceAccepted: boolean;
   reasonAR: string[];
+  carFocus?: CarSelfieFocus;
+  carSeat?: CarSeatRole;
+  phonePlacement?: string;
+  cabinGuards?: string[];
+  carClearanceAdjusted?: boolean;
 }
 
 const A = (
@@ -84,7 +99,7 @@ const A = (
   framings: SelfieFraming[],
   risk: SelfieAngleRisk,
   intent: string,
-  extras: Partial<Pick<SelfieAnglePreset, 'sceneFamilies' | 'poseKeywords' | 'subSceneKeywords' | 'variation'>> = {}
+  extras: Partial<Pick<SelfieAnglePreset, 'sceneFamilies' | 'poseKeywords' | 'subSceneKeywords' | 'lightingKeywords' | 'carFocus' | 'carSeat' | 'phonePlacement' | 'cabinGuards' | 'variation'>> = {}
 ): SelfieAnglePreset => ({
   id,
   labelAR,
@@ -101,7 +116,12 @@ const A = (
   variation: extras.variation ?? { pitchDeg: 2, yawDeg: 3, rollDeg: 2, distanceCm: 4 },
   sceneFamilies: extras.sceneFamilies,
   poseKeywords: extras.poseKeywords,
-  subSceneKeywords: extras.subSceneKeywords
+  subSceneKeywords: extras.subSceneKeywords,
+  lightingKeywords: extras.lightingKeywords,
+  carFocus: extras.carFocus,
+  carSeat: extras.carSeat,
+  phonePlacement: extras.phonePlacement,
+  cabinGuards: extras.cabinGuards
 });
 
 export const SELFIE_ANGLE_LIBRARY: SelfieAnglePreset[] = [
@@ -141,9 +161,106 @@ export const SELFIE_ANGLE_LIBRARY: SelfieAnglePreset[] = [
   A('walking_side_dynamic', 'سيلفي مشي جانبي خفيف', 'walking', 'slightly-off-center', -3, 14, 3, 2, 57, ['chest-up'], 'medium', 'walking selfie with natural lateral phone displacement, not cinematic dutch tilt', { sceneFamilies:['saudi-outdoor','military-base'], poseKeywords:['يمشي'] }),
   A('wall_lean_relaxed', 'استناد على جدار بزاوية خفيفة', 'off-axis', 'slightly-off-center', -4, 15, 2, 4, 53, ['chest-up','half-body'], 'low', 'selfie aligned with a natural wall-lean torso rotation', { poseKeywords:['مستند','جدار'] }),
 
-  A('car_driver_eye', 'مقعد السائق مستوى العين', 'vehicle', 'eye-level', -2, 7, 1, 1, 48, ['head-shoulders','chest-up'], 'low', 'driver-seat selfie respecting steering-wheel and cabin clearance', { sceneFamilies:['car'], subSceneKeywords:['السائق','داخل السيارة','المقود'] }),
-  A('car_driver_offaxis', 'مقعد السائق خارج المنتصف', 'vehicle', 'slightly-off-center', -5, 14, 1, 5, 49, ['chest-up'], 'low', 'driver-seat selfie angled away from steering-wheel obstruction', { sceneFamilies:['car'], subSceneKeywords:['السائق','داخل السيارة','المقود'] }),
-  A('car_passenger_high_soft', 'مقعد الراكب أعلى قليلًا', 'vehicle', 'slightly-high', -8, -8, -1, 9, 49, ['head-shoulders','chest-up'], 'low', 'passenger-seat selfie with natural cabin and side-window inclusion', { sceneFamilies:['car'], subSceneKeywords:['الراكب'] }),
+  A('car_driver_eye', 'مقعد السائق مستوى العين', 'vehicle', 'eye-level', -2, 7, 1, 1, 48, ['head-shoulders','chest-up'], 'low', 'face-priority driver-seat selfie with minimal cabin distortion', {
+    sceneFamilies:['car'],
+    carFocus:'face-priority',
+    carSeat:'driver',
+    phonePlacement:'slightly above the steering-wheel upper rim, fully inside the driver-side cabin',
+    cabinGuards:['keep phone clear of steering-wheel rim','keep phone below roof/headliner plane','do not place camera through windshield or side glass']
+  }),
+  A('car_driver_offaxis', 'مقعد السائق خارج المنتصف', 'vehicle', 'slightly-off-center', -5, 14, 1, 5, 49, ['chest-up'], 'low', 'balanced driver-seat selfie angled toward the center console while preserving face prominence', {
+    sceneFamilies:['car'],
+    carFocus:'balanced',
+    carSeat:'driver',
+    phonePlacement:'slightly toward the center console, above steering-wheel level',
+    cabinGuards:['maintain clearance from steering wheel and gear selector','keep camera inside cabin','avoid rearview-mirror collision']
+  }),
+  A('car_driver_window_side', 'مقعد السائق باتجاه النافذة', 'vehicle', 'slightly-off-center', -3, -10, -1, 3, 49, ['head-shoulders','chest-up'], 'low', 'driver-side window-biased selfie using natural side-light and door context', {
+    sceneFamilies:['car'],
+    carFocus:'balanced',
+    carSeat:'driver',
+    phonePlacement:'near the driver-side window line but still clearly inside the glass',
+    cabinGuards:['never move camera outside side window','preserve A-pillar clearance','keep elbow clear of door glass']
+  }),
+  A('car_driver_high_relaxed', 'مقعد السائق أعلى قليلًا باسترخاء', 'vehicle', 'slightly-high', -8, 6, 1, 9, 48, ['head-shoulders','chest-up'], 'low', 'slightly elevated relaxed driver-seat selfie that avoids steering-wheel dominance', {
+    sceneFamilies:['car'],
+    carFocus:'face-priority',
+    carSeat:'driver',
+    phonePlacement:'above steering-wheel line and below sun-visor/headliner zone',
+    cabinGuards:['keep phone below sun visor','avoid roof/headliner collision','retain realistic shoulder and wrist range']
+  }),
+  A('car_driver_screen_light', 'مقعد السائق بإضاءة شاشة الهاتف', 'vehicle', 'eye-level', -3, 6, 0, 2, 47, ['head-shoulders','chest-up'], 'low', 'close night driver selfie optimized for physically plausible phone-screen facial illumination', {
+    sceneFamilies:['car'],
+    lightingKeywords:['شاشة الهاتف'],
+    carFocus:'face-priority',
+    carSeat:'driver',
+    phonePlacement:'close to eye line, slightly above the steering wheel and inside cabin',
+    cabinGuards:['keep screen close enough to plausibly illuminate face','do not use windshield as camera plane','background must remain substantially darker']
+  }),
+  A('car_driver_cabin_context', 'مقعد السائق مع سياق المقصورة', 'vehicle', 'slightly-off-center', -4, 12, 1, 4, 55, ['chest-up'], 'medium', 'driver selfie prioritizing visible steering wheel, dashboard, and side-window context without losing the face', {
+    sceneFamilies:['car'],
+    carFocus:'cabin-context',
+    carSeat:'driver',
+    phonePlacement:'toward the center-console side at comfortable arm reach',
+    cabinGuards:['steering wheel may enter lower frame only','keep camera forward of face but behind windshield plane','avoid gear-selector and rearview-mirror collision']
+  }),
+  A('car_driver_cabin_wide', 'مقعد السائق بزاوية مقصورة أوسع', 'vehicle', 'slightly-off-center', -3, 9, 1, 3, 62, ['half-body'], 'high', 'widest physically defensible driver selfie for cabin context with strong occlusion constraints', {
+    sceneFamilies:['car'],
+    carFocus:'cabin-context',
+    carSeat:'driver',
+    phonePlacement:'near maximum arm reach toward cabin center, still behind windshield and below headliner',
+    cabinGuards:['maximum cabin reach only','do not pass through windshield','keep phone below rearview mirror and roof console','steering wheel/console must naturally occlude lower torso'],
+    variation:{pitchDeg:1,yawDeg:2,rollDeg:1,distanceCm:2}
+  }),
+  A('car_passenger_high_soft', 'مقعد الراكب أعلى قليلًا', 'vehicle', 'slightly-high', -8, -8, -1, 9, 49, ['head-shoulders','chest-up'], 'low', 'face-priority passenger-seat selfie with natural side-window inclusion', {
+    sceneFamilies:['car'],
+    carFocus:'face-priority',
+    carSeat:'front-passenger',
+    phonePlacement:'slightly above eye line on passenger side, clear of roof and visor',
+    cabinGuards:['keep phone below sun visor','keep camera inside passenger-side window plane','no dashboard penetration']
+  }),
+  A('car_passenger_window_side', 'مقعد الراكب باتجاه النافذة', 'vehicle', 'slightly-off-center', -4, 11, 1, 4, 50, ['head-shoulders','chest-up'], 'low', 'passenger selfie biased toward the side window for natural exterior light and glass context', {
+    sceneFamilies:['car'],
+    carFocus:'balanced',
+    carSeat:'front-passenger',
+    phonePlacement:'near passenger-side window while remaining fully inside the cabin',
+    cabinGuards:['do not move camera outside glass','preserve door-panel clearance','avoid visor and A-pillar collision']
+  }),
+  A('car_passenger_cabin_context', 'مقعد الراكب مع سياق المقصورة', 'vehicle', 'slightly-off-center', -4, -12, -1, 4, 55, ['chest-up'], 'medium', 'passenger selfie looking diagonally across center console to reveal dashboard and driver-side depth', {
+    sceneFamilies:['car'],
+    carFocus:'cabin-context',
+    carSeat:'front-passenger',
+    phonePlacement:'toward the center console from passenger seat',
+    cabinGuards:['keep phone above console surfaces','do not intersect dashboard','preserve windshield plane ahead of camera']
+  }),
+  A('car_rear_eye', 'المقعد الخلفي مستوى العين', 'vehicle', 'eye-level', -2, 5, 1, 1, 49, ['head-shoulders','chest-up'], 'low', 'face-priority rear-seat selfie with front seatbacks forming natural depth', {
+    sceneFamilies:['car'],
+    carFocus:'face-priority',
+    carSeat:'rear-passenger',
+    phonePlacement:'in front of rear passenger at eye level, clear of front-seat headrest',
+    cabinGuards:['do not intersect front-seat headrest','keep camera inside rear side-window plane','preserve seatbelt and seatback occlusion']
+  }),
+  A('car_rear_window_side', 'المقعد الخلفي باتجاه النافذة', 'vehicle', 'slightly-off-center', -4, 12, 1, 3, 50, ['head-shoulders','chest-up'], 'low', 'rear-seat window-biased selfie with plausible side-light and cabin depth', {
+    sceneFamilies:['car'],
+    carFocus:'balanced',
+    carSeat:'rear-passenger',
+    phonePlacement:'near rear side-window line but fully inside cabin',
+    cabinGuards:['never place camera outside rear glass','avoid B/C-pillar collision','keep front seatback as natural midground occluder']
+  }),
+  A('car_rear_cabin_context', 'المقعد الخلفي مع عمق المقصورة', 'vehicle', 'slightly-off-center', -3, -10, -1, 3, 56, ['chest-up'], 'medium', 'rear-seat selfie revealing front seatbacks and dashboard depth while retaining natural face scale', {
+    sceneFamilies:['car'],
+    carFocus:'cabin-context',
+    carSeat:'rear-passenger',
+    phonePlacement:'slightly toward cabin center from rear seat',
+    cabinGuards:['keep camera behind front seatbacks','do not float camera between front seats','preserve realistic rear-seat arm reach']
+  }),
+  A('car_front_center_context', 'زاوية أمامية متوازنة للمقصورة', 'vehicle', 'slightly-off-center', -3, 8, 1, 3, 54, ['chest-up'], 'medium', 'balanced front-cabin selfie for ambiguous front-seat positions or between-seat context', {
+    sceneFamilies:['car'],
+    carFocus:'cabin-context',
+    carSeat:'either',
+    phonePlacement:'toward the front cabin centerline without crossing the windshield plane',
+    cabinGuards:['keep camera behind windshield','keep clear of rearview mirror','do not float above center console']
+  }),
 
   A('corridor_offaxis', 'ممر داخلي خارج المنتصف', 'environmental', 'slightly-off-center', -3, 12, 1, 3, 54, ['chest-up'], 'low', 'corridor selfie preserving depth lines without architectural distortion', { sceneFamilies:['military-base'], subSceneKeywords:['ممر'] }),
   A('corridor_wide', 'ممر واسع مع عمق', 'environmental', 'slightly-off-center', -2, 9, 1, 2, 66, ['half-body'], 'medium', 'wider corridor selfie with strong but plausible depth visibility', { sceneFamilies:['military-base'], subSceneKeywords:['ممر'] }),
@@ -158,6 +275,26 @@ const clamp = (value: number, min: number, max: number) =>
 const containsAny = (value: string, terms: string[] | undefined) =>
   !terms?.length || terms.some(term => value.includes(term));
 
+export function isCarInteriorSelfieContext(context: Pick<SelfieAngleContext, 'sceneFamily' | 'subScene' | 'activity' | 'pose'>): boolean {
+  if (context.sceneFamily !== 'car') return false;
+  const sub = context.subScene || '';
+  return [
+    'مقعد السائق',
+    'المقعد الأمامي للراكب',
+    'بين المقعدين الأماميين',
+    'المقعد الخلفي'
+  ].some(term => sub.includes(term));
+}
+
+export function inferCarSeatRole(context: Pick<SelfieAngleContext, 'sceneFamily' | 'subScene' | 'activity' | 'pose'>): CarSeatRole {
+  if (!isCarInteriorSelfieContext(context)) return 'either';
+  const text = `${context.subScene} ${context.activity} ${context.pose}`;
+  if (/المقعد الخلفي|خلفي/.test(text)) return 'rear-passenger';
+  if (/الراكب/.test(text)) return 'front-passenger';
+  if (/السائق|المقود|خلف المقود/.test(text)) return 'driver';
+  return 'either';
+}
+
 const framingDistanceLimits: Record<SelfieFraming, [number, number]> = {
   'head-shoulders': [39, 47],
   'chest-up': [47, 58],
@@ -167,11 +304,21 @@ const framingDistanceLimits: Record<SelfieFraming, [number, number]> = {
 export function getEligibleSelfieAngles(context: SelfieAngleContext): SelfieAnglePreset[] {
   if (context.captureType !== 'front-selfie') return [];
 
+  const carInterior = isCarInteriorSelfieContext(context);
+  const carSeat = inferCarSeatRole(context);
+
   return SELFIE_ANGLE_LIBRARY.filter(preset => {
     if (!preset.framings.includes(context.framing)) return false;
     if (preset.sceneFamilies?.length && context.sceneFamily && !preset.sceneFamilies.includes(context.sceneFamily)) return false;
     if (preset.poseKeywords?.length && !containsAny(context.pose, preset.poseKeywords)) return false;
     if (preset.subSceneKeywords?.length && !containsAny(context.subScene, preset.subSceneKeywords)) return false;
+    if (preset.lightingKeywords?.length && !containsAny(context.lightingMode || '', preset.lightingKeywords)) return false;
+
+    if (carInterior) {
+      if (preset.family !== 'vehicle') return false;
+      if (carSeat !== 'either' && preset.carSeat && preset.carSeat !== 'either' && preset.carSeat !== carSeat) return false;
+    }
+
     return true;
   });
 }
@@ -187,6 +334,18 @@ function compatibilityScore(preset: SelfieAnglePreset, context: SelfieAngleConte
   if ((context.pose.includes('جالس') || context.pose.includes('مسترخ')) && preset.family === 'seated') score += 25;
   if ((context.pose.includes('مستلقي') || context.pose.includes('نصف مستلق')) && preset.family === 'reclined') score += 40;
   if (context.sceneFamily === 'car' && preset.family === 'vehicle') score += 40;
+
+  if (isCarInteriorSelfieContext(context) && preset.family === 'vehicle') {
+    const seat = inferCarSeatRole(context);
+    if (seat !== 'either' && (preset.carSeat === seat || preset.carSeat === 'either')) score += 35;
+    if ((context.lightingMode || '').includes('شاشة الهاتف') && preset.lightingKeywords?.includes('شاشة الهاتف')) score += 50;
+    if ((context.lightingMode || '').includes('شاشة الهاتف') && preset.carFocus === 'face-priority') score += 25;
+    if (context.framing === 'head-shoulders' && preset.carFocus === 'face-priority') score += 20;
+    if (context.framing === 'half-body' && preset.carFocus === 'cabin-context') score += 45;
+    if (context.subScene.includes('قرب النافذة') && preset.phonePlacement?.includes('window')) score += 25;
+    if (context.subScene.includes('بين المقعدين') && preset.carFocus === 'cabin-context') score += 30;
+  }
+
   if (context.framing === 'half-body' && preset.family === 'environmental') score += 25;
   if (context.framing === 'head-shoulders' && preset.id.includes('close')) score += 20;
 
@@ -220,13 +379,38 @@ export function resolveSelfieAngleGeometry(context: SelfieAngleContext): Resolve
   const preset = adviceAccepted ? advisedPreset! : fallback;
   const advice = adviceAccepted ? context.advice : undefined;
 
-  const pitchDeg = preset.pitchDeg + clamp(advice?.pitchOffsetDeg ?? 0, -preset.variation.pitchDeg, preset.variation.pitchDeg);
-  const yawDeg = preset.yawDeg + clamp(advice?.yawOffsetDeg ?? 0, -preset.variation.yawDeg, preset.variation.yawDeg);
-  const rollDeg = preset.rollDeg + clamp(advice?.rollOffsetDeg ?? 0, -preset.variation.rollDeg, preset.variation.rollDeg);
+  let pitchDeg = preset.pitchDeg + clamp(advice?.pitchOffsetDeg ?? 0, -preset.variation.pitchDeg, preset.variation.pitchDeg);
+  let yawDeg = preset.yawDeg + clamp(advice?.yawOffsetDeg ?? 0, -preset.variation.yawDeg, preset.variation.yawDeg);
+  let rollDeg = preset.rollDeg + clamp(advice?.rollOffsetDeg ?? 0, -preset.variation.rollDeg, preset.variation.rollDeg);
 
   const [minDistance, maxDistance] = framingDistanceLimits[context.framing];
   const rawDistance = preset.distanceCm + clamp(advice?.distanceOffsetCm ?? 0, -preset.variation.distanceCm, preset.variation.distanceCm);
-  const distanceCm = clamp(rawDistance, minDistance, maxDistance);
+  let distanceCm = clamp(rawDistance, minDistance, maxDistance);
+  let heightOffsetCm = preset.heightOffsetCm;
+  let carClearanceAdjusted = false;
+
+  if (isCarInteriorSelfieContext(context)) {
+    const seat = inferCarSeatRole(context);
+    const original = { pitchDeg, yawDeg, rollDeg, distanceCm, heightOffsetCm };
+
+    pitchDeg = clamp(pitchDeg, -12, seat === 'rear-passenger' ? 8 : 6);
+    yawDeg = clamp(yawDeg, seat === 'rear-passenger' ? -18 : -16, seat === 'rear-passenger' ? 18 : 16);
+    rollDeg = clamp(rollDeg, -2.5, 2.5);
+    heightOffsetCm = clamp(heightOffsetCm, -8, 12);
+
+    if (context.framing === 'half-body') {
+      distanceCm = clamp(distanceCm, 62, 64);
+    } else {
+      distanceCm = clamp(distanceCm, minDistance, Math.min(maxDistance, 58));
+    }
+
+    carClearanceAdjusted =
+      original.pitchDeg !== pitchDeg ||
+      original.yawDeg !== yawDeg ||
+      original.rollDeg !== rollDeg ||
+      original.distanceCm !== distanceCm ||
+      original.heightOffsetCm !== heightOffsetCm;
+  }
 
   const reasonAR = adviceAccepted
     ? (context.advice?.reasonAR?.slice(0, 2) ?? ['اختار Gemini زاوية متوافقة مع المشهد.'])
@@ -240,15 +424,22 @@ export function resolveSelfieAngleGeometry(context: SelfieAngleContext): Resolve
     pitchDeg,
     yawDeg,
     rollDeg,
-    heightOffsetCm: preset.heightOffsetCm,
+    heightOffsetCm,
     distanceCm,
-    armMechanics: describeArmMechanics(distanceCm, context.pose),
-    cameraPosition: describeCameraPosition(preset.heightOffsetCm),
+    armMechanics: isCarInteriorSelfieContext(context)
+      ? `${describeArmMechanics(distanceCm, context.pose)}; cabin-constrained elbow/wrist path kept clear of steering wheel, dashboard, glass, and roof trim`
+      : describeArmMechanics(distanceCm, context.pose),
+    cameraPosition: describeCameraPosition(heightOffsetCm),
     cameraDirection: describeDirection(pitchDeg, yawDeg, rollDeg),
     risk: preset.risk,
     source: adviceAccepted ? 'gemini' : 'local-fallback',
     adviceAccepted,
-    reasonAR
+    reasonAR,
+    carFocus: preset.carFocus,
+    carSeat: preset.carSeat,
+    phonePlacement: preset.phonePlacement,
+    cabinGuards: preset.cabinGuards,
+    carClearanceAdjusted
   };
 }
 
