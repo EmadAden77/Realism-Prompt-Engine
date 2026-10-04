@@ -30,6 +30,37 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
+// Preview-only live Gemini probe used during release verification.
+// It is intentionally unavailable in production.
+app.get('/api/ai/gemini-probe', async (_req, res) => {
+  if (process.env.VERCEL_ENV !== 'preview') {
+    return res.status(404).json({ error: 'Not found' });
+  }
+
+  const startedAt = Date.now();
+  try {
+    const response = await callGeminiWithFallback({
+      preferredModels: ['gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'],
+      contents: 'Reply with exactly: OK'
+    });
+
+    return res.json({
+      ok: Boolean(response?.text),
+      provider: 'gemini',
+      latencyMs: Date.now() - startedAt,
+      response: String(response?.text || '').trim().slice(0, 20)
+    });
+  } catch (error: any) {
+    console.error('[PhysFrame] Preview Gemini probe failed:', error?.message || error);
+    return res.status(503).json({
+      ok: false,
+      provider: 'gemini',
+      latencyMs: Date.now() - startedAt,
+      error: error?.message || 'Gemini probe failed'
+    });
+  }
+});
+
 // Gemini is initialized lazily inside requests so a missing key never crashes
 // the whole Vercel function before health checks or static routes can respond.
 function createGeminiClient() {
