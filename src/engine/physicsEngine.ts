@@ -14,6 +14,8 @@ import {
   BackgroundDisorderControl,
   BackgroundGeminiAdvice
 } from './backgroundRealism';
+import { deriveLightingCausality, LightingCausalityState } from './lightingCausality';
+import { evaluateScenePlausibility, ScenePlausibilityState } from './scenePlausibility';
 
 // --- TYPES ---
 export type CaptureType = 'front-selfie' | 'mirror-selfie' | 'third-person-candid';
@@ -102,6 +104,8 @@ export interface DerivedPhysicalState {
   motionBehavior: string;
   disorderBehavior: string;
   backgroundRealism: BackgroundRealismState;
+  lightingCausality: LightingCausalityState;
+  plausibility: ScenePlausibilityState;
 }
 
 // Backward-compatible interface for existing App.tsx consumers
@@ -518,10 +522,20 @@ export function resolveScene(rawState: SceneState): ResolvedScene {
     physicallyVisibleElements: [physicalState.visibleEnvironment, ...physicalState.visibleVehicles, ...physicalState.visiblePeople]
   };
 
+  if (physicalState.plausibility.overallStatus === 'impossible') {
+    for (const blocker of physicalState.plausibility.blockers) {
+      issues.push({
+        type: 'physical_impossibility',
+        field: 'scenePlausibility',
+        description: blocker
+      });
+    }
+  }
+
   const validationResult: ValidationResult = {
-    isValid: postValidation.isValid,
+    isValid: postValidation.isValid && physicalState.plausibility.overallStatus !== 'impossible',
     issues,
-    autoResolved: issues.length > 0
+    autoResolved: issues.some(issue => Boolean(issue.autoResolvedBy))
   };
 
   return {
@@ -783,57 +797,33 @@ function calculateDetailedPhysicalState(
     ? backgroundRealism.mildDisorderElements.join('; ')
     : 'restrained ordinary wear only; no decorative clutter';
 
-  // --- 8. Physical Lighting Causality (Section 16) ---
-  const lightSources: string[] = [];
-  let shadowBehavior = '';
-  let exposureBehavior = '';
-
+  // --- 8. Physical Lighting Causality ---
+  // A single deterministic solver owns source hierarchy, direction, falloff,
+  // bounce, shadow causality, and camera exposure behavior.
   const isMidday = state.timeOfDay === 'midday';
   const isHighContrast = state.lightingIntensity > 75 || state.shadowDepth > 70;
+  const cameraExposureBehavior = XIAOMI_15_ULTRA_FRONT_CAMERA_PROFILE.getExposureBehavior(
+    isNight,
+    isMidday,
+    isHighContrast
+  );
 
-  if (isNight) {
-    if (state.lightingMode === 'إضاءة شاشة الهاتف فقط') {
-      lightSources.push('solely mobile screen OLED/LCD panel glow at ~40cm distance (primary point emission)');
-      shadowBehavior = 'radial cast shadows projecting backward and outward away from phone screen, deep falloff into darkness';
-    } else if (isOutdoor) {
-      lightSources.push('overhead municipal warm LED streetlamp casting downward pool of light', 'faint residential gate entrance lantern spill');
-      shadowBehavior = 'downward cast shadows with soft penumbra under chin and nose, natural street illumination';
-    } else if (familyId === 'car') {
-      lightSources.push('subtle dashboard instrument cluster and infotainment screen backlight', 'exterior streetlamp ambient spill through tinted side window');
-      shadowBehavior = 'gentle upward-directed instrument glow with soft ambient side shadows';
-    } else {
-      lightSources.push('interior domestic fixture / warm night lamp emitting diffuse ambient light');
-      shadowBehavior = 'soft diffuse interior shadows with gentle penumbra edges';
-    }
-    exposureBehavior = XIAOMI_15_ULTRA_FRONT_CAMERA_PROFILE.getExposureBehavior(true, false, isHighContrast);
-  } else {
-    // Daytime
-    if (isOutdoor) {
-      if (isMidday) {
-        lightSources.push('direct high-angle Saudi sunlight', 'diffuse pale beige/cream wall radiosity bounce', 'asphalt ground fill reflection');
-        shadowBehavior = 'harsh short vertical cast shadows tightly hugging underside of nose, jawline, and collar';
-      } else {
-        lightSources.push('directional low-angle morning/afternoon sunlight', 'warm environmental bounce light from ground and nearby walls');
-        shadowBehavior = 'elongated directional cast shadows projecting sideways with warm soft penumbra';
-      }
-    } else if (familyId === 'car') {
-      lightSources.push('natural exterior daylight filtering through vehicle windshield and side glass', 'diffuse cabin interior bounce');
-      shadowBehavior = 'natural side-window directional light with soft ambient fill from passenger seat';
-    } else {
-      // Indoor office / room
-      lightSources.push('overhead recessed ceiling fluorescent/LED troffer panels', 'indirect exterior daylight from nearby window');
-      shadowBehavior = 'downward diffuse office shadows with realistic socket and chin occlusion';
-    }
-    exposureBehavior = XIAOMI_15_ULTRA_FRONT_CAMERA_PROFILE.getExposureBehavior(false, isMidday, isHighContrast);
-  }
+  const lightingCausality = deriveLightingCausality({
+    familyId,
+    subScene: state.subScene,
+    timeOfDay: state.timeOfDay,
+    lightingMode: state.lightingMode,
+    lightingIntensity: state.lightingIntensity,
+    shadowDepth: state.shadowDepth,
+    isOutdoor,
+    microLoc,
+    backgroundLightSources: backgroundRealism.lightSources,
+    cameraExposureBehavior
+  });
 
-  // Merge only scene-appropriate background practicals. The main subject lighting
-  // remains authoritative, so background sources cannot invent a conflicting exposure.
-  for (const backgroundLight of backgroundRealism.lightSources) {
-    if (!lightSources.includes(backgroundLight)) {
-      lightSources.push(backgroundLight);
-    }
-  }
+  const lightSources = [...lightingCausality.sourceSummary];
+  const shadowBehavior = lightingCausality.shadowBehavior;
+  const exposureBehavior = lightingCausality.exposureBehavior;
 
   // --- 9. Physical Reflections (Section 17) ---
   const reflectionState: string[] = [];
@@ -846,6 +836,22 @@ function calculateDetailedPhysicalState(
   if (state.captureType === 'mirror-selfie') {
     reflectionState.push('optically accurate flat mirror reflection with phone camera lens visible in reflection');
   }
+
+  const plausibility = evaluateScenePlausibility({
+    familyId,
+    subScene: state.subScene,
+    captureType: state.captureType,
+    framingClass,
+    cameraAngle: state.cameraAngle,
+    pose: state.pose,
+    foregroundObstruction: state.foregroundObstruction,
+    isOutdoor,
+    visibleBodyRegion,
+    occlusions,
+    foregroundElements,
+    backgroundRealism,
+    lightingCausality
+  });
 
   return {
     cameraPosition,
@@ -872,7 +878,9 @@ function calculateDetailedPhysicalState(
     exposureBehavior,
     motionBehavior,
     disorderBehavior,
-    backgroundRealism
+    backgroundRealism,
+    lightingCausality,
+    plausibility
   };
 }
 
@@ -901,8 +909,8 @@ function calculateDerivedState(
     skinResponse: 'natural human skin texture with microscopic visible pores, authentic subtle imperfections, natural melanin variance, no plastic airbrushing',
     hairCondition: 'natural human hair density, preserving authentic hairline without synthetic thickening',
     fabricBehavior: [],
-    shadowBehavior: `${physics.shadowBehavior}, calibrated to ${depth}% shadow hardness (${shadowDepthDescription})`,
-    environmentalLightBehavior: `ambient light sources: ${physics.lightSources.join('; ')}, calibrated to ${intensity}% ambient intensity`,
+    shadowBehavior: `${physics.shadowBehavior}; ${physics.lightingCausality.contrastBehavior}; calibrated to ${depth}% shadow hardness (${shadowDepthDescription})`,
+    environmentalLightBehavior: `primary light: ${physics.lightingCausality.primarySource.name}; secondary/bounce: ${physics.lightingCausality.secondarySources.map(source => source.name).join('; ') || 'none'}; bounce surfaces: ${physics.lightingCausality.bounceSurfaces.join('; ')}; falloff: ${physics.lightingCausality.falloffBehavior}; calibrated to ${intensity}% ambient intensity`,
     cameraDistance: physics.cameraDistance,
     visibleBackgroundElements: [physics.visibleEnvironment, ...physics.visibleVehicles, ...physics.visiblePeople],
     contactPhysics: [physics.armReach, ...physics.occlusions],
@@ -914,6 +922,9 @@ function calculateDerivedState(
       `Visible anatomical region: ${physics.visibleBodyRegion}`,
       `Background depth plane: ${physics.backgroundDepth}`,
       `Sensor exposure: ${physics.exposureBehavior}`,
+      `Lighting causality: ${physics.lightingCausality.inverseSquareBehavior}`,
+      `Lighting guards: ${physics.lightingCausality.consistencyGuards.join('; ')}`,
+      `Scene plausibility: status=${physics.plausibility.overallStatus}, score=${physics.plausibility.overallScore}/100; ${physics.plausibility.constraints.join('; ') || 'no additional constraints'}`,
       `Physical lived-in disorder: ${physics.disorderBehavior}`
     ],
     lensEffects: state.captureType === 'front-selfie'
