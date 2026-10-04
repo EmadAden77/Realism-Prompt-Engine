@@ -3,9 +3,31 @@ import { MicroLocation, SceneFamilyId } from '../data/microLocations';
 export type BackgroundVisibilityClass = 'minimal' | 'limited' | 'moderate' | 'expanded';
 export type BackgroundEntityDensity = 'none' | 'sparse' | 'light' | 'moderate';
 export type BackgroundMode = 'auto' | 'restricted' | 'active' | 'off';
-export type BackgroundControlDensity = 'auto' | 'none' | 'sparse' | 'moderate';
-export type BackgroundDisorderControl = 'auto' | 'very-clean' | 'light' | 'moderate';
+export type BackgroundControlDensity = 'auto' | 'none' | 'sparse' | 'light' | 'moderate' | 'high';
+export type BackgroundDisorderControl = 'auto' | 'very-clean' | 'natural' | 'lived-in' | 'light' | 'moderate';
 export type BackgroundDisorderLevel = 'none' | 'very-clean' | 'light' | 'moderate';
+export type BackgroundActivityControl = 'auto' | 'calm' | 'natural' | 'active';
+export type BackgroundPresenceControl = 'auto' | 'low' | 'balanced' | 'visible' | 'strong';
+export type BackgroundCompositionGoal = 'auto' | 'face-priority' | 'balanced' | 'background-priority';
+
+export interface BackgroundAngleIntent {
+  preferredFramingBias: 'tight' | 'balanced' | 'wide';
+  preferredAngleBias: 'centered' | 'off-axis' | 'slightly-high' | 'scene-aware';
+  preferredDistanceBias: 'near' | 'neutral' | 'far';
+  backgroundPriority: 'low' | 'medium' | 'high';
+  facePriority: 'low' | 'medium' | 'high';
+  reasonAR: string[];
+}
+
+export interface BackgroundAngleIntentInput {
+  backgroundMode?: BackgroundMode;
+  backgroundHumans?: BackgroundControlDensity;
+  backgroundVehicles?: BackgroundControlDensity;
+  backgroundDisorder?: BackgroundDisorderControl;
+  backgroundActivity?: BackgroundActivityControl;
+  backgroundPresence?: BackgroundPresenceControl;
+  backgroundCompositionGoal?: BackgroundCompositionGoal;
+}
 
 export interface BackgroundGeminiAdvice {
   humanDensity: BackgroundEntityDensity;
@@ -30,6 +52,9 @@ export interface BackgroundSceneContext {
   backgroundHumans?: BackgroundControlDensity;
   backgroundVehicles?: BackgroundControlDensity;
   backgroundDisorder?: BackgroundDisorderControl;
+  backgroundActivity?: BackgroundActivityControl;
+  backgroundPresence?: BackgroundPresenceControl;
+  backgroundCompositionGoal?: BackgroundCompositionGoal;
   backgroundGeminiAssist?: boolean;
   backgroundGeminiAdvice?: BackgroundGeminiAdvice;
   microLoc?: MicroLocation;
@@ -44,6 +69,13 @@ export interface BackgroundRealismState {
   requestedHumans: BackgroundControlDensity;
   requestedVehicles: BackgroundControlDensity;
   requestedDisorder: BackgroundDisorderControl;
+  requestedActivity: BackgroundActivityControl;
+  requestedPresence: BackgroundPresenceControl;
+  requestedCompositionGoal: BackgroundCompositionGoal;
+  activityLevel: Exclude<BackgroundActivityControl, 'auto'>;
+  presenceLevel: Exclude<BackgroundPresenceControl, 'auto'>;
+  compositionGoal: Exclude<BackgroundCompositionGoal, 'auto'>;
+  angleIntent: BackgroundAngleIntent;
   allowsHumans: boolean;
   humanDensity: BackgroundEntityDensity;
   humanBehavior: string[];
@@ -100,6 +132,7 @@ const densityFromControl = (
   if (control === 'auto') return fallback;
   if (control === 'none') return 'none';
   if (control === 'sparse') return 'sparse';
+  if (control === 'light') return 'light';
   return 'moderate';
 };
 
@@ -107,8 +140,98 @@ const disorderFromControl = (
   control: BackgroundDisorderControl,
   fallback: BackgroundDisorderLevel
 ): BackgroundDisorderLevel => {
-  return control === 'auto' ? fallback : control;
+  if (control === 'auto') return fallback;
+  if (control === 'very-clean') return 'very-clean';
+  if (control === 'natural' || control === 'light') return 'light';
+  return 'moderate';
 };
+
+const densityControlRank: Record<BackgroundControlDensity, number> = {
+  auto: 1,
+  none: 0,
+  sparse: 1,
+  light: 2,
+  moderate: 3,
+  high: 4
+};
+
+export function deriveAngleIntentFromBackground(
+  input: BackgroundAngleIntentInput
+): BackgroundAngleIntent {
+  const mode = input.backgroundMode ?? 'auto';
+  const humans = input.backgroundHumans ?? 'auto';
+  const vehicles = input.backgroundVehicles ?? 'auto';
+  const activity = input.backgroundActivity ?? 'auto';
+  const presence = input.backgroundPresence ?? 'auto';
+  const goal = input.backgroundCompositionGoal ?? 'auto';
+
+  let backgroundPriority: BackgroundAngleIntent['backgroundPriority'] = 'medium';
+  let facePriority: BackgroundAngleIntent['facePriority'] = 'medium';
+  let preferredFramingBias: BackgroundAngleIntent['preferredFramingBias'] = 'balanced';
+  let preferredAngleBias: BackgroundAngleIntent['preferredAngleBias'] = 'scene-aware';
+  let preferredDistanceBias: BackgroundAngleIntent['preferredDistanceBias'] = 'neutral';
+  const reasonAR: string[] = [];
+
+  if (mode === 'off' || goal === 'face-priority' || presence === 'low') {
+    backgroundPriority = 'low';
+    facePriority = 'high';
+    preferredFramingBias = 'tight';
+    preferredAngleBias = 'centered';
+    preferredDistanceBias = 'near';
+    reasonAR.push('أولوية الخلفية منخفضة، لذلك يُفضّل كادر أقرب وزاوية أبسط للوجه.');
+  }
+
+  const denseLife = Math.max(densityControlRank[humans], densityControlRank[vehicles]);
+  if (
+    goal === 'background-priority' ||
+    presence === 'strong' ||
+    (presence === 'visible' && denseLife >= 2)
+  ) {
+    backgroundPriority = 'high';
+    facePriority = goal === 'background-priority' ? 'medium' : facePriority;
+    preferredFramingBias = 'wide';
+    preferredAngleBias = 'off-axis';
+    preferredDistanceBias = 'far';
+    reasonAR.push('الخلفية مطلوبة بوضوح، لذلك تُفضّل زاوية خارج المنتصف ومسافة تسمح بسياق أكبر.');
+  } else if (
+    presence === 'visible' ||
+    activity === 'active' ||
+    denseLife >= 3
+  ) {
+    backgroundPriority = 'medium';
+    facePriority = facePriority === 'high' ? 'high' : 'medium';
+    preferredFramingBias = 'balanced';
+    preferredAngleBias = 'off-axis';
+    preferredDistanceBias = 'neutral';
+    reasonAR.push('نشاط الخلفية أعلى من المعتاد، لذلك تُفضّل زاوية تكشف جزءًا أكبر من المشهد دون خسارة الوجه.');
+  }
+
+  if (goal === 'balanced' || presence === 'balanced') {
+    backgroundPriority = 'medium';
+    facePriority = 'medium';
+    preferredFramingBias = 'balanced';
+    preferredDistanceBias = 'neutral';
+    if (preferredAngleBias === 'scene-aware') preferredAngleBias = 'off-axis';
+  }
+
+  if (activity === 'calm' && humans === 'none' && vehicles === 'none') {
+    preferredAngleBias = 'centered';
+    preferredDistanceBias = 'near';
+    if (goal === 'auto' && presence === 'auto') {
+      backgroundPriority = 'low';
+      facePriority = 'high';
+    }
+  }
+
+  return {
+    preferredFramingBias,
+    preferredAngleBias,
+    preferredDistanceBias,
+    backgroundPriority,
+    facePriority,
+    reasonAR
+  };
+}
 
 export function deriveBackgroundRealism(
   context: BackgroundSceneContext
@@ -130,6 +253,9 @@ export function deriveBackgroundRealism(
   const backgroundHumans = context.backgroundHumans ?? 'auto';
   const backgroundVehicles = context.backgroundVehicles ?? 'auto';
   const backgroundDisorder = context.backgroundDisorder ?? 'auto';
+  const backgroundActivity = context.backgroundActivity ?? 'auto';
+  const backgroundPresence = context.backgroundPresence ?? 'auto';
+  const backgroundCompositionGoal = context.backgroundCompositionGoal ?? 'auto';
   const backgroundGeminiAssist = context.backgroundGeminiAssist ?? true;
   const geminiAdvice = context.backgroundGeminiAdvice;
 
@@ -157,6 +283,14 @@ export function deriveBackgroundRealism(
     visibilityClass = 'moderate';
   }
 
+  if (framingClass !== 'tight') {
+    if (backgroundPresence === 'low') {
+      visibilityClass = framingClass === 'wide' ? 'moderate' : 'limited';
+    } else if (backgroundPresence === 'visible' || backgroundPresence === 'strong') {
+      visibilityClass = framingClass === 'wide' ? 'expanded' : 'moderate';
+    }
+  }
+
   const surfaceLimit =
     visibilityClass === 'minimal' ? 1 :
     visibilityClass === 'limited' ? 2 :
@@ -169,11 +303,28 @@ export function deriveBackgroundRealism(
     isMilitaryPublic ||
     isGymPublic;
 
+  const autoActivityLevel: Exclude<BackgroundActivityControl, 'auto'> =
+    activityDensity === 'moderate' ? 'active' :
+    activityDensity === 'light' ? 'natural' : 'calm';
+
+  const activityLevel: Exclude<BackgroundActivityControl, 'auto'> =
+    backgroundMode === 'off'
+      ? 'calm'
+      : backgroundActivity === 'auto'
+        ? autoActivityLevel
+        : backgroundActivity;
+
   let autoHumanDensity: BackgroundEntityDensity = 'none';
   if (framingClass !== 'tight' && publicScene) {
     if (activityDensity === 'minimal') autoHumanDensity = framingClass === 'wide' ? 'sparse' : 'none';
     else if (activityDensity === 'light') autoHumanDensity = framingClass === 'wide' ? 'light' : 'sparse';
     else if (activityDensity === 'moderate') autoHumanDensity = framingClass === 'wide' ? 'moderate' : 'light';
+
+    if (activityLevel === 'calm') {
+      autoHumanDensity = capDensity(autoHumanDensity, 'sparse');
+    } else if (activityLevel === 'active') {
+      autoHumanDensity = framingClass === 'wide' ? 'moderate' : 'light';
+    }
   }
 
   let physicalHumanMax: BackgroundEntityDensity =
@@ -250,6 +401,16 @@ export function deriveBackgroundRealism(
     return capDensity(candidate, physicalMax);
   };
 
+  const requestedAngleIntent = deriveAngleIntentFromBackground({
+    backgroundMode,
+    backgroundHumans,
+    backgroundVehicles,
+    backgroundDisorder,
+    backgroundActivity,
+    backgroundPresence,
+    backgroundCompositionGoal
+  });
+
   const humanDensity = chooseAutoDensity(
     autoHumanDensity,
     physicalHumanMax,
@@ -283,6 +444,38 @@ export function deriveBackgroundRealism(
 
   if (backgroundMode === 'restricted') {
     disorderLevel = capDisorder(disorderLevel, 'light');
+  }
+
+  const presenceCap: Exclude<BackgroundPresenceControl, 'auto'> =
+    framingClass === 'tight' ? 'low' :
+    framingClass === 'medium' ? 'visible' : 'strong';
+
+  const presenceOrder: Record<Exclude<BackgroundPresenceControl, 'auto'>, number> = {
+    low: 0,
+    balanced: 1,
+    visible: 2,
+    strong: 3
+  };
+
+  const autoPresence: Exclude<BackgroundPresenceControl, 'auto'> =
+    visibilityClass === 'minimal' ? 'low' :
+    visibilityClass === 'limited' ? 'balanced' :
+    visibilityClass === 'moderate' ? 'visible' : 'strong';
+
+  let presenceLevel: Exclude<BackgroundPresenceControl, 'auto'> =
+    backgroundPresence === 'auto' ? autoPresence : backgroundPresence;
+
+  if (presenceOrder[presenceLevel] > presenceOrder[presenceCap]) {
+    presenceLevel = presenceCap;
+  }
+
+  let compositionGoal: Exclude<BackgroundCompositionGoal, 'auto'> =
+    backgroundCompositionGoal === 'auto'
+      ? (presenceLevel === 'strong' ? 'background-priority' : presenceLevel === 'low' ? 'face-priority' : 'balanced')
+      : backgroundCompositionGoal;
+
+  if (framingClass === 'tight' && compositionGoal === 'background-priority') {
+    compositionGoal = 'balanced';
   }
 
   const humanBehavior: string[] = [];
@@ -404,10 +597,15 @@ export function deriveBackgroundRealism(
   }
 
   const fovAllowsBackgroundLife = humanDensity !== 'none' || vehicleDensity !== 'none';
+  const requestedPresenceLevel =
+    backgroundPresence === 'auto' ? autoPresence : backgroundPresence;
+
   const cappedByFraming =
     densityRank[densityFromControl(backgroundHumans, autoHumanDensity)] > densityRank[physicalHumanMax] ||
     densityRank[densityFromControl(backgroundVehicles, autoVehicleDensity)] > densityRank[physicalVehicleMax] ||
-    (backgroundDisorder !== 'auto' && disorderRank[disorderFromControl(backgroundDisorder, defaultDisorder)] > disorderRank[physicalDisorderMax]);
+    (backgroundDisorder !== 'auto' && disorderRank[disorderFromControl(backgroundDisorder, defaultDisorder)] > disorderRank[physicalDisorderMax]) ||
+    presenceOrder[requestedPresenceLevel] > presenceOrder[presenceCap] ||
+    (backgroundCompositionGoal === 'background-priority' && framingClass === 'tight');
 
   const decisionReasons: string[] = [];
   if (framingClass === 'tight') {
@@ -425,6 +623,16 @@ export function deriveBackgroundRealism(
   } else if (backgroundMode === 'active') {
     decisionReasons.push('وضع الخلفية النشط يستخدم أعلى كثافة يسمح بها المشهد والـFOV.');
   }
+  if (backgroundPresence !== 'auto') {
+    decisionReasons.push(`حضور الخلفية المطلوب: ${presenceLevel}، وتم ضبطه حسب اتساع الكادر الفعلي.`);
+  }
+  if (backgroundCompositionGoal !== 'auto') {
+    decisionReasons.push(`هدف التكوين: ${compositionGoal}.`);
+  }
+  if (backgroundActivity !== 'auto') {
+    decisionReasons.push(`نشاط المشهد: ${activityLevel}.`);
+  }
+
   if (geminiApplied) {
     decisionReasons.push('تم استخدام اقتراح Gemini فقط داخل الحدود الفيزيائية المحلية.');
     if (geminiAdvice?.reasonAR?.length) {
@@ -463,6 +671,13 @@ export function deriveBackgroundRealism(
     requestedHumans: backgroundHumans,
     requestedVehicles: backgroundVehicles,
     requestedDisorder: backgroundDisorder,
+    requestedActivity: backgroundActivity,
+    requestedPresence: backgroundPresence,
+    requestedCompositionGoal: backgroundCompositionGoal,
+    activityLevel,
+    presenceLevel,
+    compositionGoal,
+    angleIntent: requestedAngleIntent,
     allowsHumans: humanDensity !== 'none',
     humanDensity,
     humanBehavior,
