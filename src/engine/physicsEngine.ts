@@ -25,6 +25,17 @@ import {
   SelfieAngleAdvice,
   SelfieAngleMode
 } from './selfieAngles';
+import type {
+  OutfitWearStyle,
+  GarmentWearContext,
+  ShirtTuck,
+  SleeveStyle,
+  ShirtButtons,
+  CollarStyle,
+  OuterwearClosure,
+  HoodPosition,
+  ThobeCollar
+} from './activityAttire';
 
 // --- TYPES ---
 export type CaptureType = 'front-selfie' | 'mirror-selfie' | 'third-person-candid';
@@ -52,6 +63,15 @@ export interface SceneState {
   cameraAngle: CameraAngle;
   pose: string;
   outfitId: string;
+  outfitWearStyle?: OutfitWearStyle;
+  garmentWearContext?: GarmentWearContext;
+  shirtTuck?: ShirtTuck;
+  sleeveStyle?: SleeveStyle;
+  shirtButtons?: ShirtButtons;
+  collarStyle?: CollarStyle;
+  outerwearClosure?: OuterwearClosure;
+  hoodPosition?: HoodPosition;
+  thobeCollar?: ThobeCollar;
   hairStyle: string;
   expression: string;
   timeOfDay: TimeOfDay;
