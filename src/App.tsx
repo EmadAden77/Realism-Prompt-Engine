@@ -873,7 +873,11 @@ const buildNegativeConstraints = (state: SceneState, derived: DerivedSceneState)
   return neg;
 };
 
-const calculatePhysicalConsistencyScore = (validation: ValidationResult, promptContradictions: string[] = []): number => {
+const calculatePhysicalConsistencyScore = (
+  validation: ValidationResult,
+  promptContradictions: string[] = [],
+  scenePlausibilityScore?: number
+): number => {
   // This is a pre-generation consistency score, not proof that a rendered image is "100% real".
   // Start below 100 to preserve uncertainty that can only be assessed after rendering.
   let score = 96;
@@ -885,7 +889,14 @@ const calculatePhysicalConsistencyScore = (validation: ValidationResult, promptC
   }
 
   score -= promptContradictions.length * 12;
-  return Math.max(0, Math.min(96, score));
+
+  // Conservative rule: local consistency can never score higher than the
+  // deterministic Scene Plausibility Engine for the same resolved scene.
+  if (typeof scenePlausibilityScore === 'number' && Number.isFinite(scenePlausibilityScore)) {
+    score = Math.min(score, Math.max(0, Math.min(100, scenePlausibilityScore)));
+  }
+
+  return Math.max(0, Math.min(96, Math.round(score)));
 };
 
 const combineRealismScores = (localScore: number, geminiScore?: number): number => {
@@ -1670,7 +1681,11 @@ export default function PhysFrameApp() {
       const rawPrompt = buildPromptText(semantic, 'gemini');
       const validatedPrompt = validatePrompt(rawPrompt, resolved, buildNegativeConstraints(resolved.state as SceneState, derived));
       const prompt = validatedPrompt.cleanPrompt;
-      const physicalConsistencyScore = calculatePhysicalConsistencyScore(initialValidation, validatedPrompt.contradictionsFound);
+      const physicalConsistencyScore = calculatePhysicalConsistencyScore(
+        initialValidation,
+        validatedPrompt.contradictionsFound,
+        resolved.physicalState.plausibility.overallScore
+      );
 
       // Always show a deterministic local result immediately.
       const localAudit: RealismAuditResult = {
@@ -1786,7 +1801,11 @@ export default function PhysFrameApp() {
       }
 
       // 4. Auto-Fix succeeds locally and immediately. Gemini must never block correction.
-      const physicalConsistencyScore = calculatePhysicalConsistencyScore(postValidation, validatedPrompt.contradictionsFound);
+      const physicalConsistencyScore = calculatePhysicalConsistencyScore(
+        postValidation,
+        validatedPrompt.contradictionsFound,
+        finalResolved.physicalState.plausibility.overallScore
+      );
       const localFixedAudit: RealismAuditResult = {
         realismScore: physicalConsistencyScore,
         localScore: physicalConsistencyScore,
