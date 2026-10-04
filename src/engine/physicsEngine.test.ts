@@ -382,4 +382,62 @@ assert(!contaminatedPrompt.cleanPrompt.includes('24mm-28mm'), 'Wrong 24-28mm foc
 assert(contaminatedPrompt.cleanPrompt.includes('21mm'), 'Final prompt must restore the 21mm equivalent Xiaomi camera lock');
 assert(contaminatedPrompt.cleanPrompt.includes('Xiaomi 15 Ultra front camera'), 'iPhone front-camera wording must be replaced');
 
+
+console.log('▶ Test 12: Scene-aware bedroom close-up background restraint');
+assert(resolvedBedroom.physicalState.backgroundRealism.visibilityClass === 'minimal', 'Close bedroom selfie must use minimal background visibility');
+assert(!resolvedBedroom.physicalState.backgroundRealism.allowsHumans, 'Private bedroom close-up must forbid random background humans');
+assert(!resolvedBedroom.physicalState.backgroundRealism.allowsVehicles, 'Private bedroom close-up must forbid background vehicles');
+assert(resolvedBedroom.physicalState.backgroundRealism.environmentalSurfaces.length <= 1, 'Tight bedroom framing must expose at most one immediate background surface');
+
+console.log('▶ Test 13: Wider Saudi residential street background life');
+assert(resolvedStreetWide.physicalState.backgroundRealism.allowsHumans, 'Wide residential street selfie may allow sparse everyday pedestrian life');
+assert(resolvedStreetWide.physicalState.backgroundRealism.humanDensity === 'sparse', 'Quiet residential street should keep human density sparse');
+assert(resolvedStreetWide.physicalState.backgroundRealism.allowsVehicles, 'Wide residential street selfie may show sparse ordinary vehicles');
+assert(resolvedStreetWide.physicalState.backgroundRealism.vehicleDensity === 'sparse', 'Quiet residential street vehicle density must remain sparse');
+assert(resolvedStreetWide.physicalState.backgroundRealism.allowsMildDisorder, 'Outdoor street scene should allow restrained lived-in disorder');
+assert(resolvedStreetWide.physicalState.visibleEnvironment.includes('villa') || resolvedStreetWide.physicalState.visibleEnvironment.includes('curb'), 'Street background must come from the selected micro-location surfaces');
+
+console.log('▶ Test 14: Medium café selfie uses café-specific public activity');
+const cafeMediumState: SceneState = {
+  ...streetWideState,
+  subScene: 'أمام مقهى محلي',
+  framing: 'chest-up',
+  cameraAngle: 'eye-level',
+  pose: 'واقف بشكل طبيعي',
+  activity: 'ينتظر',
+  timeOfDay: 'afternoon'
+};
+const resolvedCafeMedium = resolveScene(cafeMediumState);
+assert(resolvedCafeMedium.physicalState.backgroundRealism.visibilityClass === 'limited', 'Medium café selfie must use limited background visibility');
+assert(resolvedCafeMedium.physicalState.backgroundRealism.humanDensity === 'light', 'Medium café selfie may show light public activity but not a crowd');
+assert(resolvedCafeMedium.physicalState.backgroundRealism.vehicleDensity === 'sparse', 'Medium café selfie must cap vehicles at sparse');
+assert(resolvedCafeMedium.physicalState.visibleEnvironment.includes('café glass facade') || resolvedCafeMedium.physicalState.visibleEnvironment.includes('bistro chair'), 'Café scene must preserve café micro-location surfaces rather than generic villa background');
+assert(resolvedCafeMedium.physicalState.visiblePeople.every(p => !p.toLowerCase().includes('crowd')), 'Café background must never force crowding');
+
+console.log('▶ Test 15: Phone-screen-only scene keeps background dark');
+assert(resolvedBedroom.physicalState.backgroundRealism.lightSources.length === 0, 'Phone-screen-only scene must not invent independent background light sources');
+assert(
+  resolvedBedroom.physicalState.backgroundRealism.realismGuards.some(g => g.includes('predominantly dark')),
+  'Phone-screen-only background guard must explicitly preserve darkness'
+);
+
+console.log('▶ Test 16: Car interior exposes outside vehicles only through real glazing');
+const carMediumState: SceneState = {
+  ...carNightState,
+  framing: 'chest-up',
+  lightingMode: 'إضاءة الشارع عبر زجاج السيارة'
+};
+const resolvedCarMedium = resolveScene(carMediumState);
+assert(resolvedCarMedium.physicalState.backgroundRealism.vehicleDensity === 'sparse', 'Car interior medium selfie may expose only sparse external vehicle presence');
+assert(
+  resolvedCarMedium.physicalState.backgroundRealism.vehicleBehavior.every(v => /window|windshield/i.test(v)),
+  'External vehicles in car interior must be constrained to physically visible window or windshield planes'
+);
+assert(
+  resolvedCarMedium.physicalState.backgroundRealism.occlusionRules.some(r => r.includes('window') || r.includes('windshield')),
+  'Car interior background occlusion rules must constrain exterior visibility through glazing'
+);
+
+console.log('  ✓ Scene-aware Background Realism V1 regression suite passed!\n');
+
 console.log('🎉 ALL AUTOMATED VALIDATION TESTS PASSED PERFECTLY!\n');
