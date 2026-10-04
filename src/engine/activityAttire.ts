@@ -317,9 +317,9 @@ export function getPoseOptions(familyId: SceneFamilyId): string[] {
 export function getOutfitCapabilities(outfit?: OutfitItem): OutfitCapabilities {
   const text = `${outfit?.id || ''} ${outfit?.labelAR || ''} ${outfit?.prompt || ''} ${outfit?.promptDescription || ''}`.toLowerCase();
 
-  const isShirt = /shirt|button-up|button-down|oxford|قميص/.test(text);
-  const isThobe = /thobe|ثوب/.test(text);
   const isTee = /t-shirt|\btee\b|تيشيرت/.test(text);
+  const isShirt = !isTee && /shirt|button-up|button-down|oxford|قميص/.test(text);
+  const isThobe = /thobe|ثوب/.test(text);
   const isHoodie = /hoodie|هودي/.test(text);
   const isOuterwear = /jacket|blazer|coat|bisht|farwa|جاكيت|بليزر|بشت|فروة/.test(text);
 
