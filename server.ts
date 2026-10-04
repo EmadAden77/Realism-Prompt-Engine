@@ -41,14 +41,27 @@ app.get('/api/ai/gemini-probe', async (_req, res) => {
   try {
     const response = await callGeminiWithFallback({
       preferredModels: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
-      contents: 'Reply with exactly: OK'
+      contents: 'Return a JSON object confirming the live Gemini structured-output probe.',
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            ok: { type: Type.BOOLEAN },
+            message: { type: Type.STRING }
+          },
+          required: ['ok', 'message']
+        }
+      }
     });
 
+    const parsed = JSON.parse(response?.text || '{}');
     return res.json({
-      ok: Boolean(response?.text),
+      ok: parsed?.ok === true,
       provider: 'gemini',
+      structuredJson: typeof parsed?.message === 'string',
       latencyMs: Date.now() - startedAt,
-      response: String(response?.text || '').trim().slice(0, 20)
+      response: String(parsed?.message || '').slice(0, 40)
     });
   } catch (error: any) {
     console.error('[PhysFrame] Preview Gemini probe failed:', error?.message || error);
