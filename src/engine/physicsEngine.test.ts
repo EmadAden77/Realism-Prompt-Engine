@@ -623,6 +623,8 @@ console.log('▶ Test 28: Gemini angle advice is accepted only inside the eligib
 const smartCafeState: SceneState = {
   ...cafeMediumState,
   captureType: 'front-selfie',
+  pose: 'جالس على كرسي',
+  activity: 'جالس في المقهى',
   cameraAngleMode: 'gemini-smart',
   selfieAngleAdvice: {
     angleId: 'cafe_seated_diagonal',
