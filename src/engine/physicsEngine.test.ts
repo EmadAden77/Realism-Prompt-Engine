@@ -515,6 +515,92 @@ assert(resolvedBackgroundOff.physicalState.backgroundRealism.humanDensity === 'n
 assert(resolvedBackgroundOff.physicalState.backgroundRealism.vehicleDensity === 'none', 'Background off must disable vehicles');
 assert(resolvedBackgroundOff.physicalState.backgroundRealism.disorderLevel === 'none', 'Background off must disable disorder');
 
-console.log('  ✓ Scene-aware Background Realism V2 controls + Gemini guardrails passed!\n');
+console.log('▶ Test 21: Phone-screen-only lighting uses real near-field falloff');
+assert(
+  resolvedBedroom.physicalState.lightingCausality.primarySource.name === 'smartphone display glow',
+  'Phone-screen-only mode must resolve to the smartphone display as the primary source'
+);
+assert(
+  resolvedBedroom.physicalState.lightingCausality.inverseSquareBehavior.includes('inverse-square'),
+  'Phone-screen-only mode must encode near-field inverse-square behavior'
+);
+assert(
+  resolvedBedroom.physicalState.lightingCausality.falloffBehavior.includes('rapid'),
+  'Phone-screen-only mode must preserve rapid light falloff'
+);
+
+console.log('▶ Test 22: Midday Saudi outdoor lighting has directional sun plus real bounce');
+assert(
+  resolvedStreetWide.physicalState.lightingCausality.primarySource.name.includes('midday sun'),
+  'Midday Saudi outdoor scene must use high-angle sun as primary source'
+);
+assert(
+  resolvedStreetWide.physicalState.lightingCausality.bounceSurfaces.some(s => /asphalt|wall/i.test(s)),
+  'Midday outdoor scene must include real wall/asphalt bounce surfaces'
+);
+assert(
+  resolvedStreetWide.physicalState.lightingCausality.inverseSquareBehavior.includes('do not misuse inverse-square'),
+  'Sunlight must not be modeled as a near-field inverse-square source'
+);
+
+console.log('▶ Test 23: Indoor fluorescent lighting preserves overhead directionality');
+const officeFluorescentState: SceneState = {
+  ...officeState,
+  lightingMode: 'إضاءة مكتب فلورسنت',
+  timeOfDay: 'midday'
+};
+const resolvedOfficeFluorescent = resolveScene(officeFluorescentState);
+assert(
+  resolvedOfficeFluorescent.physicalState.lightingCausality.primarySource.name.includes('fluorescent') ||
+  resolvedOfficeFluorescent.physicalState.lightingCausality.primarySource.name.includes('LED'),
+  'Office fluorescent mode must resolve to a real overhead fixture'
+);
+assert(
+  resolvedOfficeFluorescent.physicalState.lightingCausality.primarySource.direction.includes('downward'),
+  'Overhead office fixture must cast downward light'
+);
+
+console.log('▶ Test 24: Daylight car interior is shaped by real glazing');
+const carDayState: SceneState = {
+  ...carNightState,
+  timeOfDay: 'midday',
+  lightingMode: 'ضوء نهاري طبيعي'
+};
+const resolvedCarDay = resolveScene(carDayState);
+assert(
+  resolvedCarDay.physicalState.lightingCausality.primarySource.name.includes('vehicle glazing'),
+  'Daytime car interior must source daylight through real vehicle glazing'
+);
+assert(
+  resolvedCarDay.physicalState.lightingCausality.shadowBehavior.includes('window-shaped'),
+  'Car daylight shadows must preserve window-shaped cabin gradients'
+);
+
+console.log('▶ Test 25: Scene plausibility exposes constrained but valid selfie geometry');
+assert(
+  resolvedStreetWide.physicalState.plausibility.overallStatus === 'constrained',
+  'Wide front selfie should be valid but constrained by maximum arm reach'
+);
+assert(
+  resolvedStreetWide.physicalState.plausibility.captureTopology.score < 100,
+  'Wide front selfie must carry a lower capture-topology plausibility score'
+);
+assert(
+  resolvedStreetWide.physicalState.plausibility.overallScore > 0 &&
+  resolvedStreetWide.physicalState.plausibility.overallScore < 100,
+  'Constrained scene must expose a bounded non-perfect plausibility score'
+);
+
+console.log('▶ Test 26: Normal medium selfie remains fully plausible after resolution');
+assert(
+  resolvedOffice.physicalState.plausibility.overallStatus !== 'impossible',
+  'Resolved normal medium selfie must not contain plausibility blockers'
+);
+assert(
+  resolvedOffice.physicalState.plausibility.blockers.length === 0,
+  'Resolved normal scene must have zero hard plausibility blockers'
+);
+
+console.log('  ✓ Scene Plausibility + Lighting Causality V1 regression suite passed!\n');
 
 console.log('🎉 ALL AUTOMATED VALIDATION TESTS PASSED PERFECTLY!\n');
