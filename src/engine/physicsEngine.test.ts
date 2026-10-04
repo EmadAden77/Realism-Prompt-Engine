@@ -707,8 +707,10 @@ assert(
   'Smart mode must remain functional locally when Gemini advice is absent'
 );
 assert(
-  resolvedSmartReclined.physicalState.selfieAngle?.presetId?.includes('reclined') ||
-  resolvedSmartReclined.physicalState.selfieAngle?.presetId?.includes('lying'),
+  Boolean(
+    resolvedSmartReclined.physicalState.selfieAngle?.presetId?.includes('reclined') ||
+    resolvedSmartReclined.physicalState.selfieAngle?.presetId?.includes('lying')
+  ),
   'Reclined bedroom pose should select a reclined/lying-compatible angle locally'
 );
 
