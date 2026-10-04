@@ -798,6 +798,8 @@ SCENE:
 ${JSON.stringify({
   sceneFamily: sceneState.sceneFamily,
   subScene: sceneState.subScene,
+  activity: sceneState.activity,
+  pose: sceneState.pose,
   timeOfDay: sceneState.timeOfDay,
   captureType: sceneState.captureType,
   framing: sceneState.framing,
@@ -823,6 +825,8 @@ Rules:
 - Public Saudi scenes may contain sparse, ordinary background life if physically visible.
 - No landmarks, staged crowds, decorative traffic, cinematic clutter, or tourist stereotypes.
 - Mild disorder must be place-appropriate and visually secondary.
+- The subject's actual activity and pose matter: background life must not obstruct or contradict what the subject is doing.
+- A walking subject may justify subtle background motion; a seated/reclined private scene should remain quieter.
 - Respect requested activity, background presence, and composition goal as explicit user intent.
 - Strong background presence does NOT authorize impossible crowding; it only increases contextual visibility inside the available FOV.
 - Face-priority means background remains subordinate. Background-priority means expose more context only when geometry permits.
