@@ -505,6 +505,8 @@ app.post('/api/ai/selfie-angle', async (req, res) => {
       activity: String(sceneState.activity || ''),
       framing: sceneState.framing || 'chest-up',
       manualAngle: sceneState.cameraAngle || 'eye-level',
+      timeOfDay: sceneState.timeOfDay || 'midday',
+      lightingMode: String(sceneState.lightingMode || ''),
       mode: 'gemini-smart' as const
     };
 
@@ -524,6 +526,10 @@ app.post('/api/ai/selfie-angle', async (req, res) => {
       distanceCm: angle.distanceCm,
       risk: angle.risk,
       intent: angle.intent,
+      carFocus: angle.carFocus || 'balanced',
+      carSeat: angle.carSeat || null,
+      phonePlacement: angle.phonePlacement || null,
+      cabinGuards: angle.cabinGuards || [],
       allowedMicroVariation: angle.variation
     }));
 
@@ -559,8 +565,15 @@ Selection priorities:
 6. Never choose cinematic bird-eye, 90-degree profile, dramatic Dutch angle, DSLR, ARRI, 35mm, 85mm, or impossible floating-camera geometry.
 7. Roll is only natural handheld micro-tilt, never a dramatic Dutch angle.
 8. Return micro-variation offsets only; the local engine will clamp them to the preset's allowed range.
+9. FOR CAR INTERIORS: first decide the photographic goal:
+   - face-priority = face remains dominant; steering wheel/dashboard/window only as secondary context.
+   - cabin-context = deliberately reveal more steering wheel/dashboard/window/seat architecture while keeping the face primary enough to remain a selfie.
+   - balanced = neither dominates.
+10. FOR CAR INTERIORS: respect the actual seat role. Driver angles must not be used for front/rear passenger positions and vice versa.
+11. FOR CAR INTERIORS: phone must remain physically inside the cabin, behind windshield/side-glass planes, below roof/headliner/visor, and clear of steering wheel, rearview mirror, A/B/C pillars, dashboard, center console, and gear selector.
+12. If lighting is "إضاءة شاشة الهاتف فقط", prefer a face-priority close/medium angle where the phone can plausibly illuminate the face; do not choose a distant cabin-context angle.
 
-Return one or two concise Arabic reasons explaining why the angle fits this exact pose and scene.`,
+Return the exact carFocus associated with the selected catalog item (or "balanced" for non-car scenes), plus one or two concise Arabic reasons explaining why the angle fits this exact pose and scene.`,
       config: {
         responseMimeType: 'application/json',
         responseSchema: {
@@ -571,6 +584,10 @@ Return one or two concise Arabic reasons explaining why the angle fits this exac
             yawOffsetDeg: { type: Type.INTEGER },
             rollOffsetDeg: { type: Type.INTEGER },
             distanceOffsetCm: { type: Type.INTEGER },
+            carFocus: {
+              type: Type.STRING,
+              description: 'One of: face-priority, cabin-context, balanced.'
+            },
             reasonAR: {
               type: Type.ARRAY,
               items: { type: Type.STRING }
@@ -583,6 +600,7 @@ Return one or two concise Arabic reasons explaining why the angle fits this exac
             'yawOffsetDeg',
             'rollOffsetDeg',
             'distanceOffsetCm',
+            'carFocus',
             'reasonAR',
             'confidence'
           ]
@@ -607,6 +625,7 @@ Return one or two concise Arabic reasons explaining why the angle fits this exac
       yawOffsetDeg: numberOrZero(parsed.yawOffsetDeg),
       rollOffsetDeg: numberOrZero(parsed.rollOffsetDeg),
       distanceOffsetCm: numberOrZero(parsed.distanceOffsetCm),
+      carFocus: selected.carFocus || 'balanced',
       reasonAR: Array.isArray(parsed.reasonAR) ? parsed.reasonAR.slice(0, 2) : [],
       confidence: Math.max(0, Math.min(100, numberOrZero(parsed.confidence)))
     });
