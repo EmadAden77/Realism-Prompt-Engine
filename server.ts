@@ -492,7 +492,9 @@ app.post('/api/ai/audit-realism', async (req, res) => {
     const { sceneState, promptText } = req.body;
 
     const response = await callGeminiWithFallback({
-      preferredModels: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
+      // Audit is latency-sensitive. 3.5 Flash is currently succeeding while 3.8 Flash
+      // is frequently returning 503 high-demand responses in production.
+      preferredModels: ['gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'],
       contents: `You are an elite AI Image Realism Auditor and anti-slop evaluator.
 Examine this generation configuration and prompt:
 Configuration: ${JSON.stringify(sceneState, null, 2)}
