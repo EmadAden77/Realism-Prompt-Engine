@@ -630,10 +630,7 @@ const deriveRealismState = (state: SceneState): DerivedSceneState => {
   else if (state.framing === 'chest-up') derived.visibleBackgroundElements = baseDetails.slice(0, 3).map(d => `mid-field: ${d}`);
   else derived.visibleBackgroundElements = baseDetails;
 
-  if (state.lensCondition === 'budget-android') {
-    derived.lensEffects = 'low-end smartphone camera processing, slight overall optical softness, blown-out highlights in bright areas (poor dynamic range), slightly crushed blacks, inferior HDR recovery';
-    derived.skinResponse += ', minor artificial over-sharpening artifacts typical of cheap phone processing';
-  } else if (state.lensCondition === 'smudged-lens') {
+  if (state.lensCondition === 'smudged-lens') {
     derived.lensEffects = 'photographed through a slightly smudged lens, oily finger smudge causing organic light bloom and streaks, soft glowing scattered glare around any light sources, localized loss of micro-contrast';
   } else {
     derived.lensEffects = 'clean standard smartphone lens capture without excessive professional sharpness';
@@ -873,7 +870,11 @@ const buildNegativeConstraints = (state: SceneState, derived: DerivedSceneState)
   return neg;
 };
 
-const calculatePhysicalConsistencyScore = (validation: ValidationResult, promptContradictions: string[] = []): number => {
+const calculatePhysicalConsistencyScore = (
+  validation: ValidationResult,
+  promptContradictions: string[] = [],
+  scenePlausibilityScore?: number
+): number => {
   // This is a pre-generation consistency score, not proof that a rendered image is "100% real".
   // Start below 100 to preserve uncertainty that can only be assessed after rendering.
   let score = 96;
@@ -885,7 +886,14 @@ const calculatePhysicalConsistencyScore = (validation: ValidationResult, promptC
   }
 
   score -= promptContradictions.length * 12;
-  return Math.max(0, Math.min(96, score));
+
+  // Conservative rule: local consistency can never score higher than the
+  // deterministic Scene Plausibility Engine for the same resolved scene.
+  if (typeof scenePlausibilityScore === 'number' && Number.isFinite(scenePlausibilityScore)) {
+    score = Math.min(score, Math.max(0, Math.min(100, scenePlausibilityScore)));
+  }
+
+  return Math.max(0, Math.min(96, Math.round(score)));
 };
 
 const combineRealismScores = (localScore: number, geminiScore?: number): number => {
@@ -1670,7 +1678,11 @@ export default function PhysFrameApp() {
       const rawPrompt = buildPromptText(semantic, 'gemini');
       const validatedPrompt = validatePrompt(rawPrompt, resolved, buildNegativeConstraints(resolved.state as SceneState, derived));
       const prompt = validatedPrompt.cleanPrompt;
-      const physicalConsistencyScore = calculatePhysicalConsistencyScore(initialValidation, validatedPrompt.contradictionsFound);
+      const physicalConsistencyScore = calculatePhysicalConsistencyScore(
+        initialValidation,
+        validatedPrompt.contradictionsFound,
+        resolved.physicalState.plausibility.overallScore
+      );
 
       // Always show a deterministic local result immediately.
       const localAudit: RealismAuditResult = {
@@ -1786,7 +1798,11 @@ export default function PhysFrameApp() {
       }
 
       // 4. Auto-Fix succeeds locally and immediately. Gemini must never block correction.
-      const physicalConsistencyScore = calculatePhysicalConsistencyScore(postValidation, validatedPrompt.contradictionsFound);
+      const physicalConsistencyScore = calculatePhysicalConsistencyScore(
+        postValidation,
+        validatedPrompt.contradictionsFound,
+        finalResolved.physicalState.plausibility.overallScore
+      );
       const localFixedAudit: RealismAuditResult = {
         realismScore: physicalConsistencyScore,
         localScore: physicalConsistencyScore,
