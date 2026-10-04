@@ -916,6 +916,7 @@ export default function PhysFrameApp() {
   const [showAuditModal, setShowAuditModal] = useState(false);
   const [isAuditing, setIsAuditing] = useState(false);
   const [auditResult, setAuditResult] = useState<RealismAuditResult | null>(null);
+  const [auditError, setAuditError] = useState<string | null>(null);
   const [isAutoFixing, setIsAutoFixing] = useState(false);
   const [autoFixStatus, setAutoFixStatus] = useState<'idle' | 'processing' | 'success'>('idle');
   const [autoFixMessage, setAutoFixMessage] = useState<string | null>(null);
@@ -1487,11 +1488,15 @@ export default function PhysFrameApp() {
   };
 
   // Gemini Intelligence: Audit Realism
+  // Local physics result is committed first so the modal can never become blank.
+  // Gemini is an optional qualitative layer on top of the deterministic score.
   const handleAuditRealism = async () => {
-    try {
-      setIsAuditing(true);
-      setShowAuditModal(true);
+    setIsAuditing(true);
+    setShowAuditModal(true);
+    setAuditError(null);
+    setAuditResult(null);
 
+    try {
       // Pure deterministic physical pipeline:
       // SceneState -> Physical Scene Resolver -> Physics Validator -> Consistency Validator -> Prompt Builder -> Final Validation
       const initialValidation = validateScene(state as any);
@@ -1501,23 +1506,72 @@ export default function PhysFrameApp() {
       const rawPrompt = buildPromptText(semantic, 'gemini');
       const validatedPrompt = validatePrompt(rawPrompt, resolved, buildNegativeConstraints(resolved.state as SceneState, derived));
       const prompt = validatedPrompt.cleanPrompt;
-
-      const res = await fetch('/api/ai/audit-realism', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sceneState: resolved.state,
-          promptText: prompt,
-        }),
-      });
-
-      if (!res.ok) throw new Error('فشل فحص الواقعية');
-      const data: RealismAuditResult = await res.json();
       const physicalConsistencyScore = calculatePhysicalConsistencyScore(initialValidation, validatedPrompt.contradictionsFound);
-      setAuditResult({ ...data, realismScore: physicalConsistencyScore });
-    } catch (err: any) {
-      console.error(err);
-      showToast(err.message || 'خطأ أثناء فحص الواقعية');
+
+      // Always show a deterministic local result immediately.
+      const localAudit: RealismAuditResult = {
+        realismScore: physicalConsistencyScore,
+        verdictAR: physicalConsistencyScore >= 90
+          ? 'اتساق فيزيائي محلي ممتاز'
+          : physicalConsistencyScore >= 75
+            ? 'اتساق فيزيائي جيد مع ملاحظات'
+            : 'توجد تناقضات فيزيائية تحتاج تصحيح',
+        strengthsAR: [
+          'تم فحص هندسة الكاميرا والمسافة ومجال الرؤية محليًا.',
+          'تم فحص توافق الإضاءة والظلال والخلفية مع المشهد.',
+          'تم فحص ظهور البشر والسيارات والعناصر الثانوية حسب زاوية السيلفي.'
+        ],
+        risksAR: validatedPrompt.contradictionsFound.length > 0
+          ? validatedPrompt.contradictionsFound
+          : [],
+        recommendationsAR: validatedPrompt.contradictionsFound.length > 0
+          ? ['استخدم التصحيح التلقائي لمعالجة التناقضات المكتشفة قبل التوليد.']
+          : ['الأساس الفيزيائي للمشهد متناسق؛ تدقيق Gemini سيضيف مراجعة نوعية عند توفر الاتصال.']
+      };
+      setAuditResult(localAudit);
+
+      try {
+        const res = await fetch('/api/ai/audit-realism', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sceneState: resolved.state,
+            promptText: prompt,
+          }),
+        });
+
+        if (!res.ok) {
+          const errorPayload = await res.json().catch(() => null);
+          throw new Error(errorPayload?.error || `فشل تدقيق Gemini (HTTP ${res.status})`);
+        }
+
+        const data: RealismAuditResult = await res.json();
+
+        // Preserve deterministic score; Gemini may enrich wording/recommendations only.
+        setAuditResult({
+          ...localAudit,
+          ...data,
+          realismScore: physicalConsistencyScore
+        });
+
+        if (data.verdictAR?.includes('تعذر تدقيق Gemini')) {
+          setAuditError('تعذر اتصال Gemini؛ تم عرض نتيجة الاتساق الفيزيائي المحلي.');
+        }
+      } catch (geminiErr: any) {
+        console.error('Gemini audit failed:', geminiErr);
+        setAuditError(geminiErr?.message || 'تعذر تدقيق Gemini؛ تم عرض نتيجة الاتساق الفيزيائي المحلي.');
+      }
+    } catch (localErr: any) {
+      console.error('Local audit pipeline failed:', localErr);
+      const message = localErr?.message || 'حدث خطأ أثناء بناء نتيجة الفحص المحلي.';
+      setAuditError(message);
+      setAuditResult({
+        realismScore: 0,
+        verdictAR: 'تعذر إكمال الفحص المحلي',
+        strengthsAR: [],
+        risksAR: [message],
+        recommendationsAR: ['أعد اختيار المشهد أو استخدم التصحيح التلقائي ثم حاول مرة أخرى.']
+      });
     } finally {
       setIsAuditing(false);
     }
@@ -2975,7 +3029,14 @@ export default function PhysFrameApp() {
               </div>
 
               <div className="flex-1 overflow-y-auto space-y-4">
-                {isAuditing ? (
+                {auditError && (
+                  <div className="bg-[#211715] border border-[#5A302B] p-3 rounded-xl text-xs text-[#F0B6AE] flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{auditError}</span>
+                  </div>
+                )}
+
+                {isAuditing && !auditResult ? (
                   <div className="py-12 flex flex-col items-center justify-center text-center">
                     <RefreshCw className="w-8 h-8 text-[var(--accent)] animate-spin mb-3" />
                     <p className="text-xs text-white font-medium">جاري فحص التناسق الفيزيائي وكواشف الـ AI...</p>
@@ -2983,6 +3044,13 @@ export default function PhysFrameApp() {
                   </div>
                 ) : auditResult ? (
                   <div className="space-y-4 animate-fade-in">
+                    {isAuditing && (
+                      <div className="bg-[#14181B] border border-white/10 p-2.5 rounded-xl text-[11px] text-[var(--text-muted)] flex items-center gap-2">
+                        <RefreshCw className="w-3.5 h-3.5 text-[var(--accent)] animate-spin" />
+                        <span>النتيجة المحلية جاهزة، جاري إضافة تدقيق Gemini...</span>
+                      </div>
+                    )}
+
                     {/* Score Card */}
                     <div className="bg-[#14181B] p-4 rounded-xl border border-white/10 flex items-center justify-between">
                       <div>
