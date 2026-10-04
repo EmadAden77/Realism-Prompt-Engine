@@ -1271,6 +1271,66 @@ export default function PhysFrameApp() {
     showToast('تم حذف الصورة المرجعية');
   };
 
+  // Keep the original reference untouched in IndexedDB, but send Gemini a bounded
+  // analysis copy so Base64 inflation cannot exceed Vercel request limits.
+  const prepareImageForGemini = async (blob: Blob): Promise<Blob> => {
+    const MAX_ANALYSIS_BYTES = 1_800_000;
+    const MAX_ANALYSIS_DIMENSION = 1600;
+
+    if (
+      blob.size <= MAX_ANALYSIS_BYTES &&
+      ['image/jpeg', 'image/png', 'image/webp'].includes(blob.type)
+    ) {
+      return blob;
+    }
+
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const objectUrl = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve(img);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error('تعذر قراءة الصورة المرجعية لضغطها قبل إرسالها إلى Gemini'));
+      };
+      img.src = objectUrl;
+    });
+
+    const scale = Math.min(
+      1,
+      MAX_ANALYSIS_DIMENSION / Math.max(image.naturalWidth, image.naturalHeight)
+    );
+    const width = Math.max(1, Math.round(image.naturalWidth * scale));
+    const height = Math.max(1, Math.round(image.naturalHeight * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) throw new Error('تعذر تجهيز نسخة التحليل للصورة');
+
+    ctx.drawImage(image, 0, 0, width, height);
+
+    const encodeJpeg = (quality: number) =>
+      new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          output => output ? resolve(output) : reject(new Error('تعذر ضغط الصورة للتحليل')),
+          'image/jpeg',
+          quality
+        );
+      });
+
+    let output = await encodeJpeg(0.86);
+    for (const quality of [0.78, 0.70, 0.62]) {
+      if (output.size <= MAX_ANALYSIS_BYTES) break;
+      output = await encodeJpeg(quality);
+    }
+
+    return output;
+  };
+
   // Convert Blob to Base64
   const blobToBase64 = (blob: Blob): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -1287,19 +1347,24 @@ export default function PhysFrameApp() {
   const analyzeFaceFromBlob = async (blob: Blob) => {
     try {
       setIsAnalyzingFace(true);
-      const base64Data = await blobToBase64(blob);
+      const analysisBlob = await prepareImageForGemini(blob);
+      const base64Data = await blobToBase64(analysisBlob);
 
       const res = await fetch('/api/ai/analyze-face', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           imageBase64: base64Data,
-          mimeType: blob.type || 'image/jpeg',
+          mimeType: analysisBlob.type || 'image/jpeg',
         }),
       });
 
       if (!res.ok) {
-        throw new Error('فشل فحص الصورة بواسطة الذكاء الاصطناعي');
+        if (res.status === 413) {
+          throw new Error('الصورة كبيرة جدًا للإرسال. تم تجهيز ضغط تلقائي، أعد المحاولة مرة واحدة.');
+        }
+        const errorPayload = await res.json().catch(() => null);
+        throw new Error(errorPayload?.error || `فشل فحص الصورة بواسطة الذكاء الاصطناعي (HTTP ${res.status})`);
       }
 
       const data: FaceAnalysisResult = await res.json();
