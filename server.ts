@@ -40,7 +40,7 @@ app.get('/api/ai/gemini-probe', async (_req, res) => {
   const startedAt = Date.now();
   try {
     const response = await callGeminiWithFallback({
-      preferredModels: ['gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'],
+      preferredModels: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
       contents: 'Reply with exactly: OK'
     });
 
@@ -78,7 +78,62 @@ function createGeminiClient() {
   });
 }
 
-// Resilient helper to call Gemini with multi-model fallback (gemini-3.8-flash -> gemini-3.5-flash -> gemini-3.1-flash-lite)
+// Adaptive Gemini fallback with per-model circuit breaking.
+// A model hitting quota or temporary overload is cooled down inside a warm function
+// so repeated requests do not waste latency retrying a model that is known to be unavailable.
+const geminiModelCooldownUntil = new Map<string, number>();
+
+const getGeminiErrorText = (error: any): string =>
+  String(error?.message || error || '');
+
+const getGeminiStatus = (error: any): number => {
+  const direct = Number(error?.status);
+  if (Number.isFinite(direct) && direct > 0) return direct;
+  const text = getGeminiErrorText(error);
+  const match = text.match(/"code"\s*:\s*(\d{3})/);
+  return match ? Number(match[1]) : 0;
+};
+
+const getRetryDelayMs = (error: any, fallbackMs: number): number => {
+  const text = getGeminiErrorText(error);
+  const jsonSeconds = text.match(/"retryDelay"\s*:\s*"?(\d+)s"?/);
+  if (jsonSeconds) {
+    return Math.min(24 * 60 * 60 * 1000, Math.max(1_000, Number(jsonSeconds[1]) * 1000));
+  }
+  return fallbackMs;
+};
+
+const classifyGeminiError = (error: any) => {
+  const text = getGeminiErrorText(error);
+  const status = getGeminiStatus(error);
+
+  if (/API_KEY_INVALID|API key not valid|Gemini API key is not configured/i.test(text)) {
+    return { kind: 'configuration' as const, status, cooldownMs: 0 };
+  }
+  if (status === 429 || /RESOURCE_EXHAUSTED|quota exceeded|rate limit/i.test(text)) {
+    return {
+      kind: 'quota' as const,
+      status: status || 429,
+      cooldownMs: getRetryDelayMs(error, 15 * 60 * 1000)
+    };
+  }
+  if (status === 503 || /UNAVAILABLE|high demand|overloaded/i.test(text)) {
+    return {
+      kind: 'overloaded' as const,
+      status: status || 503,
+      cooldownMs: getRetryDelayMs(error, 45 * 1000)
+    };
+  }
+  if (status === 404 || /not found|unsupported model/i.test(text)) {
+    return {
+      kind: 'model-unavailable' as const,
+      status: status || 404,
+      cooldownMs: 30 * 60 * 1000
+    };
+  }
+  return { kind: 'other' as const, status, cooldownMs: 0 };
+};
+
 async function callGeminiWithFallback(params: {
   contents: any;
   config?: any;
@@ -87,25 +142,50 @@ async function callGeminiWithFallback(params: {
   const models = params.preferredModels || ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'];
   const ai = createGeminiClient();
   let lastError: any = null;
+  const now = Date.now();
 
-  for (const model of models) {
+  const activeModels = models.filter(model => (geminiModelCooldownUntil.get(model) || 0) <= now);
+  const candidates = activeModels.length
+    ? activeModels
+    : [...models].sort(
+        (a, b) => (geminiModelCooldownUntil.get(a) || 0) - (geminiModelCooldownUntil.get(b) || 0)
+      ).slice(0, 1);
+
+  for (const model of candidates) {
     try {
       const response = await ai.models.generateContent({
         model,
         contents: params.contents,
         config: params.config,
       });
+
       if (response && response.text) {
-        console.info("[PhysFrame] Gemini model " + model + " succeeded.");
+        geminiModelCooldownUntil.delete(model);
+        console.info(`[PhysFrame] Gemini model ${model} succeeded.`);
         return response;
       }
+
+      lastError = new Error(`Gemini model ${model} returned an empty response`);
     } catch (err: any) {
-      console.warn(`[PhysFrame] Model ${model} failed, trying next fallback. Error:`, err?.message || err);
+      const failure = classifyGeminiError(err);
       lastError = err;
+
+      if (failure.kind === 'configuration') {
+        console.error(`[PhysFrame] Gemini configuration failure on ${model}; fallback stopped.`);
+        throw err;
+      }
+
+      if (failure.cooldownMs > 0) {
+        geminiModelCooldownUntil.set(model, Date.now() + failure.cooldownMs);
+      }
+
+      console.warn(
+        `[PhysFrame] Gemini model ${model} failed (${failure.kind}${failure.status ? `/${failure.status}` : ''}); trying next fallback.`
+      );
     }
   }
 
-  throw lastError || new Error('All model attempts failed');
+  throw lastError || new Error('All Gemini model attempts failed or are temporarily unavailable');
 }
 
 // Scene dictionaries for validation and local fallback
@@ -617,7 +697,7 @@ app.post('/api/ai/selfie-angle', async (req, res) => {
     }
 
     const response = await callGeminiWithFallback({
-      preferredModels: ['gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'],
+      preferredModels: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
       contents: `You are the Camera Director for a physically constrained Xiaomi 15 Ultra front-camera selfie engine.
 
 Choose EXACTLY ONE angle from the supplied eligible catalog. Never invent a new angle ID.
@@ -740,7 +820,7 @@ app.post('/api/ai/background-reasoning', async (req, res) => {
 
     const response = await callGeminiWithFallback({
       // Background reasoning is latency-sensitive.
-      preferredModels: ['gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'],
+      preferredModels: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
       contents: `You are a scene-context reasoner for a photorealistic Saudi smartphone selfie prompt engine.
 
 Your task is NOT to redesign the scene. Decide only how much secondary background life is contextually plausible.
@@ -846,7 +926,7 @@ app.post('/api/ai/audit-realism', async (req, res) => {
     const response = await callGeminiWithFallback({
       // Audit is latency-sensitive. 3.5 Flash is currently succeeding while 3.8 Flash
       // is frequently returning 503 high-demand responses in production.
-      preferredModels: ['gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'],
+      preferredModels: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
       contents: `You are an elite AI Image Realism Auditor and anti-slop evaluator.
 Examine this generation configuration and prompt:
 Configuration: ${JSON.stringify(sceneState, null, 2)}
