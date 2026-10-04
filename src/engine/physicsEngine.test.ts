@@ -438,6 +438,83 @@ assert(
   'Car interior background occlusion rules must constrain exterior visibility through glazing'
 );
 
-console.log('  ✓ Scene-aware Background Realism V1 regression suite passed!\n');
+console.log('▶ Test 17: Explicit background density is capped by selfie FOV');
+const tightForcedBackground: SceneState = {
+  ...bedroomState,
+  backgroundMode: 'active',
+  backgroundHumans: 'moderate',
+  backgroundVehicles: 'moderate',
+  backgroundDisorder: 'moderate',
+  backgroundGeminiAssist: true,
+  backgroundGeminiAdvice: {
+    humanDensity: 'moderate',
+    vehicleDensity: 'moderate',
+    disorderLevel: 'moderate',
+    reasonAR: ['اختبار'],
+    confidence: 95
+  }
+};
+const resolvedTightForced = resolveScene(tightForcedBackground);
+assert(resolvedTightForced.physicalState.backgroundRealism.humanDensity === 'none', 'Tight private selfie must cap forced humans to none');
+assert(resolvedTightForced.physicalState.backgroundRealism.vehicleDensity === 'none', 'Tight private selfie must cap forced vehicles to none');
+assert(resolvedTightForced.physicalState.backgroundRealism.cappedByFraming, 'FOV cap must be reported when user asks for impossible density');
+
+console.log('▶ Test 18: Explicit user controls override Gemini background advice');
+const userPriorityState: SceneState = {
+  ...streetWideState,
+  backgroundMode: 'auto',
+  backgroundHumans: 'none',
+  backgroundVehicles: 'none',
+  backgroundDisorder: 'very-clean',
+  backgroundGeminiAssist: true,
+  backgroundGeminiAdvice: {
+    humanDensity: 'moderate',
+    vehicleDensity: 'light',
+    disorderLevel: 'moderate',
+    reasonAR: ['المشهد العام يسمح بنشاط'],
+    confidence: 92
+  }
+};
+const resolvedUserPriority = resolveScene(userPriorityState);
+assert(resolvedUserPriority.physicalState.backgroundRealism.humanDensity === 'none', 'Explicit no-humans choice must override Gemini');
+assert(resolvedUserPriority.physicalState.backgroundRealism.vehicleDensity === 'none', 'Explicit no-vehicles choice must override Gemini');
+assert(resolvedUserPriority.physicalState.backgroundRealism.disorderLevel === 'very-clean', 'Explicit very-clean choice must override Gemini disorder advice');
+
+console.log('▶ Test 19: Gemini advice is advisory and capped by medium framing');
+const geminiMediumCafe: SceneState = {
+  ...cafeMediumState,
+  backgroundMode: 'auto',
+  backgroundHumans: 'auto',
+  backgroundVehicles: 'auto',
+  backgroundDisorder: 'auto',
+  backgroundGeminiAssist: true,
+  backgroundGeminiAdvice: {
+    humanDensity: 'moderate',
+    vehicleDensity: 'moderate',
+    disorderLevel: 'moderate',
+    reasonAR: ['المقهى مكان عام لكن الكادر متوسط'],
+    confidence: 90
+  }
+};
+const resolvedGeminiMedium = resolveScene(geminiMediumCafe);
+assert(resolvedGeminiMedium.physicalState.backgroundRealism.geminiApplied, 'Gemini advice should be applied when controls are automatic');
+assert(resolvedGeminiMedium.physicalState.backgroundRealism.humanDensity === 'light', 'Medium selfie must cap Gemini human advice to light');
+assert(resolvedGeminiMedium.physicalState.backgroundRealism.vehicleDensity === 'sparse', 'Medium selfie must cap Gemini vehicle advice to sparse');
+
+console.log('▶ Test 20: Background off mode disables secondary life');
+const backgroundOffState: SceneState = {
+  ...streetWideState,
+  backgroundMode: 'off',
+  backgroundHumans: 'moderate',
+  backgroundVehicles: 'moderate',
+  backgroundDisorder: 'moderate',
+  backgroundGeminiAssist: true
+};
+const resolvedBackgroundOff = resolveScene(backgroundOffState);
+assert(resolvedBackgroundOff.physicalState.backgroundRealism.humanDensity === 'none', 'Background off must disable humans');
+assert(resolvedBackgroundOff.physicalState.backgroundRealism.vehicleDensity === 'none', 'Background off must disable vehicles');
+assert(resolvedBackgroundOff.physicalState.backgroundRealism.disorderLevel === 'none', 'Background off must disable disorder');
+
+console.log('  ✓ Scene-aware Background Realism V2 controls + Gemini guardrails passed!\n');
 
 console.log('🎉 ALL AUTOMATED VALIDATION TESTS PASSED PERFECTLY!\n');

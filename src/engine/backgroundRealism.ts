@@ -2,26 +2,55 @@ import { MicroLocation, SceneFamilyId } from '../data/microLocations';
 
 export type BackgroundVisibilityClass = 'minimal' | 'limited' | 'moderate' | 'expanded';
 export type BackgroundEntityDensity = 'none' | 'sparse' | 'light' | 'moderate';
+export type BackgroundMode = 'auto' | 'restricted' | 'active' | 'off';
+export type BackgroundControlDensity = 'auto' | 'none' | 'sparse' | 'moderate';
+export type BackgroundDisorderControl = 'auto' | 'very-clean' | 'light' | 'moderate';
+export type BackgroundDisorderLevel = 'none' | 'very-clean' | 'light' | 'moderate';
+
+export interface BackgroundGeminiAdvice {
+  humanDensity: BackgroundEntityDensity;
+  vehicleDensity: BackgroundEntityDensity;
+  disorderLevel: BackgroundDisorderLevel;
+  reasonAR: string[];
+  confidence?: number;
+  cacheKey?: string;
+}
 
 export interface BackgroundSceneContext {
   familyId: SceneFamilyId;
   subScene: string;
   timeOfDay: 'morning' | 'midday' | 'afternoon' | 'sunset' | 'night';
   framingClass: 'tight' | 'medium' | 'wide';
+  cameraAngle: 'eye-level' | 'slightly-high' | 'slightly-low' | 'slightly-off-center';
+  captureType: 'front-selfie' | 'mirror-selfie' | 'third-person-candid';
   activityDensity: 'none' | 'minimal' | 'light' | 'moderate';
   isOutdoor: boolean;
   lightingMode: string;
+  backgroundMode?: BackgroundMode;
+  backgroundHumans?: BackgroundControlDensity;
+  backgroundVehicles?: BackgroundControlDensity;
+  backgroundDisorder?: BackgroundDisorderControl;
+  backgroundGeminiAssist?: boolean;
+  backgroundGeminiAdvice?: BackgroundGeminiAdvice;
   microLoc?: MicroLocation;
 }
 
 export interface BackgroundRealismState {
   visibilityClass: BackgroundVisibilityClass;
+  fovAllowsBackgroundLife: boolean;
+  cappedByFraming: boolean;
+  geminiApplied: boolean;
+  requestedMode: BackgroundMode;
+  requestedHumans: BackgroundControlDensity;
+  requestedVehicles: BackgroundControlDensity;
+  requestedDisorder: BackgroundDisorderControl;
   allowsHumans: boolean;
   humanDensity: BackgroundEntityDensity;
   humanBehavior: string[];
   allowsVehicles: boolean;
   vehicleDensity: BackgroundEntityDensity;
   vehicleBehavior: string[];
+  disorderLevel: BackgroundDisorderLevel;
   allowsMildDisorder: boolean;
   mildDisorderElements: string[];
   lightSources: string[];
@@ -30,6 +59,7 @@ export interface BackgroundRealismState {
   occlusionRules: string[];
   motionRules: string[];
   realismGuards: string[];
+  decisionReasons: string[];
 }
 
 const containsAny = (value: string, terms: string[]) =>
@@ -42,11 +72,42 @@ const densityRank: Record<BackgroundEntityDensity, number> = {
   moderate: 3
 };
 
+const disorderRank: Record<BackgroundDisorderLevel, number> = {
+  none: 0,
+  'very-clean': 1,
+  light: 2,
+  moderate: 3
+};
+
 const capDensity = (
   density: BackgroundEntityDensity,
   cap: BackgroundEntityDensity
 ): BackgroundEntityDensity => {
   return densityRank[density] <= densityRank[cap] ? density : cap;
+};
+
+const capDisorder = (
+  level: BackgroundDisorderLevel,
+  cap: BackgroundDisorderLevel
+): BackgroundDisorderLevel => {
+  return disorderRank[level] <= disorderRank[cap] ? level : cap;
+};
+
+const densityFromControl = (
+  control: BackgroundControlDensity,
+  fallback: BackgroundEntityDensity
+): BackgroundEntityDensity => {
+  if (control === 'auto') return fallback;
+  if (control === 'none') return 'none';
+  if (control === 'sparse') return 'sparse';
+  return 'moderate';
+};
+
+const disorderFromControl = (
+  control: BackgroundDisorderControl,
+  fallback: BackgroundDisorderLevel
+): BackgroundDisorderLevel => {
+  return control === 'auto' ? fallback : control;
 };
 
 export function deriveBackgroundRealism(
@@ -57,11 +118,20 @@ export function deriveBackgroundRealism(
     subScene,
     timeOfDay,
     framingClass,
+    cameraAngle,
+    captureType,
     activityDensity,
     isOutdoor,
     lightingMode,
     microLoc
   } = context;
+
+  const backgroundMode = context.backgroundMode ?? 'auto';
+  const backgroundHumans = context.backgroundHumans ?? 'auto';
+  const backgroundVehicles = context.backgroundVehicles ?? 'auto';
+  const backgroundDisorder = context.backgroundDisorder ?? 'auto';
+  const backgroundGeminiAssist = context.backgroundGeminiAssist ?? true;
+  const geminiAdvice = context.backgroundGeminiAdvice;
 
   const baseBg = microLoc?.backgroundElements ?? [];
   const activityText = microLoc?.activity ?? '';
@@ -79,8 +149,13 @@ export function deriveBackgroundRealism(
   const isGymPublic = familyId === 'gym';
 
   let visibilityClass: BackgroundVisibilityClass = 'limited';
-  if (framingClass === 'tight') visibilityClass = 'minimal';
-  else if (framingClass === 'wide') visibilityClass = (isOutdoor || isGymPublic || isMilitaryPublic) ? 'expanded' : 'moderate';
+  if (framingClass === 'tight') {
+    visibilityClass = 'minimal';
+  } else if (framingClass === 'wide') {
+    visibilityClass = (isOutdoor || isGymPublic || isMilitaryPublic) ? 'expanded' : 'moderate';
+  } else if (cameraAngle === 'slightly-off-center') {
+    visibilityClass = 'moderate';
+  }
 
   const surfaceLimit =
     visibilityClass === 'minimal' ? 1 :
@@ -94,15 +169,120 @@ export function deriveBackgroundRealism(
     isMilitaryPublic ||
     isGymPublic;
 
-  let humanDensity: BackgroundEntityDensity = 'none';
+  let autoHumanDensity: BackgroundEntityDensity = 'none';
   if (framingClass !== 'tight' && publicScene) {
-    if (activityDensity === 'minimal') humanDensity = framingClass === 'wide' ? 'sparse' : 'none';
-    else if (activityDensity === 'light') humanDensity = framingClass === 'wide' ? 'light' : 'sparse';
-    else if (activityDensity === 'moderate') humanDensity = framingClass === 'wide' ? 'moderate' : 'light';
+    if (activityDensity === 'minimal') autoHumanDensity = framingClass === 'wide' ? 'sparse' : 'none';
+    else if (activityDensity === 'light') autoHumanDensity = framingClass === 'wide' ? 'light' : 'sparse';
+    else if (activityDensity === 'moderate') autoHumanDensity = framingClass === 'wide' ? 'moderate' : 'light';
   }
 
+  let physicalHumanMax: BackgroundEntityDensity =
+    !publicScene || framingClass === 'tight'
+      ? 'none'
+      : framingClass === 'wide'
+        ? 'moderate'
+        : 'light';
+
   if (isPassage && familyId === 'saudi-outdoor') {
-    humanDensity = capDensity(humanDensity, 'sparse');
+    autoHumanDensity = capDensity(autoHumanDensity, 'sparse');
+    physicalHumanMax = capDensity(physicalHumanMax, 'sparse');
+  }
+
+  const vehicleCue = baseBg.some(item =>
+    /car|vehicle|sedan|SUV|parking|road|asphalt|driveway|curb|street/i.test(item)
+  ) || isParking || isStreet || isCafe || isShop;
+
+  let autoVehicleDensity: BackgroundEntityDensity = 'none';
+  let physicalVehicleMax: BackgroundEntityDensity = 'none';
+
+  if (framingClass !== 'tight') {
+    if (isCarInterior) {
+      const exteriorWindowCue = baseBg.some(item => /window|windshield|street|parked car|side mirror/i.test(item));
+      if (exteriorWindowCue) {
+        autoVehicleDensity = 'sparse';
+        physicalVehicleMax = 'sparse';
+      }
+    } else if (isOutdoor && vehicleCue) {
+      autoVehicleDensity = activityDensity === 'moderate' && framingClass === 'wide' ? 'light' : 'sparse';
+      physicalVehicleMax = framingClass === 'wide' ? 'light' : 'sparse';
+    }
+  }
+
+  const defaultDisorder: BackgroundDisorderLevel =
+    familyId === 'saudi-outdoor' || familyId === 'gym' || familyId === 'military-base'
+      ? 'light'
+      : 'very-clean';
+
+  const physicalDisorderMax: BackgroundDisorderLevel =
+    framingClass === 'tight'
+      ? 'light'
+      : (isPrivateInterior || isCarInterior)
+        ? 'light'
+        : 'moderate';
+
+  let geminiApplied = false;
+
+  const chooseAutoDensity = (
+    localAuto: BackgroundEntityDensity,
+    physicalMax: BackgroundEntityDensity,
+    geminiValue: BackgroundEntityDensity | undefined,
+    control: BackgroundControlDensity
+  ): BackgroundEntityDensity => {
+    if (backgroundMode === 'off') return 'none';
+
+    if (control !== 'auto') {
+      return capDensity(densityFromControl(control, localAuto), physicalMax);
+    }
+
+    let candidate = localAuto;
+
+    if (backgroundMode === 'active') {
+      candidate = physicalMax;
+    } else if (backgroundGeminiAssist && geminiValue) {
+      candidate = geminiValue;
+      geminiApplied = true;
+    }
+
+    if (backgroundMode === 'restricted') {
+      candidate = capDensity(candidate, 'sparse');
+    }
+
+    return capDensity(candidate, physicalMax);
+  };
+
+  const humanDensity = chooseAutoDensity(
+    autoHumanDensity,
+    physicalHumanMax,
+    geminiAdvice?.humanDensity,
+    backgroundHumans
+  );
+
+  const vehicleDensity = chooseAutoDensity(
+    autoVehicleDensity,
+    physicalVehicleMax,
+    geminiAdvice?.vehicleDensity,
+    backgroundVehicles
+  );
+
+  let disorderLevel: BackgroundDisorderLevel;
+  if (backgroundMode === 'off') {
+    disorderLevel = 'none';
+  } else if (backgroundDisorder !== 'auto') {
+    disorderLevel = capDisorder(
+      disorderFromControl(backgroundDisorder, defaultDisorder),
+      physicalDisorderMax
+    );
+  } else if (backgroundMode === 'active') {
+    disorderLevel = physicalDisorderMax;
+  } else if (backgroundGeminiAssist && geminiAdvice?.disorderLevel) {
+    disorderLevel = capDisorder(geminiAdvice.disorderLevel, physicalDisorderMax);
+    geminiApplied = true;
+  } else {
+    disorderLevel = capDisorder(defaultDisorder, physicalDisorderMax);
+  }
+
+  if (backgroundMode === 'restricted') {
+    disorderLevel = capDisorder(disorderLevel, 'light');
   }
 
   const humanBehavior: string[] = [];
@@ -128,20 +308,6 @@ export function deriveBackgroundRealism(
     }
   }
 
-  const vehicleCue = baseBg.some(item =>
-    /car|vehicle|sedan|SUV|parking|road|asphalt|driveway|curb|street/i.test(item)
-  ) || isParking || isStreet || isCafe || isShop;
-
-  let vehicleDensity: BackgroundEntityDensity = 'none';
-  if (framingClass !== 'tight') {
-    if (isCarInterior) {
-      const exteriorWindowCue = baseBg.some(item => /window|windshield|street|parked car|side mirror/i.test(item));
-      if (exteriorWindowCue) vehicleDensity = 'sparse';
-    } else if (isOutdoor && vehicleCue) {
-      vehicleDensity = activityDensity === 'moderate' && framingClass === 'wide' ? 'light' : 'sparse';
-    }
-  }
-
   const vehicleBehavior: string[] = [];
   if (vehicleDensity !== 'none') {
     if (isCarInterior) {
@@ -150,7 +316,7 @@ export function deriveBackgroundRealism(
       vehicleBehavior.push('one or two ordinary parked sedans or family SUVs aligned with real parking bays, with correct wheel contact and perspective scale');
     } else if (isStreet || isCafe || isShop) {
       vehicleBehavior.push('one ordinary parked car in the midground aligned with the curb or parking bay');
-      if (vehicleDensity === 'light') {
+      if (vehicleDensity === 'light' || vehicleDensity === 'moderate') {
         vehicleBehavior.push('one distant slowly moving vehicle may occupy the far road lane, never dominating the selfie');
       }
     } else {
@@ -159,18 +325,24 @@ export function deriveBackgroundRealism(
   }
 
   const mildDisorderElements: string[] = [];
-  if (familyId === 'bedroom') {
-    mildDisorderElements.push('slight lived-in bedding asymmetry or one small bedside object only if it falls inside the selfie frame');
-  } else if (familyId === 'living-room') {
-    mildDisorderElements.push('a slightly shifted cushion, small cable, or naturally imperfect furniture alignment without visible mess');
-  } else if (familyId === 'military-base') {
-    mildDisorderElements.push('a restrained document stack, cable, chair misalignment, or minor wall scuff appropriate to a functioning workplace');
-  } else if (familyId === 'gym') {
-    mildDisorderElements.push('one ordinary water bottle, towel edge, or subtle equipment wear mark, never staged toward the camera');
-  } else if (familyId === 'car') {
-    mildDisorderElements.push('a charging cable, faint dashboard dust, or small everyday cabin-use mark consistent with the visible cabin area');
-  } else if (familyId === 'saudi-outdoor') {
-    mildDisorderElements.push('minor curb dust, asphalt patching, paint fading, service hardware, or slight parking misalignment appropriate to the selected location');
+  if (disorderLevel === 'light' || disorderLevel === 'moderate') {
+    if (familyId === 'bedroom') {
+      mildDisorderElements.push('slight lived-in bedding asymmetry or one small bedside object only if it falls inside the selfie frame');
+    } else if (familyId === 'living-room') {
+      mildDisorderElements.push('a slightly shifted cushion, small cable, or naturally imperfect furniture alignment without visible mess');
+    } else if (familyId === 'military-base') {
+      mildDisorderElements.push('a restrained document stack, cable, chair misalignment, or minor wall scuff appropriate to a functioning workplace');
+    } else if (familyId === 'gym') {
+      mildDisorderElements.push('one ordinary water bottle, towel edge, or subtle equipment wear mark, never staged toward the camera');
+    } else if (familyId === 'car') {
+      mildDisorderElements.push('a charging cable, faint dashboard dust, or small everyday cabin-use mark consistent with the visible cabin area');
+    } else if (familyId === 'saudi-outdoor') {
+      mildDisorderElements.push('minor curb dust, asphalt patching, paint fading, service hardware, or slight parking misalignment appropriate to the selected location');
+    }
+
+    if (disorderLevel === 'moderate' && framingClass === 'wide') {
+      mildDisorderElements.push('one additional small place-appropriate imperfection deeper in frame, visually secondary and never chaotic');
+    }
   }
 
   const lightSources: string[] = [];
@@ -231,8 +403,42 @@ export function deriveBackgroundRealism(
     }
   }
 
+  const fovAllowsBackgroundLife = humanDensity !== 'none' || vehicleDensity !== 'none';
+  const cappedByFraming =
+    densityRank[densityFromControl(backgroundHumans, autoHumanDensity)] > densityRank[physicalHumanMax] ||
+    densityRank[densityFromControl(backgroundVehicles, autoVehicleDensity)] > densityRank[physicalVehicleMax] ||
+    (backgroundDisorder !== 'auto' && disorderRank[disorderFromControl(backgroundDisorder, defaultDisorder)] > disorderRank[physicalDisorderMax]);
+
+  const decisionReasons: string[] = [];
+  if (framingClass === 'tight') {
+    decisionReasons.push('الكادر قريب جدًا، لذلك يمنع ظهور بشر أو سيارات كاملة في الخلفية.');
+  } else {
+    decisionReasons.push('تم تقييد الخلفية حسب مجال الرؤية الفعلي للكادر وزاوية الكاميرا.');
+  }
+  if (isPrivateInterior) {
+    decisionReasons.push('المكان خاص، لذلك لا يسمح بأشخاص عشوائيين في الخلفية.');
+  }
+  if (backgroundMode === 'off') {
+    decisionReasons.push('وضع الخلفية مغلق يدويًا.');
+  } else if (backgroundMode === 'restricted') {
+    decisionReasons.push('وضع الخلفية المقيّد يحد النشاط إلى الحد الأدنى.');
+  } else if (backgroundMode === 'active') {
+    decisionReasons.push('وضع الخلفية النشط يستخدم أعلى كثافة يسمح بها المشهد والـFOV.');
+  }
+  if (geminiApplied) {
+    decisionReasons.push('تم استخدام اقتراح Gemini فقط داخل الحدود الفيزيائية المحلية.');
+    if (geminiAdvice?.reasonAR?.length) {
+      decisionReasons.push(...geminiAdvice.reasonAR.slice(0, 2));
+    }
+  }
+  if (cappedByFraming) {
+    decisionReasons.push('تم خفض أحد اختيارات الخلفية لأن زاوية التصوير أو الكادر لا يسمحان به.');
+  }
+
   const realismGuards = [
     'background realism is conditional on camera position, selfie distance, pitch, yaw, framing, and actual field of view',
+    'user background controls have priority, but impossible density is automatically capped by framing and scene geometry',
+    'Gemini background advice is advisory only and can never override physical FOV, lighting, occlusion, or private-space constraints',
     'no decorative crowding, no invented landmark, no tourist stereotype, and no background object added merely to make the image look busy',
     'all background humans, vehicles, furniture, and infrastructure must preserve correct perspective scale, ground contact, occlusion, and shadow direction',
     phoneScreenOnly
@@ -244,21 +450,34 @@ export function deriveBackgroundRealism(
     realismGuards.push(`micro-location activity cue: ${activityText}; use it only when compatible with the visible framing`);
   }
 
+  if (captureType === 'front-selfie') {
+    realismGuards.push('direct front-camera selfie background must remain subordinate to the subject and respect Xiaomi 15 Ultra 21mm selfie perspective');
+  }
+
   return {
     visibilityClass,
+    fovAllowsBackgroundLife,
+    cappedByFraming,
+    geminiApplied,
+    requestedMode: backgroundMode,
+    requestedHumans: backgroundHumans,
+    requestedVehicles: backgroundVehicles,
+    requestedDisorder: backgroundDisorder,
     allowsHumans: humanDensity !== 'none',
     humanDensity,
     humanBehavior,
     allowsVehicles: vehicleDensity !== 'none',
     vehicleDensity,
     vehicleBehavior,
-    allowsMildDisorder: mildDisorderElements.length > 0,
+    disorderLevel,
+    allowsMildDisorder: disorderLevel === 'light' || disorderLevel === 'moderate',
     mildDisorderElements,
     lightSources,
     environmentalSurfaces,
     depthLayers,
     occlusionRules,
     motionRules,
-    realismGuards
+    realismGuards,
+    decisionReasons
   };
 }
