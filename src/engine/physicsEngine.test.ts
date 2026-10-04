@@ -545,7 +545,7 @@ assert(
 
 console.log('▶ Test 23: Indoor fluorescent lighting preserves overhead directionality');
 const officeFluorescentState: SceneState = {
-  ...officeState,
+  ...officeCorridorState,
   lightingMode: 'إضاءة مكتب فلورسنت',
   timeOfDay: 'midday'
 };
