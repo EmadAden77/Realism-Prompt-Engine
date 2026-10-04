@@ -30,50 +30,6 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-// Preview-only live Gemini probe used during release verification.
-// It is intentionally unavailable in production.
-app.get('/api/ai/gemini-probe', async (_req, res) => {
-  if (process.env.VERCEL_ENV !== 'preview') {
-    return res.status(404).json({ error: 'Not found' });
-  }
-
-  const startedAt = Date.now();
-  try {
-    const response = await callGeminiWithFallback({
-      preferredModels: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
-      contents: 'Return a JSON object confirming the live Gemini structured-output probe.',
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            ok: { type: Type.BOOLEAN },
-            message: { type: Type.STRING }
-          },
-          required: ['ok', 'message']
-        }
-      }
-    });
-
-    const parsed = JSON.parse(response?.text || '{}');
-    return res.json({
-      ok: parsed?.ok === true,
-      provider: 'gemini',
-      structuredJson: typeof parsed?.message === 'string',
-      latencyMs: Date.now() - startedAt,
-      response: String(parsed?.message || '').slice(0, 40)
-    });
-  } catch (error: any) {
-    console.error('[PhysFrame] Preview Gemini probe failed:', error?.message || error);
-    return res.status(503).json({
-      ok: false,
-      provider: 'gemini',
-      latencyMs: Date.now() - startedAt,
-      error: error?.message || 'Gemini probe failed'
-    });
-  }
-});
-
 // Gemini is initialized lazily inside requests so a missing key never crashes
 // the whole Vercel function before health checks or static routes can respond.
 function createGeminiClient() {
