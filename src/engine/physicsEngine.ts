@@ -6,7 +6,14 @@
 
 import { MICRO_LOCATIONS, getMicroLocation, MicroLocation, SceneFamilyId } from '../data/microLocations';
 import { OUTFITS, OutfitItem } from '../data/clothingOutfits';
-import { deriveBackgroundRealism, BackgroundRealismState } from './backgroundRealism';
+import {
+  deriveBackgroundRealism,
+  BackgroundRealismState,
+  BackgroundMode,
+  BackgroundControlDensity,
+  BackgroundDisorderControl,
+  BackgroundGeminiAdvice
+} from './backgroundRealism';
 
 // --- TYPES ---
 export type CaptureType = 'front-selfie' | 'mirror-selfie' | 'third-person-candid';
@@ -55,6 +62,14 @@ export interface SceneState {
   atmosphericCondition: AtmosphericCondition;
   foregroundObstruction: ForegroundObstruction;
   muscleFatigue: MuscleFatigue;
+
+  // User-controlled background realism. Optional for backward-compatible presets/tests.
+  backgroundMode?: BackgroundMode;
+  backgroundHumans?: BackgroundControlDensity;
+  backgroundVehicles?: BackgroundControlDensity;
+  backgroundDisorder?: BackgroundDisorderControl;
+  backgroundGeminiAssist?: boolean;
+  backgroundGeminiAdvice?: BackgroundGeminiAdvice;
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -731,9 +746,17 @@ function calculateDetailedPhysicalState(
     subScene: state.subScene,
     timeOfDay: state.timeOfDay,
     framingClass,
+    cameraAngle: state.cameraAngle,
+    captureType: state.captureType,
     activityDensity,
     isOutdoor,
     lightingMode: state.lightingMode,
+    backgroundMode: state.backgroundMode,
+    backgroundHumans: state.backgroundHumans,
+    backgroundVehicles: state.backgroundVehicles,
+    backgroundDisorder: state.backgroundDisorder,
+    backgroundGeminiAssist: state.backgroundGeminiAssist,
+    backgroundGeminiAdvice: state.backgroundGeminiAdvice,
     microLoc
   });
 
@@ -910,7 +933,7 @@ function calculateDerivedState(
   derived.realismConstraints.push(
     `Background visibility: ${physics.backgroundRealism.visibilityClass}; ${physics.backgroundRealism.depthLayers.join('; ')}`,
     `Background occlusion: ${physics.backgroundRealism.occlusionRules.join('; ')}`,
-    `Background population: humans=${physics.backgroundRealism.humanDensity}, vehicles=${physics.backgroundRealism.vehicleDensity}. ${physics.backgroundRealism.realismGuards.join('; ')}`
+    `Background control decision: humans=${physics.backgroundRealism.humanDensity}, vehicles=${physics.backgroundRealism.vehicleDensity}, disorder=${physics.backgroundRealism.disorderLevel}. ${physics.backgroundRealism.realismGuards.join('; ')}`
   );
 
   if (state.lensCondition === 'smudged-lens') {
