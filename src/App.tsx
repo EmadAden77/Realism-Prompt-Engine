@@ -48,6 +48,8 @@ import {
 import { getEligibleSelfieAngles, SelfieAngleAdvice, SelfieAngleMode } from './engine/selfieAngles';
 import {
   describeAttireControls,
+  getAttireAwareBasePhysics,
+  getAttireAwareOutfitPrompt,
   getActivityDefinition,
   getActivityOptions,
   getOutfitCapabilities,
@@ -741,6 +743,8 @@ const buildSemanticScene = (
 ): SemanticScene => {
   const outfit = OUTFITS.find(o => o.id === state.outfitId);
   const attire = describeAttireControls(outfit, state);
+  const attireBasePrompt = getAttireAwareOutfitPrompt(outfit, state);
+  const attireBasePhysics = getAttireAwareBasePhysics(outfit, state);
   const activityDefinition = getActivityDefinition(state.activity);
   const hair = HAIRSTYLES.find(h => h.id === state.hairStyle);
   const expression = EXPRESSIONS.find(e => e.id === state.expression);
@@ -836,8 +840,8 @@ const buildSemanticScene = (
     captureMechanics,
     hair: `${hair?.prompt}. Physics: ${hair?.physics}. ${derived.hairCondition}.`,
     expression: expressionDetails,
-    outfit: `${outfit?.prompt || ''}. Wear configuration: ${attire.prompt}`,
-    outfitPhysics: [...(outfit?.physics || []), ...derived.fabricBehavior, ...attire.physics].join(', '),
+    outfit: `${attireBasePrompt}. Wear configuration: ${attire.prompt}`,
+    outfitPhysics: [...attireBasePhysics, ...derived.fabricBehavior, ...attire.physics].join(', '),
     poseAndContact: `Pose: ${state.pose}. Activity: ${activityDefinition.prompt}. Activity mechanics: ${activityDefinition.mechanics}. Gaze behavior: ${activityDefinition.gaze}. Contact rules: ${derived.contactPhysics.filter(p => !p.includes('arm')).join('. ')}`,
     visibleEnvironment: visibleEnvironmentText,
     lighting: `Time: ${state.timeOfDay}. Lighting source: ${state.lightingMode}. Lighting Intensity: ${state.lightingIntensity}% (${derived.lightingIntensityDescription}). Ambient bounce: ${derived.environmentalLightBehavior}. Shadow Depth: ${state.shadowDepth}% (${derived.shadowDepthDescription}). Shadows: ${derived.shadowBehavior}.`,
@@ -881,6 +885,26 @@ const buildNegativeConstraints = (state: SceneState, derived: DerivedSceneState)
 
   if (state.captureType === 'front-selfie') {
     neg += `floating camera, third-person perspective, impossible selfie arm length, professional studio bokeh on selfie, DSLR extreme shallow depth of field. `;
+  }
+
+  if (state.shirtButtons === 'fully-buttoned') {
+    neg += `open shirt collar, unbuttoned shirt placket, exposed upper chest through shirt opening. `;
+  } else if (state.shirtButtons === 'top-one-open') {
+    neg += `fully buttoned shirt collar, two or more open shirt buttons, deep shirt opening. `;
+  } else if (state.shirtButtons === 'top-two-open') {
+    neg += `fully buttoned shirt collar, three or more open shirt buttons, excessively deep shirt opening. `;
+  }
+
+  if (state.shirtTuck === 'tucked') {
+    neg += `untucked shirt hem, shirt hanging over waistband, half-tucked shirt. `;
+  } else if (state.shirtTuck === 'untucked') {
+    neg += `fully tucked shirt, shirt hem disappearing uniformly inside waistband. `;
+  }
+
+  if (state.sleeveStyle === 'down') {
+    neg += `rolled sleeves, exposed forearms from rolled cuffs. `;
+  } else if (state.sleeveStyle === 'rolled-forearm') {
+    neg += `fully lowered sleeves, cuffs covering wrists. `;
   }
 
   if (state.lightingMode === 'إضاءة شاشة الهاتف فقط') {
@@ -951,6 +975,8 @@ const combineRealismScores = (localScore: number, geminiScore?: number): number 
 const buildBackgroundReasoningKey = (state: SceneState): string => JSON.stringify({
   sceneFamily: state.sceneFamily,
   subScene: state.subScene,
+  activity: state.activity,
+  pose: state.pose,
   timeOfDay: state.timeOfDay,
   captureType: state.captureType,
   framing: state.framing,
@@ -1081,7 +1107,7 @@ const DEFAULT_STATE: SceneState = {
   pose: '',
   outfitId: 'mil_admin_tan_shirt',
   outfitWearStyle: 'natural-neat',
-  garmentWearContext: 'neutral',
+  garmentWearContext: 'auto',
   shirtTuck: 'auto',
   sleeveStyle: 'auto',
   shirtButtons: 'auto',
@@ -3119,6 +3145,7 @@ export default function PhysFrameApp() {
                        <div className="col-span-2">
                          <label className="text-[10px] text-[var(--text-muted)] block mb-1">أثر النشاط على اللبس</label>
                          <select value={state.garmentWearContext} onChange={e => setState({ ...state, garmentWearContext: e.target.value as GarmentWearContext })} className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white">
+                           <option value="auto">تلقائي حسب النشاط</option>
                            <option value="neutral">طبيعي ثابت</option>
                            <option value="after-sitting">بعد جلوس</option>
                            <option value="after-walking">بعد مشي</option>
