@@ -11,6 +11,7 @@ export type OutfitWearStyle =
   | 'sporty';
 
 export type GarmentWearContext =
+  | 'auto'
   | 'neutral'
   | 'after-sitting'
   | 'after-walking'
@@ -345,7 +346,7 @@ const wearStylePrompt: Record<OutfitWearStyle, string> = {
   sporty: 'worn functionally for movement with practical ease and natural athletic drape'
 };
 
-const wearContextPrompt: Record<GarmentWearContext, string> = {
+const wearContextPrompt: Record<Exclude<GarmentWearContext, 'auto'>, string> = {
   neutral: 'neutral garment state with ordinary gravity drape',
   'after-sitting': 'subtle compression folds at hips, waist, elbows, and lower torso from recent sitting',
   'after-walking': 'small movement-set folds and slight hem displacement from recent walking',
@@ -354,14 +355,76 @@ const wearContextPrompt: Record<GarmentWearContext, string> = {
   'light-sweat': 'very light localized perspiration darkening at realistic high-contact areas without soaking the garment'
 };
 
-export function describeAttireControls(
+export function inferGarmentWearContext(activity: string): Exclude<GarmentWearContext, 'auto'> {
+  const definition = getActivityDefinition(activity);
+  if (definition.tags.includes('sport') || definition.tags.includes('fatigue')) return 'post-workout';
+  if (definition.tags.includes('walking') || definition.tags.includes('motion') || definition.tags.includes('transition')) return 'after-walking';
+  if (definition.tags.includes('seated') || definition.tags.includes('reclined')) return 'after-sitting';
+  return 'neutral';
+}
+
+export function getAttireAwareOutfitPrompt(
   outfit: OutfitItem | undefined,
   controls: AttireControls
-): { prompt: string; physics: string[] } {
+): string {
+  let base = outfit?.prompt || '';
+
+  if (controls.shirtButtons && controls.shirtButtons !== 'auto') {
+    base = base
+      .replace(/\bopen-collar\b/gi, '')
+      .replace(/\bunbuttoned at neck\b/gi, '')
+      .replace(/\bopen relaxed dress shirt collar\b/gi, 'dress shirt collar');
+  }
+
+  if (
+    controls.outerwearClosure &&
+    controls.outerwearClosure !== 'auto' &&
+    controls.outerwearClosure !== 'open'
+  ) {
+    base = base.replace(/\bworn open\b/gi, 'worn');
+  }
+
+  return base.replace(/\s{2,}/g, ' ').trim();
+}
+
+export function getAttireAwareBasePhysics(
+  outfit: OutfitItem | undefined,
+  controls: AttireControls
+): string[] {
+  const base = [...(outfit?.physics || [])];
+
+  return base.filter(rule => {
+    if (controls.shirtButtons && controls.shirtButtons !== 'auto' && /open.*collar|unbutton/i.test(rule)) {
+      return false;
+    }
+    if (controls.hoodPosition === 'up' && /hood resting|hood.*neck/i.test(rule)) {
+      return false;
+    }
+    if (
+      controls.outerwearClosure &&
+      controls.outerwearClosure !== 'auto' &&
+      controls.outerwearClosure !== 'open' &&
+      /open.*jacket|worn open/i.test(rule)
+    ) {
+      return false;
+    }
+    return true;
+  });
+}
+
+export function describeAttireControls(
+  outfit: OutfitItem | undefined,
+  controls: AttireControls & { activity?: string }
+): { prompt: string; physics: string[]; resolvedWearContext: Exclude<GarmentWearContext, 'auto'> } {
   const capabilities = getOutfitCapabilities(outfit);
+  const resolvedWearContext =
+    !controls.garmentWearContext || controls.garmentWearContext === 'auto'
+      ? inferGarmentWearContext(controls.activity || '')
+      : controls.garmentWearContext;
+
   const prompt: string[] = [
     wearStylePrompt[controls.outfitWearStyle ?? 'natural-neat'],
-    wearContextPrompt[controls.garmentWearContext ?? 'neutral']
+    wearContextPrompt[resolvedWearContext]
   ];
   const physics: string[] = [];
 
@@ -429,6 +492,7 @@ export function describeAttireControls(
 
   return {
     prompt: prompt.join('; '),
-    physics
+    physics,
+    resolvedWearContext
   };
 }
