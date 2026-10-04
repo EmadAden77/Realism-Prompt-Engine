@@ -486,7 +486,108 @@ Select completely coherent, physically realistic attributes and provide a vivid 
   }
 });
 
-// 3. AI Realism Inspector: Audit current settings & prompt for anti-AI realism score & slop prevention
+// 3. Gemini Background Reasoner: advisory scene understanding only.
+// Local physics/FOV remains authoritative and caps every Gemini suggestion.
+app.post('/api/ai/background-reasoning', async (req, res) => {
+  try {
+    const sceneState = req.body?.sceneState || {};
+    const localLimits = req.body?.localLimits || {};
+
+    const response = await callGeminiWithFallback({
+      // Background reasoning is latency-sensitive.
+      preferredModels: ['gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'],
+      contents: `You are a scene-context reasoner for a photorealistic Saudi smartphone selfie prompt engine.
+
+Your task is NOT to redesign the scene. Decide only how much secondary background life is contextually plausible.
+
+SCENE:
+${JSON.stringify({
+  sceneFamily: sceneState.sceneFamily,
+  subScene: sceneState.subScene,
+  timeOfDay: sceneState.timeOfDay,
+  captureType: sceneState.captureType,
+  framing: sceneState.framing,
+  cameraAngle: sceneState.cameraAngle,
+  lightingMode: sceneState.lightingMode,
+  backgroundMode: sceneState.backgroundMode,
+  backgroundHumans: sceneState.backgroundHumans,
+  backgroundVehicles: sceneState.backgroundVehicles,
+  backgroundDisorder: sceneState.backgroundDisorder
+}, null, 2)}
+
+LOCAL PHYSICAL LIMITS:
+${JSON.stringify(localLimits, null, 2)}
+
+Rules:
+- The local engine owns camera geometry, Xiaomi 15 Ultra front-camera FOV, occlusion, lighting causality, and physical feasibility.
+- Never exceed local limits.
+- Private interiors should normally have no random people.
+- Tight selfies should normally have no visible full people or vehicles.
+- Public Saudi scenes may contain sparse, ordinary background life if physically visible.
+- No landmarks, staged crowds, decorative traffic, cinematic clutter, or tourist stereotypes.
+- Mild disorder must be place-appropriate and visually secondary.
+- User explicit choices have higher priority than your advice.
+- Return density advice only. Do not invent a new location.
+
+Return concise Arabic reasoning.`,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            humanDensity: {
+              type: Type.STRING,
+              description: 'One of: none, sparse, light, moderate.'
+            },
+            vehicleDensity: {
+              type: Type.STRING,
+              description: 'One of: none, sparse, light, moderate.'
+            },
+            disorderLevel: {
+              type: Type.STRING,
+              description: 'One of: none, very-clean, light, moderate.'
+            },
+            reasonAR: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+              description: 'One or two concise Arabic reasons tied to the actual scene and selfie framing.'
+            },
+            confidence: {
+              type: Type.INTEGER,
+              description: 'Confidence from 0 to 100.'
+            }
+          },
+          required: ['humanDensity', 'vehicleDensity', 'disorderLevel', 'reasonAR', 'confidence']
+        }
+      }
+    });
+
+    const parsed = JSON.parse(response.text || '{}');
+    const allowedDensity = new Set(['none', 'sparse', 'light', 'moderate']);
+    const allowedDisorder = new Set(['none', 'very-clean', 'light', 'moderate']);
+
+    if (!allowedDensity.has(parsed.humanDensity) ||
+        !allowedDensity.has(parsed.vehicleDensity) ||
+        !allowedDisorder.has(parsed.disorderLevel)) {
+      throw new Error('Gemini background reasoning returned an invalid density value');
+    }
+
+    return res.json({
+      humanDensity: parsed.humanDensity,
+      vehicleDensity: parsed.vehicleDensity,
+      disorderLevel: parsed.disorderLevel,
+      reasonAR: Array.isArray(parsed.reasonAR) ? parsed.reasonAR.slice(0, 2) : [],
+      confidence: Math.max(0, Math.min(100, Number(parsed.confidence) || 0))
+    });
+  } catch (error: any) {
+    console.warn('Background reasoning failed:', error?.message || error);
+    return res.status(503).json({
+      error: 'تعذر تحليل الخلفية بواسطة Gemini الآن. سيستمر المحرك المحلي بالعمل بشكل طبيعي.'
+    });
+  }
+});
+
+// 4. AI Realism Inspector: Audit current settings & prompt for anti-AI realism score & slop prevention
 app.post('/api/ai/audit-realism', async (req, res) => {
   try {
     const { sceneState, promptText } = req.body;
