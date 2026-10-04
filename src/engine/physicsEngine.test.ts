@@ -885,6 +885,109 @@ assert(
   'Car selfie angle must carry explicit cabin collision guards'
 );
 
-console.log('  ✓ In-Car Selfie Camera Director regression suite passed!\n');
+console.log('▶ Test 39: Background composition automatically changes smart selfie angle');
+const facePriorityBackgroundState: SceneState = {
+  ...streetWideState,
+  framing: 'chest-up',
+  cameraAngleMode: 'gemini-smart',
+  selfieAngleAdvice: undefined,
+  backgroundAutoAngle: true,
+  backgroundMode: 'auto',
+  backgroundHumans: 'none',
+  backgroundVehicles: 'none',
+  backgroundDisorder: 'very-clean',
+  backgroundActivity: 'calm',
+  backgroundPresence: 'low',
+  backgroundCompositionGoal: 'face-priority'
+};
+const resolvedFacePriorityBackground = resolveScene(facePriorityBackgroundState);
+
+const backgroundPriorityState: SceneState = {
+  ...facePriorityBackgroundState,
+  backgroundHumans: 'high',
+  backgroundVehicles: 'moderate',
+  backgroundDisorder: 'lived-in',
+  backgroundActivity: 'active',
+  backgroundPresence: 'strong',
+  backgroundCompositionGoal: 'background-priority'
+};
+const resolvedBackgroundPriority = resolveScene(backgroundPriorityState);
+
+assert(
+  resolvedFacePriorityBackground.physicalState.selfieAngle?.presetId !==
+  resolvedBackgroundPriority.physicalState.selfieAngle?.presetId,
+  'Changing background realism from face-priority to background-priority must automatically change the smart selfie angle'
+);
+assert(
+  resolvedBackgroundPriority.physicalState.selfieAngle?.legacyAngle === 'slightly-off-center',
+  'Strong/background-priority realism should bias the selfie toward a physically valid off-axis angle'
+);
+assert(
+  resolvedBackgroundPriority.physicalState.backgroundRealism.angleIntent.backgroundPriority === 'high',
+  'Background-priority settings must derive high background camera intent'
+);
+
+console.log('▶ Test 40: Disabling background-angle link preserves angle selection');
+const unlinkedFaceState: SceneState = {
+  ...facePriorityBackgroundState,
+  backgroundAutoAngle: false
+};
+const unlinkedBackgroundState: SceneState = {
+  ...backgroundPriorityState,
+  backgroundAutoAngle: false
+};
+const resolvedUnlinkedFace = resolveScene(unlinkedFaceState);
+const resolvedUnlinkedBackground = resolveScene(unlinkedBackgroundState);
+assert(
+  resolvedUnlinkedFace.physicalState.selfieAngle?.presetId ===
+  resolvedUnlinkedBackground.physicalState.selfieAngle?.presetId,
+  'When background-angle linking is OFF, background realism changes must not alter the deterministic selfie angle'
+);
+
+console.log('▶ Test 41: Strong background presence is capped by medium selfie FOV');
+assert(
+  resolvedBackgroundPriority.physicalState.backgroundRealism.presenceLevel === 'visible',
+  'Chest-up framing must cap requested strong background presence to visible'
+);
+assert(
+  resolvedBackgroundPriority.physicalState.backgroundRealism.cappedByFraming,
+  'Medium framing must report when strong/high background requests are physically capped'
+);
+
+console.log('▶ Test 42: High people density expands intent but remains physically bounded');
+assert(
+  ['none', 'sparse', 'light', 'moderate'].includes(
+    resolvedBackgroundPriority.physicalState.backgroundRealism.humanDensity
+  ),
+  'High user density request must resolve to a physically supported engine density'
+);
+assert(
+  resolvedBackgroundPriority.physicalState.backgroundRealism.requestedHumans === 'high',
+  'Engine must preserve the explicit high-density user request for auditability'
+);
+
+console.log('▶ Test 43: Expanded disorder controls map to physical disorder levels');
+const naturalDisorderState: SceneState = {
+  ...streetWideState,
+  backgroundDisorder: 'natural',
+  backgroundAutoAngle: true
+};
+const livedInDisorderState: SceneState = {
+  ...streetWideState,
+  backgroundDisorder: 'lived-in',
+  backgroundAutoAngle: true
+};
+const resolvedNaturalDisorder = resolveScene(naturalDisorderState);
+const resolvedLivedInDisorder = resolveScene(livedInDisorderState);
+assert(
+  resolvedNaturalDisorder.physicalState.backgroundRealism.disorderLevel === 'light',
+  'Natural disorder control must map to restrained light physical irregularity'
+);
+assert(
+  resolvedLivedInDisorder.physicalState.backgroundRealism.disorderLevel === 'moderate',
+  'Lived-in disorder control should map to moderate irregularity when wide framing permits it'
+);
+
+console.log('  ✓ Background Realism → Selfie Angle Link V2 regression suite passed!\n');
 
 console.log('🎉 ALL AUTOMATED VALIDATION TESTS PASSED PERFECTLY!\n');
