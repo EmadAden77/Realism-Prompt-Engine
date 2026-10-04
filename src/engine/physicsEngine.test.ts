@@ -815,42 +815,42 @@ assert(
   'Rear-seat geometry must preserve front-seat/headrest clearance'
 );
 
-console.log('▶ Test 37: Driver cabin-context micro-variation is hard-clamped to cabin clearance');
-const wideDriverState: SceneState = {
+console.log('▶ Test 37: Driver micro-variation is hard-clamped to cabin clearance');
+const edgeDriverState: SceneState = {
   ...carNightState,
-  framing: 'half-body',
+  framing: 'chest-up',
   lightingMode: 'إضاءة داخل السيارة',
   cameraAngleMode: 'gemini-smart',
   selfieAngleAdvice: {
-    angleId: 'car_driver_cabin_wide',
-    pitchOffsetDeg: -40,
+    angleId: 'car_driver_offaxis',
+    pitchOffsetDeg: -20,
     yawOffsetDeg: 50,
     rollOffsetDeg: 20,
-    distanceOffsetCm: 30,
-    carFocus: 'cabin-context',
+    distanceOffsetCm: 20,
+    carFocus: 'balanced',
     reasonAR: ['اختبار حدود المقصورة'],
     confidence: 99
   }
 };
-const resolvedWideDriver = resolveScene(wideDriverState);
+const resolvedEdgeDriver = resolveScene(edgeDriverState);
 assert(
-  resolvedWideDriver.physicalState.selfieAngle?.source === 'gemini',
-  'Eligible driver cabin-context angle should be accepted before local clamping'
+  resolvedEdgeDriver.physicalState.selfieAngle?.source === 'gemini',
+  'Eligible driver angle should be accepted before local cabin clamping'
 );
 assert(
-  Math.abs(resolvedWideDriver.physicalState.selfieAngle?.yawDeg ?? 99) <= 16,
+  Math.abs(resolvedEdgeDriver.physicalState.selfieAngle?.yawDeg ?? 99) <= 16,
   'Driver cabin yaw must remain within physical cabin clearance'
 );
 assert(
-  Math.abs(resolvedWideDriver.physicalState.selfieAngle?.rollDeg ?? 99) <= 2.5,
+  Math.abs(resolvedEdgeDriver.physicalState.selfieAngle?.rollDeg ?? 99) <= 2.5,
   'Driver cabin roll must remain a micro-tilt'
 );
 assert(
-  (resolvedWideDriver.physicalState.selfieAngle?.distanceCm ?? 99) <= 64,
-  'Wide driver selfie must not exceed in-cabin maximum functional reach'
+  (resolvedEdgeDriver.physicalState.selfieAngle?.distanceCm ?? 99) <= 58,
+  'Driver chest-up selfie must remain within in-cabin functional reach'
 );
 assert(
-  resolvedWideDriver.physicalState.selfieAngle?.carClearanceAdjusted === true,
+  resolvedEdgeDriver.physicalState.selfieAngle?.carClearanceAdjusted === true,
   'Cabin clamp must report when Gemini variation was physically corrected'
 );
 
