@@ -630,10 +630,7 @@ const deriveRealismState = (state: SceneState): DerivedSceneState => {
   else if (state.framing === 'chest-up') derived.visibleBackgroundElements = baseDetails.slice(0, 3).map(d => `mid-field: ${d}`);
   else derived.visibleBackgroundElements = baseDetails;
 
-  if (state.lensCondition === 'budget-android') {
-    derived.lensEffects = 'low-end smartphone camera processing, slight overall optical softness, blown-out highlights in bright areas (poor dynamic range), slightly crushed blacks, inferior HDR recovery';
-    derived.skinResponse += ', minor artificial over-sharpening artifacts typical of cheap phone processing';
-  } else if (state.lensCondition === 'smudged-lens') {
+  if (state.lensCondition === 'smudged-lens') {
     derived.lensEffects = 'photographed through a slightly smudged lens, oily finger smudge causing organic light bloom and streaks, soft glowing scattered glare around any light sources, localized loss of micro-contrast';
   } else {
     derived.lensEffects = 'clean standard smartphone lens capture without excessive professional sharpness';
