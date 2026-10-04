@@ -12,6 +12,9 @@ import {
   BackgroundMode,
   BackgroundControlDensity,
   BackgroundDisorderControl,
+  BackgroundActivityControl,
+  BackgroundPresenceControl,
+  BackgroundCompositionGoal,
   BackgroundGeminiAdvice
 } from './backgroundRealism';
 import { deriveLightingCausality, LightingCausalityState } from './lightingCausality';
@@ -76,6 +79,10 @@ export interface SceneState {
   backgroundHumans?: BackgroundControlDensity;
   backgroundVehicles?: BackgroundControlDensity;
   backgroundDisorder?: BackgroundDisorderControl;
+  backgroundActivity?: BackgroundActivityControl;
+  backgroundPresence?: BackgroundPresenceControl;
+  backgroundCompositionGoal?: BackgroundCompositionGoal;
+  backgroundAutoAngle?: boolean;
   backgroundGeminiAssist?: boolean;
   backgroundGeminiAdvice?: BackgroundGeminiAdvice;
 
@@ -662,6 +669,14 @@ function calculateDetailedPhysicalState(
     manualAngle: state.cameraAngle,
     timeOfDay: state.timeOfDay,
     lightingMode: state.lightingMode,
+    backgroundAutoAngle: state.backgroundAutoAngle ?? true,
+    backgroundMode: state.backgroundMode,
+    backgroundHumans: state.backgroundHumans,
+    backgroundVehicles: state.backgroundVehicles,
+    backgroundDisorder: state.backgroundDisorder,
+    backgroundActivity: state.backgroundActivity,
+    backgroundPresence: state.backgroundPresence,
+    backgroundCompositionGoal: state.backgroundCompositionGoal,
     mode: state.cameraAngleMode ?? 'manual',
     advice: state.selfieAngleAdvice
   });
@@ -810,6 +825,9 @@ function calculateDetailedPhysicalState(
     backgroundHumans: state.backgroundHumans,
     backgroundVehicles: state.backgroundVehicles,
     backgroundDisorder: state.backgroundDisorder,
+    backgroundActivity: state.backgroundActivity,
+    backgroundPresence: state.backgroundPresence,
+    backgroundCompositionGoal: state.backgroundCompositionGoal,
     backgroundGeminiAssist: state.backgroundGeminiAssist,
     backgroundGeminiAdvice: state.backgroundGeminiAdvice,
     microLoc
@@ -993,7 +1011,7 @@ function calculateDerivedState(
   derived.realismConstraints.push(
     `Background visibility: ${physics.backgroundRealism.visibilityClass}; ${physics.backgroundRealism.depthLayers.join('; ')}`,
     `Background occlusion: ${physics.backgroundRealism.occlusionRules.join('; ')}`,
-    `Background control decision: humans=${physics.backgroundRealism.humanDensity}, vehicles=${physics.backgroundRealism.vehicleDensity}, disorder=${physics.backgroundRealism.disorderLevel}. ${physics.backgroundRealism.realismGuards.join('; ')}`
+    `Background control decision: humans=${physics.backgroundRealism.humanDensity}, vehicles=${physics.backgroundRealism.vehicleDensity}, disorder=${physics.backgroundRealism.disorderLevel}, activity=${physics.backgroundRealism.activityLevel}, presence=${physics.backgroundRealism.presenceLevel}, composition=${physics.backgroundRealism.compositionGoal}. ${physics.backgroundRealism.realismGuards.join('; ')}`
   );
 
   if (state.lensCondition === 'smudged-lens') {
