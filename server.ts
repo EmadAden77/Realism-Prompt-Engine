@@ -5,7 +5,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { MICRO_LOCATIONS } from './src/data/microLocations.ts';
 import { OUTFITS } from './src/data/clothingOutfits.ts';
-import { getEligibleSelfieAngles } from './src/engine/selfieAngles.ts';
 
 dotenv.config();
 
@@ -497,49 +496,94 @@ app.post('/api/ai/selfie-angle', async (req, res) => {
       return res.status(400).json({ error: 'Smart selfie angle selection applies only to front-camera selfies.' });
     }
 
-    const context = {
-      captureType: 'front-selfie' as const,
-      sceneFamily: sceneState.sceneFamily || null,
-      subScene: String(sceneState.subScene || ''),
-      pose: String(sceneState.pose || ''),
-      activity: String(sceneState.activity || ''),
-      framing: sceneState.framing || 'chest-up',
-      manualAngle: sceneState.cameraAngle || 'eye-level',
-      timeOfDay: sceneState.timeOfDay || 'midday',
-      lightingMode: String(sceneState.lightingMode || ''),
-      backgroundAutoAngle: sceneState.backgroundAutoAngle !== false,
-      backgroundMode: sceneState.backgroundMode,
-      backgroundHumans: sceneState.backgroundHumans,
-      backgroundVehicles: sceneState.backgroundVehicles,
-      backgroundDisorder: sceneState.backgroundDisorder,
-      backgroundActivity: sceneState.backgroundActivity,
-      backgroundPresence: sceneState.backgroundPresence,
-      backgroundCompositionGoal: sceneState.backgroundCompositionGoal,
-      mode: 'gemini-smart' as const
+    // IMPORTANT ARCHITECTURE BOUNDARY:
+    // The deterministic selfie engine runs in the client bundle. Server routes must not
+    // import client engine modules, because one transitive ESM resolution failure would
+    // crash every Gemini API route at function startup. The client sends only the
+    // already-eligible angle catalog; the server validates a narrow safe schema and
+    // Gemini can choose only from that catalog. The client re-validates the returned ID
+    // again through its local physics engine before applying it.
+    const rawCatalog = Array.isArray(req.body?.eligibleAngles) ? req.body.eligibleAngles : [];
+
+    const finite = (value: unknown, min: number, max: number): number | null => {
+      const number = Number(value);
+      return Number.isFinite(number) && number >= min && number <= max ? number : null;
     };
 
-    const eligible = getEligibleSelfieAngles(context);
-    if (!eligible.length) {
-      return res.status(422).json({ error: 'No physically eligible selfie angle exists for this scene/framing.' });
-    }
+    const safeText = (value: unknown, max = 240): string =>
+      typeof value === 'string' ? value.slice(0, max) : '';
 
-    const angleCatalog = eligible.map(angle => ({
-      id: angle.id,
-      labelAR: angle.labelAR,
-      family: angle.family,
-      pitchDeg: angle.pitchDeg,
-      yawDeg: angle.yawDeg,
-      rollDeg: angle.rollDeg,
-      heightOffsetCm: angle.heightOffsetCm,
-      distanceCm: angle.distanceCm,
-      risk: angle.risk,
-      intent: angle.intent,
-      carFocus: angle.carFocus || 'balanced',
-      carSeat: angle.carSeat || null,
-      phonePlacement: angle.phonePlacement || null,
-      cabinGuards: angle.cabinGuards || [],
-      allowedMicroVariation: angle.variation
-    }));
+    const safeStringArray = (value: unknown, maxItems = 8, maxLength = 180): string[] =>
+      Array.isArray(value)
+        ? value
+            .filter(item => typeof item === 'string')
+            .slice(0, maxItems)
+            .map(item => String(item).slice(0, maxLength))
+        : [];
+
+    const angleCatalog = rawCatalog
+      .slice(0, 64)
+      .map((angle: any) => {
+        const pitchDeg = finite(angle?.pitchDeg, -25, 15);
+        const yawDeg = finite(angle?.yawDeg, -25, 25);
+        const rollDeg = finite(angle?.rollDeg, -4, 4);
+        const heightOffsetCm = finite(angle?.heightOffsetCm, -15, 25);
+        const distanceCm = finite(angle?.distanceCm, 38, 72);
+        const variationPitch = finite(angle?.allowedMicroVariation?.pitchDeg, 0, 5);
+        const variationYaw = finite(angle?.allowedMicroVariation?.yawDeg, 0, 6);
+        const variationRoll = finite(angle?.allowedMicroVariation?.rollDeg, 0, 3);
+        const variationDistance = finite(angle?.allowedMicroVariation?.distanceCm, 0, 6);
+
+        if (
+          typeof angle?.id !== 'string' ||
+          !/^[a-z0-9_\-]{3,80}$/i.test(angle.id) ||
+          pitchDeg === null ||
+          yawDeg === null ||
+          rollDeg === null ||
+          heightOffsetCm === null ||
+          distanceCm === null ||
+          variationPitch === null ||
+          variationYaw === null ||
+          variationRoll === null ||
+          variationDistance === null
+        ) {
+          return null;
+        }
+
+        return {
+          id: angle.id,
+          labelAR: safeText(angle.labelAR, 100),
+          family: safeText(angle.family, 40),
+          pitchDeg,
+          yawDeg,
+          rollDeg,
+          heightOffsetCm,
+          distanceCm,
+          risk: ['low', 'medium', 'high'].includes(angle.risk) ? angle.risk : 'medium',
+          intent: safeText(angle.intent, 240),
+          carFocus: ['face-priority', 'cabin-context', 'balanced'].includes(angle.carFocus)
+            ? angle.carFocus
+            : 'balanced',
+          carSeat: ['driver', 'front-passenger', 'rear-passenger', 'either'].includes(angle.carSeat)
+            ? angle.carSeat
+            : null,
+          phonePlacement: safeText(angle.phonePlacement, 240) || null,
+          cabinGuards: safeStringArray(angle.cabinGuards),
+          allowedMicroVariation: {
+            pitchDeg: variationPitch,
+            yawDeg: variationYaw,
+            rollDeg: variationRoll,
+            distanceCm: variationDistance
+          }
+        };
+      })
+      .filter(Boolean);
+
+    if (!angleCatalog.length) {
+      return res.status(422).json({
+        error: 'No validated physically eligible selfie angles were supplied by the local engine.'
+      });
+    }
 
     const response = await callGeminiWithFallback({
       preferredModels: ['gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'],
@@ -628,9 +672,9 @@ Return the exact carFocus associated with the selected catalog item (or "balance
     });
 
     const parsed = JSON.parse(response.text || '{}');
-    const selected = eligible.find(angle => angle.id === parsed.angleId);
+    const selected = angleCatalog.find((angle: any) => angle?.id === parsed.angleId) as any;
     if (!selected) {
-      throw new Error('Gemini selected an angle outside the eligible physical catalog');
+      throw new Error('Gemini selected an angle outside the validated physical catalog');
     }
 
     const numberOrZero = (value: unknown) => {
