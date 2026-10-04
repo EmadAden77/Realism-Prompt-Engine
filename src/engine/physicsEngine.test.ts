@@ -733,6 +733,158 @@ assert(
   'Wide smart selfie must retain near-maximum physical arm extension mechanics'
 );
 
-console.log('  ✓ Gemini Smart Selfie Angle Director regression suite passed!\n');
+console.log('▶ Test 33: In-car selfie library has dedicated driver/passenger/rear geometry');
+const vehicleAngles = SELFIE_ANGLE_LIBRARY.filter(angle => angle.family === 'vehicle');
+assert(vehicleAngles.length >= 12, 'Car interior must have a broad dedicated vehicle-angle library');
+assert(vehicleAngles.some(angle => angle.carSeat === 'driver'), 'Vehicle library must include driver-seat angles');
+assert(vehicleAngles.some(angle => angle.carSeat === 'front-passenger'), 'Vehicle library must include front-passenger angles');
+assert(vehicleAngles.some(angle => angle.carSeat === 'rear-passenger'), 'Vehicle library must include rear-seat angles');
+assert(vehicleAngles.some(angle => angle.carFocus === 'cabin-context'), 'Vehicle library must include cabin-context angles');
+assert(vehicleAngles.some(angle => angle.carFocus === 'face-priority'), 'Vehicle library must include face-priority angles');
+
+console.log('▶ Test 34: Phone-screen-only driver selfie prefers face-priority geometry');
+const carScreenLightState: SceneState = {
+  ...carNightState,
+  framing: 'chest-up',
+  lightingMode: 'إضاءة شاشة الهاتف فقط',
+  cameraAngleMode: 'gemini-smart',
+  selfieAngleAdvice: undefined
+};
+const resolvedCarScreenLight = resolveScene(carScreenLightState);
+assert(
+  resolvedCarScreenLight.physicalState.selfieAngle?.presetId === 'car_driver_screen_light',
+  'Phone-screen-only driver selfie should select the dedicated close screen-light angle'
+);
+assert(
+  resolvedCarScreenLight.physicalState.selfieAngle?.carFocus === 'face-priority',
+  'Phone-screen-only driver selfie must prioritize the face'
+);
+assert(
+  (resolvedCarScreenLight.physicalState.selfieAngle?.distanceCm ?? 0) <= 58,
+  'Phone-screen-only driver selfie must stay within realistic in-cabin arm reach'
+);
+
+console.log('▶ Test 35: Passenger scene rejects driver-only Gemini angle');
+const passengerState: SceneState = {
+  ...carNightState,
+  subScene: 'المقعد الأمامي للراكب',
+  activity: 'جالس في مقعد الراكب',
+  framing: 'chest-up',
+  lightingMode: 'ضوء نهاري طبيعي',
+  timeOfDay: 'midday',
+  cameraAngleMode: 'gemini-smart',
+  selfieAngleAdvice: {
+    angleId: 'car_driver_offaxis',
+    pitchOffsetDeg: 0,
+    yawOffsetDeg: 0,
+    rollOffsetDeg: 0,
+    distanceOffsetCm: 0,
+    carFocus: 'balanced',
+    reasonAR: ['اختبار رفض زاوية السائق للراكب'],
+    confidence: 99
+  }
+};
+const resolvedPassenger = resolveScene(passengerState);
+assert(
+  resolvedPassenger.physicalState.selfieAngle?.source === 'local-fallback',
+  'Passenger scene must reject a driver-only Gemini angle'
+);
+assert(
+  resolvedPassenger.physicalState.selfieAngle?.carSeat === 'front-passenger' ||
+  resolvedPassenger.physicalState.selfieAngle?.carSeat === 'either',
+  'Passenger fallback must remain passenger-compatible'
+);
+
+console.log('▶ Test 36: Rear-seat selfie stays behind front-seat geometry');
+const rearSeatState: SceneState = {
+  ...carNightState,
+  subScene: 'المقعد الخلفي',
+  activity: 'جالس بهدوء في المقعد الخلفي',
+  framing: 'chest-up',
+  lightingMode: 'إضاءة داخل السيارة',
+  cameraAngleMode: 'gemini-smart',
+  selfieAngleAdvice: undefined
+};
+const resolvedRearSeat = resolveScene(rearSeatState);
+assert(
+  resolvedRearSeat.physicalState.selfieAngle?.carSeat === 'rear-passenger',
+  'Rear-seat scene must select rear-passenger geometry'
+);
+assert(
+  resolvedRearSeat.physicalState.selfieAngle?.cabinGuards?.some(rule => /front-seat|seatback|headrest/i.test(rule)) === true,
+  'Rear-seat geometry must preserve front-seat/headrest clearance'
+);
+
+console.log('▶ Test 37: Driver cabin-context micro-variation is hard-clamped to cabin clearance');
+const wideDriverState: SceneState = {
+  ...carNightState,
+  framing: 'half-body',
+  lightingMode: 'إضاءة داخل السيارة',
+  cameraAngleMode: 'gemini-smart',
+  selfieAngleAdvice: {
+    angleId: 'car_driver_cabin_wide',
+    pitchOffsetDeg: -40,
+    yawOffsetDeg: 50,
+    rollOffsetDeg: 20,
+    distanceOffsetCm: 30,
+    carFocus: 'cabin-context',
+    reasonAR: ['اختبار حدود المقصورة'],
+    confidence: 99
+  }
+};
+const resolvedWideDriver = resolveScene(wideDriverState);
+assert(
+  resolvedWideDriver.physicalState.selfieAngle?.source === 'gemini',
+  'Eligible driver cabin-context angle should be accepted before local clamping'
+);
+assert(
+  Math.abs(resolvedWideDriver.physicalState.selfieAngle?.yawDeg ?? 99) <= 16,
+  'Driver cabin yaw must remain within physical cabin clearance'
+);
+assert(
+  Math.abs(resolvedWideDriver.physicalState.selfieAngle?.rollDeg ?? 99) <= 2.5,
+  'Driver cabin roll must remain a micro-tilt'
+);
+assert(
+  (resolvedWideDriver.physicalState.selfieAngle?.distanceCm ?? 99) <= 64,
+  'Wide driver selfie must not exceed in-cabin maximum functional reach'
+);
+assert(
+  resolvedWideDriver.physicalState.selfieAngle?.carClearanceAdjusted === true,
+  'Cabin clamp must report when Gemini variation was physically corrected'
+);
+
+console.log('▶ Test 38: Driver cabin-context angle exposes explicit phone placement and guards');
+const cabinContextState: SceneState = {
+  ...carNightState,
+  framing: 'chest-up',
+  lightingMode: 'إضاءة داخل السيارة',
+  cameraAngleMode: 'gemini-smart',
+  selfieAngleAdvice: {
+    angleId: 'car_driver_cabin_context',
+    pitchOffsetDeg: 0,
+    yawOffsetDeg: 0,
+    rollOffsetDeg: 0,
+    distanceOffsetCm: 0,
+    carFocus: 'cabin-context',
+    reasonAR: ['إظهار المقود والتابلوه مع بقاء الوجه هو العنصر الأساسي'],
+    confidence: 94
+  }
+};
+const resolvedCabinContext = resolveScene(cabinContextState);
+assert(
+  resolvedCabinContext.physicalState.selfieAngle?.carFocus === 'cabin-context',
+  'Cabin-context selection must remain explicitly tagged'
+);
+assert(
+  Boolean(resolvedCabinContext.physicalState.selfieAngle?.phonePlacement),
+  'Car selfie angle must expose a physical phone placement'
+);
+assert(
+  (resolvedCabinContext.physicalState.selfieAngle?.cabinGuards?.length ?? 0) >= 3,
+  'Car selfie angle must carry explicit cabin collision guards'
+);
+
+console.log('  ✓ In-Car Selfie Camera Director regression suite passed!\n');
 
 console.log('🎉 ALL AUTOMATED VALIDATION TESTS PASSED PERFECTLY!\n');
