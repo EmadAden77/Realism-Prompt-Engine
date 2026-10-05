@@ -67,9 +67,20 @@ import {
 } from './engine/activityAttire';
 import {
   resolveGroupSelfie,
+  getGroupClothingOptions,
   GroupSelfieSize,
-  GroupSelfieRelationship
+  GroupSelfieRelationship,
+  GroupClothingPresetId,
+  GroupClothingDiversity,
+  GroupUniformConsistency
 } from './engine/groupSelfie';
+import {
+  getAllowedStanceCategories,
+  getDetailedPoseSuggestions,
+  getCompatibleMicroLocations,
+  normalizePoseHierarchy,
+  StanceCategory
+} from './engine/sceneAffordances';
 
 // --- TYPES ---
 type CaptureType = 'front-selfie' | 'mirror-selfie' | 'third-person-candid';
@@ -98,6 +109,8 @@ interface SceneState {
   framing: Framing;
   cameraAngle: CameraAngle;
   pose: string;
+  stanceCategory?: StanceCategory;
+  detailedPoseId?: string;
   outfitId: string;
   outfitWearStyle: OutfitWearStyle;
   garmentWearContext: GarmentWearContext;
@@ -150,6 +163,9 @@ interface SceneState {
   groupSelfieEnabled: boolean;
   groupSelfieSize: GroupSelfieSize;
   groupSelfieRelationship: GroupSelfieRelationship;
+  groupClothingPreset: GroupClothingPresetId;
+  groupClothingDiversity: GroupClothingDiversity;
+  groupUniformConsistency: GroupUniformConsistency;
 }
 
 interface DerivedSceneState {
@@ -1172,7 +1188,10 @@ const DEFAULT_STATE: SceneState = {
   cameraAngleMode: 'gemini-smart',
   groupSelfieEnabled: false,
   groupSelfieSize: 2,
-  groupSelfieRelationship: 'auto'
+  groupSelfieRelationship: 'auto',
+  groupClothingPreset: 'auto',
+  groupClothingDiversity: 'natural',
+  groupUniformConsistency: 'naturally-varied'
 };
 
 export default function PhysFrameApp() {
@@ -1300,32 +1319,55 @@ export default function PhysFrameApp() {
   const activeFamily = state.sceneFamily ? SCENE_FAMILIES[state.sceneFamily] : null;
   const selectedOutfit = OUTFITS.find(o => o.id === state.outfitId);
   const outfitCapabilities = getOutfitCapabilities(selectedOutfit);
+
+  const stanceOptions = state.sceneFamily ? getAllowedStanceCategories(state.sceneFamily) : [];
+  const activeStance: StanceCategory | undefined =
+    state.stanceCategory && stanceOptions.includes(state.stanceCategory)
+      ? state.stanceCategory
+      : stanceOptions[0];
+  const detailedPoseOptions = state.sceneFamily && activeStance
+    ? getDetailedPoseSuggestions(state.sceneFamily, activeStance)
+    : [];
+  const selectedDetailedPose = detailedPoseOptions.find(item =>
+    item.id === state.detailedPoseId || item.labelAR === state.pose
+  ) || detailedPoseOptions[0];
+  const compatibleSubSceneLocations = state.sceneFamily && activeStance && selectedDetailedPose
+    ? getCompatibleMicroLocations(state.sceneFamily, activeStance, selectedDetailedPose.id)
+    : [];
+
   const activityOptions = state.sceneFamily ? getActivityOptions(state.sceneFamily, state.subScene) : [];
-  const poseOptions = state.sceneFamily ? getPoseOptions(state.sceneFamily, state.subScene) : [];
   const sceneRecommendations = state.sceneFamily
     ? getSceneRecommendations(state.sceneFamily, state.subScene)
     : { activities: [], poses: [] };
   const recommendedActivitySet = new Set(sceneRecommendations.activities);
-  const recommendedPoseSet = new Set(sceneRecommendations.poses);
+
   const militarySubSceneGroups = state.sceneFamily === 'military-base'
     ? ['المكاتب', 'الممرات', 'الأبواب والمداخل', 'الانتظار والاجتماعات', 'الاستراحة والخدمات', 'الدرج', 'خارج المبنى', 'المواقف']
         .map(groupAR => ({
           groupAR,
-          locations: MICRO_LOCATIONS['military-base'].filter(location => location.groupAR === groupAR)
+          locations: compatibleSubSceneLocations.filter(location => location.groupAR === groupAR)
         }))
         .filter(group => group.locations.length > 0)
     : [];
+
+  const currentMicroLocation = state.sceneFamily ? getMicroLocation(state.sceneFamily, state.subScene) : undefined;
+  const groupClothingOptions = state.sceneFamily
+    ? getGroupClothingOptions(state.sceneFamily, currentMicroLocation)
+    : [];
+
   const backgroundReasoningKey = buildBackgroundReasoningKey(state);
   const selfieAngleReasoningKey = buildSelfieAngleReasoningKey(state);
   const currentResolvedPreview = state.sceneFamily ? resolveScene(state as any) : null;
   const backgroundDecision = currentResolvedPreview?.physicalState.backgroundRealism ?? null;
   const selfieAngleDecision = currentResolvedPreview?.physicalState.selfieAngle ?? null;
-  const currentMicroLocation = state.sceneFamily ? getMicroLocation(state.sceneFamily, state.subScene) : undefined;
   const groupSelfiePreview = state.sceneFamily
     ? resolveGroupSelfie({
         enabled: state.groupSelfieEnabled,
         requestedSize: state.groupSelfieSize,
         relationship: state.groupSelfieRelationship,
+        clothingPreset: state.groupClothingPreset,
+        clothingDiversity: state.groupClothingDiversity,
+        uniformConsistency: state.groupUniformConsistency,
         familyId: state.sceneFamily,
         subScene: state.subScene,
         framing: state.framing,
@@ -1340,7 +1382,7 @@ export default function PhysFrameApp() {
          setState(resolved);
       }
     }
-  }, [state.sceneFamily, state.subScene, state.lightingMode, state.timeOfDay, state.captureType, state.activity, state.foregroundObstruction, state.groupSelfieEnabled, state.groupSelfieSize, state.framing]);
+  }, [state.sceneFamily, state.stanceCategory, state.detailedPoseId, state.pose, state.subScene, state.lightingMode, state.timeOfDay, state.captureType, state.activity, state.foregroundObstruction, state.groupSelfieEnabled, state.groupSelfieSize, state.groupClothingPreset, state.groupClothingDiversity, state.groupUniformConsistency, state.framing]);
 
   useEffect(() => {
     if (
@@ -1533,15 +1575,21 @@ export default function PhysFrameApp() {
 
   const handleSceneSelect = (familyId: SceneFamilyId) => {
     const family = SCENE_FAMILIES[familyId];
+    const hierarchy = normalizePoseHierarchy(familyId, undefined, undefined, undefined, undefined);
     setState({
       ...state,
       sceneFamily: familyId,
-      subScene: family.subScenes[0],
-      activity: getActivityOptions(familyId, family.subScenes[0])[0]?.labelAR || family.activities[0],
-      pose: getPoseOptions(familyId, family.subScenes[0])[0] || family.poses[0],
+      stanceCategory: hierarchy.stanceCategory,
+      detailedPoseId: hierarchy.detailedPoseId,
+      pose: hierarchy.pose,
+      subScene: hierarchy.subScene,
+      activity: getActivityOptions(familyId, hierarchy.subScene)[0]?.labelAR || family.activities[0],
       lightingMode: family.allowedLighting[0],
       environmentRealism: family.environmentRealism[0],
-      outfitId: state.outfitId || 'thobe_white_summer'
+      outfitId: state.outfitId || 'thobe_white_summer',
+      groupClothingPreset: 'auto',
+      selfieAngleAdvice: undefined,
+      backgroundGeminiAdvice: undefined
     });
   };
 
@@ -2721,7 +2769,69 @@ export default function PhysFrameApp() {
                     </button>
                   </div>
 
-                  <label className="text-[11px] text-[var(--text-muted)] block mb-2 font-bold">الزاوية الفرعية الدقيقة:</label>
+                  <div className="mb-3">
+                    <label className="text-[11px] text-[var(--text-muted)] block mb-2 font-bold">نوع الوضعية:</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {stanceOptions.map(stance => {
+                        const label = stance === 'standing' ? 'واقف' : stance === 'sitting' ? 'جالس' : 'مستلقي';
+                        return (
+                          <button
+                            key={stance}
+                            type="button"
+                            onClick={() => {
+                              if (!state.sceneFamily) return;
+                              const hierarchy = normalizePoseHierarchy(state.sceneFamily, stance, undefined, undefined, undefined);
+                              setState(prev => ({
+                                ...prev,
+                                stanceCategory: hierarchy.stanceCategory,
+                                detailedPoseId: hierarchy.detailedPoseId,
+                                pose: hierarchy.pose,
+                                subScene: hierarchy.subScene,
+                                activity: getActivityOptions(state.sceneFamily!, hierarchy.subScene)[0]?.labelAR || prev.activity,
+                                selfieAngleAdvice: undefined,
+                                backgroundGeminiAdvice: undefined
+                              }));
+                            }}
+                            className={`py-2 rounded-xl text-xs border transition-colors ${activeStance === stance ? 'bg-[var(--accent)]/15 border-[var(--border-accent)] text-[var(--accent)] font-bold' : 'border-[var(--border)] text-[var(--text-muted)] hover:bg-white/5'}`}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <label className="text-[11px] text-[var(--text-muted)] block mb-1 font-bold">الوضعية التفصيلية:</label>
+                  <select
+                    value={selectedDetailedPose?.id || ''}
+                    onChange={e => {
+                      if (!state.sceneFamily || !activeStance) return;
+                      const hierarchy = normalizePoseHierarchy(
+                        state.sceneFamily,
+                        activeStance,
+                        e.target.value,
+                        undefined,
+                        state.subScene
+                      );
+                      setState(prev => ({
+                        ...prev,
+                        stanceCategory: hierarchy.stanceCategory,
+                        detailedPoseId: hierarchy.detailedPoseId,
+                        pose: hierarchy.pose,
+                        subScene: hierarchy.subScene,
+                        activity: getActivityOptions(state.sceneFamily!, hierarchy.subScene)[0]?.labelAR || prev.activity,
+                        selfieAngleAdvice: undefined,
+                        backgroundGeminiAdvice: undefined
+                      }));
+                    }}
+                    className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-xs text-[#F3EFE7] focus:outline-none focus:border-[var(--accent)] mb-3"
+                  >
+                    {detailedPoseOptions.map(item => (
+                      <option key={item.id} value={item.id}>{item.labelAR}</option>
+                    ))}
+                  </select>
+
+                  <label className="text-[11px] text-[var(--text-muted)] block mb-2 font-bold">الزاوية / المكان الفرعي المناسب:</label>
                   {state.sceneFamily === 'military-base' ? (
                     <div className="space-y-3">
                       {militarySubSceneGroups.map(group => (
@@ -2738,6 +2848,7 @@ export default function PhysFrameApp() {
                                 onClick={() => setState(prev => ({
                                   ...prev,
                                   subScene: location.labelAR,
+                                  activity: getActivityOptions('military-base', location.labelAR)[0]?.labelAR || prev.activity,
                                   selfieAngleAdvice: undefined,
                                   backgroundGeminiAdvice: undefined
                                 }))}
@@ -2750,23 +2861,24 @@ export default function PhysFrameApp() {
                         </div>
                       ))}
                       <div className="text-[9px] leading-relaxed text-[var(--text-muted)] px-1">
-                        كل زاوية تحمل حدودًا مستقلة للبشر والسيارات والفوضى والإضاءة، وتعيد حساب الخلفية والزاوية الذكية عند تغييرها.
+                        تظهر فقط الزوايا التي تستطيع تنفيذ الوضعية المختارة فعليًا، مع الأثاث ونقاط الملامسة المناسبة.
                       </div>
                     </div>
                   ) : (
                     <div className="flex flex-wrap gap-1.5">
-                      {activeFamily?.subScenes.map(sub => (
+                      {compatibleSubSceneLocations.map(location => (
                         <button
-                          key={sub}
+                          key={location.id}
                           onClick={() => setState(prev => ({
                             ...prev,
-                            subScene: sub,
+                            subScene: location.labelAR,
+                            activity: state.sceneFamily ? getActivityOptions(state.sceneFamily, location.labelAR)[0]?.labelAR || prev.activity : prev.activity,
                             selfieAngleAdvice: undefined,
                             backgroundGeminiAdvice: undefined
                           }))}
-                          className={`px-3 py-1.5 rounded-xl text-xs border transition-colors ${state.subScene === sub ? 'bg-[var(--accent)]/15 border-[var(--border-accent)] text-[var(--accent)] font-bold' : 'border-[var(--border)] text-[var(--text-muted)] hover:bg-white/5'}`}
+                          className={`px-3 py-1.5 rounded-xl text-xs border transition-colors ${state.subScene === location.labelAR ? 'bg-[var(--accent)]/15 border-[var(--border-accent)] text-[var(--accent)] font-bold' : 'border-[var(--border)] text-[var(--text-muted)] hover:bg-white/5'}`}
                         >
-                          {sub}
+                          {location.labelAR}
                         </button>
                       ))}
                     </div>
@@ -2803,32 +2915,9 @@ export default function PhysFrameApp() {
                     </optgroup>
                   </select>
 
-                  <label className="text-[11px] text-[var(--text-muted)] block mb-1 font-semibold">فيزياء الوضعية والملامسة:</label>
-                  <select
-                    value={state.pose}
-                    onChange={e => setState({
-                      ...state,
-                      pose: e.target.value,
-                      selfieAngleAdvice: undefined
-                    })}
-                    className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-xs text-[#F3EFE7] focus:outline-none focus:border-[var(--accent)]"
-                  >
-                    {sceneRecommendations.poses.length > 0 && (
-                      <optgroup label="★ مقترح لهذا المشهد">
-                        {sceneRecommendations.poses.map(p => (
-                          <option key={`recommended-pose-${p}`} value={p}>{p}</option>
-                        ))}
-                      </optgroup>
-                    )}
-                    <optgroup label="خيارات إضافية">
-                      {poseOptions
-                        .filter(p => !recommendedPoseSet.has(p))
-                        .map(p => <option key={p} value={p}>{p}</option>)}
-                    </optgroup>
-                  </select>
-
-                  <div className="mt-2.5 rounded-xl bg-black/20 border border-white/5 px-3 py-2 text-[9px] leading-relaxed text-[var(--text-muted)]">
-                    الاقتراحات الأولى تتغير تلقائيًا حسب الزاوية الفرعية المختارة، بما فيها الأثاث ونقاط الملامسة. النشاط يغيّر حركة الجسم واتجاه النظر ويعيد حساب زاوية السيلفي الذكية عند الحاجة.
+                  <div className="rounded-xl bg-black/20 border border-white/5 px-3 py-2 text-[9px] leading-relaxed text-[var(--text-muted)]">
+                    <div className="font-bold text-white mb-1">الوضعية المختارة: {selectedDetailedPose?.labelAR || state.pose}</div>
+                    النشاط مستقل عن الوضعية، بينما الأثاث ونقاط الملامسة والزاوية الفرعية تُحسم من اختيار الوضعية التفصيلية أعلاه.
                   </div>
                 </section>
 
@@ -2916,11 +3005,58 @@ export default function PhysFrameApp() {
                              </div>
                            </div>
 
+                           <div className="mb-2">
+                             <label className="text-[10px] text-[var(--text-muted)] block mb-1">ملابس الأشخاص</label>
+                             <select
+                               value={state.groupClothingPreset}
+                               onChange={e => updateGroupSelfieControls({
+                                 groupClothingPreset: e.target.value as GroupClothingPresetId
+                               })}
+                               className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white"
+                             >
+                               {groupClothingOptions.map(option => (
+                                 <option key={option.id} value={option.id}>{option.labelAR}</option>
+                               ))}
+                             </select>
+                           </div>
+
+                           <div className="grid grid-cols-2 gap-2 mb-2">
+                             <div>
+                               <label className="text-[10px] text-[var(--text-muted)] block mb-1">تنوع الملابس</label>
+                               <select
+                                 value={state.groupClothingDiversity}
+                                 onChange={e => updateGroupSelfieControls({
+                                   groupClothingDiversity: e.target.value as GroupClothingDiversity
+                                 })}
+                                 className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white"
+                               >
+                                 <option value="low">منخفض</option>
+                                 <option value="natural">طبيعي</option>
+                                 <option value="high">مرتفع</option>
+                               </select>
+                             </div>
+                             <div>
+                               <label className="text-[10px] text-[var(--text-muted)] block mb-1">تناسق الزي</label>
+                               <select
+                                 value={state.groupUniformConsistency}
+                                 onChange={e => updateGroupSelfieControls({
+                                   groupUniformConsistency: e.target.value as GroupUniformConsistency
+                                 })}
+                                 className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white"
+                               >
+                                 <option value="unified">موحد</option>
+                                 <option value="mostly-unified">شبه موحد</option>
+                                 <option value="naturally-varied">متنوع طبيعيًا</option>
+                               </select>
+                             </div>
+                           </div>
+
                            <div className="rounded-lg border border-[#2C5A43] bg-[#102219] px-3 py-2 text-[9px] leading-relaxed text-[#8FD2A6]">
                              <div className="font-bold mb-1">Anti-Cloning: {groupSelfiePreview.antiCloningPassed ? 'PASS ✓' : 'يحتاج تصحيح'}</div>
                              <div>التوزيع: {groupSelfiePreview.arrangement}</div>
                              <div className="mt-1">الحد الواقعي للمكان: {groupSelfiePreview.maxByLocation} · المسافة المقترحة: {groupSelfiePreview.recommendedDistanceCm}cm</div>
-                             <div className="mt-1">كل مرافق له وجه وشعر ولحية وطول وبنية وملابس مختلفة عن الآخرين، وصاحب الصورة المرجعية وحده مثبت الهوية ويحمل الهاتف.</div>
+                             <div className="mt-1">ملابس الأشخاص: {groupSelfiePreview.clothingPresetLabelAR} · التنوع: {groupSelfiePreview.clothingDiversity} · التناسق: {groupSelfiePreview.uniformConsistency}</div>
+                             <div className="mt-1">كل مرافق له وجه وشعر ولحية وطول وبنية مستقلة. ملابس المجموعة تخص المرافقين فقط ولا تغيّر ملابس صاحب الصورة المرجعية.</div>
                            </div>
                          </div>
                        )}
