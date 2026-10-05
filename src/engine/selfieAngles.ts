@@ -75,6 +75,8 @@ export interface SelfieAngleContext {
   backgroundActivity?: BackgroundActivityControl;
   backgroundPresence?: BackgroundPresenceControl;
   backgroundCompositionGoal?: BackgroundCompositionGoal;
+  groupSelfieEnabled?: boolean;
+  groupSelfieSize?: 2 | 3 | 4 | 5;
   mode?: SelfieAngleMode;
   advice?: SelfieAngleAdvice;
 }
@@ -365,6 +367,24 @@ function compatibilityScore(preset: SelfieAnglePreset, context: SelfieAngleConte
 
   if (context.framing === 'half-body' && preset.family === 'environmental') score += 25;
   if (context.framing === 'head-shoulders' && preset.id.includes('close')) score += 20;
+
+  if (context.groupSelfieEnabled) {
+    const size = context.groupSelfieSize ?? 2;
+    if (size === 2) {
+      if (preset.distanceCm >= 45) score += 24;
+      if (preset.family === 'off-axis' || preset.legacyAngle === 'slightly-off-center') score += 18;
+      if (preset.id.includes('close') && preset.distanceCm < 44) score -= 30;
+    } else if (size === 3) {
+      if (preset.distanceCm >= 53) score += 35;
+      if (preset.family === 'off-axis' || preset.family === 'environmental') score += 28;
+      if (preset.id.includes('close')) score -= 45;
+    } else {
+      if (preset.family === 'environmental') score += 55;
+      if (preset.distanceCm >= 64) score += 45;
+      if (preset.legacyAngle === 'slightly-off-center') score += 20;
+      if (preset.family === 'high' || preset.id.includes('close')) score -= 55;
+    }
+  }
 
   if (context.backgroundAutoAngle !== false) {
     const backgroundIntent = deriveAngleIntentFromBackground({
