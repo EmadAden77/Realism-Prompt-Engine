@@ -57,6 +57,8 @@ export interface BackgroundSceneContext {
   backgroundCompositionGoal?: BackgroundCompositionGoal;
   backgroundGeminiAssist?: boolean;
   backgroundGeminiAdvice?: BackgroundGeminiAdvice;
+  groupSelfieEnabled?: boolean;
+  groupSelfieSize?: 2 | 3 | 4 | 5;
   microLoc?: MicroLocation;
 }
 
@@ -258,6 +260,8 @@ export function deriveBackgroundRealism(
   const backgroundCompositionGoal = context.backgroundCompositionGoal ?? 'auto';
   const backgroundGeminiAssist = context.backgroundGeminiAssist ?? true;
   const geminiAdvice = context.backgroundGeminiAdvice;
+  const groupSelfieEnabled = context.groupSelfieEnabled ?? false;
+  const groupSelfieSize = context.groupSelfieSize ?? 2;
 
   const baseBg = microLoc?.backgroundElements ?? [];
   const activityText = microLoc?.activity ?? '';
@@ -345,6 +349,14 @@ export function deriveBackgroundRealism(
   if (microLoc?.humanDensityCap) {
     autoHumanDensity = capDensity(autoHumanDensity, microLoc.humanDensityCap);
     physicalHumanMax = capDensity(physicalHumanMax, microLoc.humanDensityCap);
+  }
+
+  if (groupSelfieEnabled) {
+    const groupBackgroundCap: BackgroundEntityDensity =
+      groupSelfieSize >= 4 ? 'none' :
+      groupSelfieSize === 3 ? 'sparse' : physicalHumanMax;
+    autoHumanDensity = capDensity(autoHumanDensity, groupBackgroundCap);
+    physicalHumanMax = capDensity(physicalHumanMax, groupBackgroundCap);
   }
 
   const vehicleCue = baseBg.some(item =>
@@ -673,6 +685,9 @@ export function deriveBackgroundRealism(
     if (geminiAdvice?.reasonAR?.length) {
       decisionReasons.push(...geminiAdvice.reasonAR.slice(0, 2));
     }
+  }
+  if (groupSelfieEnabled && groupSelfieSize >= 3) {
+    decisionReasons.push('تم تقليل البشر العشوائيين في الخلفية لأن أعضاء السيلفي الجماعي يشغلون مجال الرؤية الأساسي.');
   }
   if (cappedByFraming) {
     decisionReasons.push('تم خفض أحد اختيارات الخلفية لأن زاوية التصوير أو الكادر لا يسمحان به.');
