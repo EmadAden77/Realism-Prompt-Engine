@@ -340,6 +340,17 @@ for (const fam of families) {
         };
 
         const resolved = resolveScene(testState);
+        if (!resolved.validation.isValid) {
+          console.error('Combination debug:', JSON.stringify({
+            family: fam,
+            subScene: sub.id,
+            resolvedActivity: resolved.state.activity,
+            resolvedPose: resolved.state.pose,
+            lightingMode: resolved.state.lightingMode,
+            validation: resolved.validation,
+            plausibility: resolved.physicalState.plausibility
+          }, null, 2));
+        }
         assert(resolved.validation.isValid, `Combination ${fam} / ${sub.id} / ${time} / ${gMode} must be valid`);
         combinationsTested++;
       }
