@@ -586,8 +586,25 @@ const EXPRESSIONS = [
 
 const resolveConflicts = (state: SceneState): SceneState => {
   if (!state.sceneFamily || !SCENE_FAMILIES[state.sceneFamily]) return state;
-  // Execute pure deterministic physical scene resolution pipeline
-  const resolved = resolveScene(state as any);
+
+  // Legacy presets, curated vibes and random scenes can change pose directly while
+  // carrying a stale hierarchical ID from a previous scene. If label and ID no
+  // longer represent the same pose, let the physics engine migrate from the
+  // explicit pose label instead of forcing stale hierarchy state.
+  let normalizedInput = state;
+  if (state.detailedPoseId && state.stanceCategory) {
+    const selected = getDetailedPoseSuggestions(state.sceneFamily, state.stanceCategory)
+      .find(item => item.id === state.detailedPoseId);
+    if (selected && selected.labelAR !== state.pose) {
+      normalizedInput = {
+        ...state,
+        stanceCategory: undefined,
+        detailedPoseId: undefined
+      };
+    }
+  }
+
+  const resolved = resolveScene(normalizedInput as any);
   return resolved.state as SceneState;
 };
 
