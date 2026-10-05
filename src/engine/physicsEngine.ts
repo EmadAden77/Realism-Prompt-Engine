@@ -30,9 +30,16 @@ import {
   widenFramingForGroup,
   GroupSelfieSize,
   GroupSelfieRelationship,
+  GroupClothingPresetId,
+  GroupClothingDiversity,
+  GroupUniformConsistency,
   ResolvedGroupSelfie
 } from './groupSelfie';
-import { deriveMicroPhysics } from './sceneAffordances';
+import {
+  deriveMicroPhysics,
+  normalizePoseHierarchy,
+  StanceCategory
+} from './sceneAffordances';
 import type {
   OutfitWearStyle,
   GarmentWearContext,
@@ -70,6 +77,8 @@ export interface SceneState {
   framing: Framing;
   cameraAngle: CameraAngle;
   pose: string;
+  stanceCategory?: StanceCategory;
+  detailedPoseId?: string;
   outfitId: string;
   outfitWearStyle?: OutfitWearStyle;
   garmentWearContext?: GarmentWearContext;
@@ -122,6 +131,9 @@ export interface SceneState {
   groupSelfieEnabled?: boolean;
   groupSelfieSize?: GroupSelfieSize;
   groupSelfieRelationship?: GroupSelfieRelationship;
+  groupClothingPreset?: GroupClothingPresetId;
+  groupClothingDiversity?: GroupClothingDiversity;
+  groupUniformConsistency?: GroupUniformConsistency;
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -362,6 +374,34 @@ export function resolveScene(rawState: SceneState): ResolvedScene {
   let s: SceneState = { ...rawState };
 
   const familyId = s.sceneFamily || 'saudi-outdoor';
+
+  // Normalize the user-facing hierarchy in one pass:
+  // place -> stance -> detailed pose -> compatible micro-location.
+  const poseHierarchy = normalizePoseHierarchy(
+    familyId,
+    s.stanceCategory,
+    s.detailedPoseId,
+    s.pose,
+    s.subScene
+  );
+  if (
+    s.stanceCategory !== poseHierarchy.stanceCategory ||
+    s.detailedPoseId !== poseHierarchy.detailedPoseId ||
+    s.pose !== poseHierarchy.pose ||
+    s.subScene !== poseHierarchy.subScene
+  ) {
+    issues.push({
+      type: 'contradiction',
+      field: 'poseHierarchy',
+      description: 'Stored pose/stance/micro-location combination was stale or physically incompatible.',
+      autoResolvedBy: 'Normalized stance, detailed pose and micro-location together in one pass.'
+    });
+    s.stanceCategory = poseHierarchy.stanceCategory;
+    s.detailedPoseId = poseHierarchy.detailedPoseId;
+    s.pose = poseHierarchy.pose;
+    s.subScene = poseHierarchy.subScene;
+  }
+
   const microLoc = getMicroLocation(familyId, s.subScene);
   const isOutdoor = microLoc ? microLoc.isOutdoor : (familyId === 'saudi-outdoor');
   const isNight = s.timeOfDay === 'night';
@@ -372,6 +412,9 @@ export function resolveScene(rawState: SceneState): ResolvedScene {
       enabled: true,
       requestedSize: s.groupSelfieSize ?? 2,
       relationship: s.groupSelfieRelationship ?? 'auto',
+      clothingPreset: s.groupClothingPreset ?? 'auto',
+      clothingDiversity: s.groupClothingDiversity ?? 'natural',
+      uniformConsistency: s.groupUniformConsistency ?? 'naturally-varied',
       familyId,
       subScene: s.subScene,
       framing: s.framing,
@@ -653,6 +696,25 @@ export function validateScene(inputState: SceneState | ResolvedScene): Validatio
   const issues: ValidationIssue[] = [];
 
   const familyId = state.sceneFamily || 'saudi-outdoor';
+  const hierarchyCheck = normalizePoseHierarchy(
+    familyId,
+    state.stanceCategory,
+    state.detailedPoseId,
+    state.pose,
+    state.subScene
+  );
+  if (
+    hierarchyCheck.stanceCategory !== state.stanceCategory ||
+    hierarchyCheck.detailedPoseId !== state.detailedPoseId ||
+    hierarchyCheck.pose !== state.pose ||
+    hierarchyCheck.subScene !== state.subScene
+  ) {
+    issues.push({
+      type: 'contradiction',
+      field: 'poseHierarchy',
+      description: 'Selected stance, detailed pose and micro-location are not mutually compatible.'
+    });
+  }
   const microLoc = getMicroLocation(familyId, state.subScene);
   const isOutdoor = microLoc ? microLoc.isOutdoor : (familyId === 'saudi-outdoor');
   const isNight = state.timeOfDay === 'night';
@@ -663,6 +725,9 @@ export function validateScene(inputState: SceneState | ResolvedScene): Validatio
       enabled: true,
       requestedSize: state.groupSelfieSize ?? 2,
       relationship: state.groupSelfieRelationship ?? 'auto',
+      clothingPreset: state.groupClothingPreset ?? 'auto',
+      clothingDiversity: state.groupClothingDiversity ?? 'natural',
+      uniformConsistency: state.groupUniformConsistency ?? 'naturally-varied',
       familyId,
       subScene: state.subScene,
       framing: state.framing,
