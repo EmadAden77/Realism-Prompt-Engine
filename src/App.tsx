@@ -1013,7 +1013,10 @@ const buildBackgroundReasoningKey = (state: SceneState): string => JSON.stringif
   backgroundActivity: state.backgroundActivity,
   backgroundPresence: state.backgroundPresence,
   backgroundCompositionGoal: state.backgroundCompositionGoal,
-  backgroundAutoAngle: state.backgroundAutoAngle
+  backgroundAutoAngle: state.backgroundAutoAngle,
+  groupSelfie: state.groupSelfieEnabled
+    ? { size: state.groupSelfieSize, relationship: state.groupSelfieRelationship }
+    : 'off'
 });
 
 const buildSelfieAngleReasoningKey = (state: SceneState): string => JSON.stringify({
@@ -1245,7 +1248,8 @@ export default function PhysFrameApp() {
         cameraAngleMode: (patch.groupSelfieEnabled === true || prev.groupSelfieEnabled)
           ? 'gemini-smart'
           : prev.cameraAngleMode,
-        selfieAngleAdvice: undefined
+        selfieAngleAdvice: undefined,
+        backgroundGeminiAdvice: undefined
       };
       return next.sceneFamily ? resolveConflicts(next) : next;
     });
@@ -2806,7 +2810,13 @@ export default function PhysFrameApp() {
                       ].map(t => (
                         <button
                           key={t.id}
-                          onClick={() => setState({ ...state, captureType: t.id as CaptureType })}
+                          onClick={() => setState({
+                           ...state,
+                           captureType: t.id as CaptureType,
+                           groupSelfieEnabled: t.id === 'front-selfie' ? state.groupSelfieEnabled : false,
+                           selfieAngleAdvice: undefined,
+                           backgroundGeminiAdvice: undefined
+                         })}
                           className={`flex-1 py-2 px-1 rounded-xl text-xs border text-center transition-all ${state.captureType === t.id ? 'bg-[var(--accent)]/15 border-[var(--accent)] text-[var(--accent)] font-bold' : 'border-[var(--border)] text-[var(--text-muted)] hover:bg-white/5'}`}
                         >
                           {t.l}
