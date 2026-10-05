@@ -1,4 +1,5 @@
 import { OUTFITS } from '../data/clothingOutfits';
+import { MICRO_LOCATIONS } from '../data/microLocations';
 import {
   describeAttireControls,
   getActivityDefinition,
@@ -6,6 +7,7 @@ import {
   getAttireAwareOutfitPrompt,
   getOutfitCapabilities,
   getPoseOptions,
+  getSceneRecommendations,
   inferGarmentWearContext
 } from './activityAttire';
 
@@ -87,5 +89,34 @@ console.log('▶ Activity/Attire Test 8: expanded pose library preserves legacy 
 assert(getPoseOptions('military-base').includes('واقف بثبات'), 'Military pose library must preserve legacy standing pose');
 assert(getPoseOptions('gym').includes('يحمل زجاجة ماء'), 'Gym pose library must preserve legacy bottle pose');
 assert(getPoseOptions('saudi-outdoor').includes('مستند بظهره على الجدار'), 'Outdoor pose library must preserve legacy wall-lean pose');
+
+
+console.log('▶ Activity/Attire Test 9: selected micro-location changes recommendation order');
+const meetingRecommendations = getSceneRecommendations('military-base', 'غرفة اجتماعات عادية');
+assert(meetingRecommendations.poses[0].includes('طاولة الاجتماعات'), 'Meeting room must suggest chair/table contact explicitly');
+assert(meetingRecommendations.activities.includes('يراجع ملفًا'), 'Meeting room must suggest a plausible meeting-room activity');
+
+const cafeRecommendations = getSceneRecommendations('saudi-outdoor', 'أمام مقهى محلي');
+assert(cafeRecommendations.activities[0] === 'جالس في المقهى', 'Cafe must prioritize cafe-specific activity');
+assert(cafeRecommendations.poses.some(item => item.includes('طاولة المقهى')), 'Cafe must suggest table/chair geometry');
+
+const bedRecommendations = getSceneRecommendations('bedroom', 'مستلقٍ على السرير');
+assert(bedRecommendations.poses[0].includes('السرير'), 'Bed scene must prioritize bed-contact pose');
+
+const exteriorCarRecommendations = getSceneRecommendations('car', 'بجانب باب السائق');
+assert(exteriorCarRecommendations.poses[0].includes('السيارة'), 'Exterior car scene must not default to an in-cabin seated pose');
+
+console.log('▶ Activity/Attire Test 10: every micro-location exposes contextual suggestions');
+for (const family of Object.keys(MICRO_LOCATIONS) as Array<keyof typeof MICRO_LOCATIONS>) {
+  for (const location of MICRO_LOCATIONS[family]) {
+    const recommendations = getSceneRecommendations(family, location.labelAR);
+    assert(recommendations.activities.length >= 3, `${family}/${location.id} must expose at least 3 activity suggestions`);
+    assert(recommendations.poses.length >= 2, `${family}/${location.id} must expose at least 2 pose suggestions`);
+    const activityOptions = getActivityOptions(family, location.labelAR).map(item => item.labelAR);
+    const poseOptions = getPoseOptions(family, location.labelAR);
+    assert(activityOptions[0] === recommendations.activities[0], `${family}/${location.id} must place contextual activity first`);
+    assert(poseOptions[0] === recommendations.poses[0], `${family}/${location.id} must place contextual pose first`);
+  }
+}
 
 console.log('✓ Activity + Attire controls regression suite passed.');
