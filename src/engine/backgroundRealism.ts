@@ -270,8 +270,11 @@ export function deriveBackgroundRealism(
   const isPark = containsAny(subScene, ['حديقة', 'ممشى']);
   const isStreet = containsAny(subScene, ['شارع', 'طريق', 'رصيف', 'زاوية']);
   const isPassage = containsAny(subScene, ['ممر جانبي', 'بين المباني']);
-  const isMilitaryPublic = familyId === 'military-base' &&
-    containsAny(subScene, ['ممر', 'مدخل', 'انتظار', 'ساحة']);
+  const isMilitaryPublic = familyId === 'military-base' && (
+    microLoc?.humanDensityCap
+      ? microLoc.humanDensityCap !== 'none'
+      : containsAny(subScene, ['ممر', 'مدخل', 'انتظار', 'ساحة', 'موقف', 'درج'])
+  );
   const isGymPublic = familyId === 'gym';
 
   let visibilityClass: BackgroundVisibilityClass = 'limited';
@@ -339,6 +342,11 @@ export function deriveBackgroundRealism(
     physicalHumanMax = capDensity(physicalHumanMax, 'sparse');
   }
 
+  if (microLoc?.humanDensityCap) {
+    autoHumanDensity = capDensity(autoHumanDensity, microLoc.humanDensityCap);
+    physicalHumanMax = capDensity(physicalHumanMax, microLoc.humanDensityCap);
+  }
+
   const vehicleCue = baseBg.some(item =>
     /car|vehicle|sedan|SUV|parking|road|asphalt|driveway|curb|street/i.test(item)
   ) || isParking || isStreet || isCafe || isShop;
@@ -359,17 +367,26 @@ export function deriveBackgroundRealism(
     }
   }
 
+  if (microLoc?.vehicleDensityCap) {
+    autoVehicleDensity = capDensity(autoVehicleDensity, microLoc.vehicleDensityCap);
+    physicalVehicleMax = capDensity(physicalVehicleMax, microLoc.vehicleDensityCap);
+  }
+
   const defaultDisorder: BackgroundDisorderLevel =
     familyId === 'saudi-outdoor' || familyId === 'gym' || familyId === 'military-base'
       ? 'light'
       : 'very-clean';
 
-  const physicalDisorderMax: BackgroundDisorderLevel =
+  let physicalDisorderMax: BackgroundDisorderLevel =
     framingClass === 'tight'
       ? 'light'
       : (isPrivateInterior || isCarInterior)
         ? 'light'
         : 'moderate';
+
+  if (microLoc?.disorderCap) {
+    physicalDisorderMax = capDisorder(physicalDisorderMax, microLoc.disorderCap);
+  }
 
   let geminiApplied = false;
 
@@ -474,6 +491,10 @@ export function deriveBackgroundRealism(
       ? (presenceLevel === 'strong' ? 'background-priority' : presenceLevel === 'low' ? 'face-priority' : 'balanced')
       : backgroundCompositionGoal;
 
+  if (backgroundCompositionGoal === 'auto' && microLoc?.cameraBias) {
+    compositionGoal = microLoc.cameraBias;
+  }
+
   if (framingClass === 'tight' && compositionGoal === 'background-priority') {
     compositionGoal = 'balanced';
   }
@@ -489,7 +510,17 @@ export function deriveBackgroundRealism(
     } else if (isPark) {
       humanBehavior.push('one or two distant neighborhood pedestrians using the path naturally, small in scale and not posing for the camera');
     } else if (familyId === 'military-base') {
-      humanBehavior.push('one administrative colleague crossing the corridor or standing briefly near a doorway, not looking into the selfie lens');
+      if (microLoc?.zone === 'parking') {
+        humanBehavior.push('one distant staff member walking naturally toward or away from a parked car, secondary to the subject and not camera-aware');
+      } else if (microLoc?.zone === 'exterior' || microLoc?.zone === 'entrance') {
+        humanBehavior.push('one distant administrative colleague entering, leaving, or crossing the walkway naturally, never posed toward the selfie');
+      } else if (microLoc?.zone === 'break') {
+        humanBehavior.push('at most one colleague quietly seated or preparing a drink in the secondary background, not looking into the camera');
+      } else if (microLoc?.zone === 'office' || microLoc?.zone === 'meeting' || microLoc?.zone === 'waiting') {
+        humanBehavior.push('at most one colleague quietly working, waiting, or passing in the deeper background where the room layout actually allows it');
+      } else {
+        humanBehavior.push('one administrative colleague crossing the passage or moving between work areas, small in scale and not looking into the selfie lens');
+      }
     } else if (familyId === 'gym') {
       humanBehavior.push('one other gym member resting, walking between equipment, or adjusting a machine in the secondary background');
     } else {
@@ -630,6 +661,8 @@ export function deriveBackgroundRealism(
   }
   if (backgroundCompositionGoal !== 'auto') {
     decisionReasons.push(`هدف التكوين: ${compositionGoal}.`);
+  } else if (microLoc?.cameraBias) {
+    decisionReasons.push(`الزاوية الفرعية تضبط التكوين تلقائيًا على: ${compositionGoal}.`);
   }
   if (backgroundActivity !== 'auto') {
     decisionReasons.push(`نشاط المشهد: ${activityLevel}.`);
