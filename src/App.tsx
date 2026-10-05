@@ -313,51 +313,60 @@ const SCENE_FAMILIES: Record<SceneFamilyId, {
   'military-base': {
     labelAR: 'مبنى عمل عسكري',
     subScenes: MICRO_LOCATIONS['military-base'].map(m => m.labelAR),
-    activities: getActivityOptions('military-base' as SceneFamilyId).map(item => item.labelAR),
-    poses: getPoseOptions('military-base' as SceneFamilyId),
+    activities: [],
+    poses: [],
     allowedLighting: ['إضاءة مكتب فلورسنت', 'ضوء نهاري من النافذة', 'إضاءة ممرات متوازية', 'شمس الظهر'],
     environmentRealism: ['رسمية ومنظمة', 'نشطة (عمل يومي)']
   },
   'saudi-outdoor': {
     labelAR: 'أماكن سعودية',
     subScenes: MICRO_LOCATIONS['saudi-outdoor'].map(m => m.labelAR),
-    activities: getActivityOptions('saudi-outdoor' as SceneFamilyId).map(item => item.labelAR),
-    poses: getPoseOptions('saudi-outdoor' as SceneFamilyId),
+    activities: [],
+    poses: [],
     allowedLighting: ['ضوء نهاري طبيعي', 'شمس الظهر', 'ساعة ذهبية (شروق/غروب)', 'إنارة شارع دافئة', 'إنارة نيون تجارية متناثرة'],
     environmentRealism: ['هادئ', 'طبيعي', 'نشط']
   },
   'car': {
     labelAR: 'السيارة',
     subScenes: MICRO_LOCATIONS['car'].map(m => m.labelAR),
-    activities: getActivityOptions('car' as SceneFamilyId).map(item => item.labelAR),
-    poses: getPoseOptions('car' as SceneFamilyId),
+    activities: [],
+    poses: [],
     allowedLighting: ['ضوء نهاري طبيعي', 'شمس الظهر', 'إضاءة داخل السيارة', 'إضاءة الشارع عبر زجاج السيارة', 'إضاءة شاشة الهاتف فقط'],
     environmentRealism: ['مرتبة', 'طبيعية', 'مستخدمة يوميًا']
   },
   'living-room': {
     labelAR: 'صالة منزلية',
     subScenes: MICRO_LOCATIONS['living-room'].map(m => m.labelAR),
-    activities: getActivityOptions('living-room' as SceneFamilyId).map(item => item.labelAR),
-    poses: getPoseOptions('living-room' as SceneFamilyId),
+    activities: [],
+    poses: [],
     allowedLighting: ['ضوء نهاري طبيعي', 'إضاءة سقف', 'إنارة ليلية مختلطة', 'إضاءة شاشة الهاتف فقط'],
     environmentRealism: ['مرتبة', 'طبيعية', 'مستخدمة يوميًا']
   },
   'bedroom': {
     labelAR: 'غرفة نوم',
     subScenes: MICRO_LOCATIONS['bedroom'].map(m => m.labelAR),
-    activities: getActivityOptions('bedroom' as SceneFamilyId).map(item => item.labelAR),
-    poses: getPoseOptions('bedroom' as SceneFamilyId),
+    activities: [],
+    poses: [],
     allowedLighting: ['ضوء نهاري طبيعي', 'إضاءة سقف', 'إضاءة أباجورة دافئة', 'إضاءة شاشة الهاتف فقط'],
     environmentRealism: ['مرتبة', 'طبيعية', 'مستخدمة يوميًا']
   },
   'gym': {
     labelAR: 'نادي رياضي',
     subScenes: MICRO_LOCATIONS['gym'].map(m => m.labelAR),
-    activities: getActivityOptions('gym' as SceneFamilyId).map(item => item.labelAR),
-    poses: getPoseOptions('gym' as SceneFamilyId),
+    activities: [],
+    poses: [],
     allowedLighting: ['إضاءة النادي الرياضي', 'ضوء نهاري طبيعي'],
     environmentRealism: ['هادئ', 'طبيعي', 'نشط']
   }
+};
+
+const getSceneAwareDefaults = (familyId: SceneFamilyId, subScene: string) => {
+  const microLoc = getMicroLocation(familyId, subScene);
+  const activities = getSuggestedActivities(familyId, subScene, microLoc);
+  const activity = activities[0]?.labelAR || 'واقف بشكل طبيعي';
+  const poses = getSuggestedPoses(familyId, subScene, activity, microLoc);
+  const pose = poses[0]?.labelAR || 'واقف باسترخاء طبيعي';
+  return { microLoc, activities, activity, poses, pose };
 };
 
 const HAIRSTYLES = [
@@ -1547,15 +1556,19 @@ export default function PhysFrameApp() {
 
   const handleSceneSelect = (familyId: SceneFamilyId) => {
     const family = SCENE_FAMILIES[familyId];
+    const subScene = family.subScenes[0];
+    const sceneDefaults = getSceneAwareDefaults(familyId, subScene);
     setState({
       ...state,
       sceneFamily: familyId,
-      subScene: family.subScenes[0],
-      activity: getActivityOptions(familyId, family.subScenes[0])[0]?.labelAR || family.activities[0],
-      pose: getPoseOptions(familyId)[0] || family.poses[0],
+      subScene,
+      activity: sceneDefaults.activity,
+      pose: sceneDefaults.pose,
       lightingMode: family.allowedLighting[0],
       environmentRealism: family.environmentRealism[0],
-      outfitId: state.outfitId || 'thobe_white_summer'
+      outfitId: state.outfitId || 'thobe_white_summer',
+      selfieAngleAdvice: undefined,
+      backgroundGeminiAdvice: undefined
     });
   };
 
@@ -1780,12 +1793,19 @@ export default function PhysFrameApp() {
       : ['front-selfie', 'third-person-candid'];
     const chosenCapture = captureOptions[Math.floor(Math.random() * captureOptions.length)];
 
+    const randomSubScene = family.subScenes[Math.floor(Math.random() * family.subScenes.length)];
+    const randomMicroLoc = getMicroLocation(randomFamilyId, randomSubScene);
+    const randomActivities = getSuggestedActivities(randomFamilyId, randomSubScene, randomMicroLoc);
+    const randomActivity = randomActivities[Math.floor(Math.random() * randomActivities.length)]?.labelAR || 'واقف بشكل طبيعي';
+    const randomPoses = getSuggestedPoses(randomFamilyId, randomSubScene, randomActivity, randomMicroLoc);
+    const randomPose = randomPoses[Math.floor(Math.random() * randomPoses.length)]?.labelAR || 'واقف باسترخاء طبيعي';
+
     let rawState: SceneState = {
       ...state,
       sceneFamily: randomFamilyId,
-      subScene: family.subScenes[Math.floor(Math.random() * family.subScenes.length)],
-      activity: family.activities[Math.floor(Math.random() * family.activities.length)],
-      pose: family.poses[Math.floor(Math.random() * family.poses.length)],
+      subScene: randomSubScene,
+      activity: randomActivity,
+      pose: randomPose,
       lightingMode: family.allowedLighting[Math.floor(Math.random() * family.allowedLighting.length)],
       environmentRealism: family.environmentRealism[Math.floor(Math.random() * family.environmentRealism.length)],
       outfitId: availableOutfits[Math.floor(Math.random() * availableOutfits.length)]?.id || availableOutfits[0]?.id || 'thobe_white_summer',
@@ -1990,11 +2010,13 @@ export default function PhysFrameApp() {
         else if (/نادي|جيم|تمرين/.test(directorVibeInput)) chosenFamily = 'gym';
       }
       const fam = SCENE_FAMILIES[chosenFamily] || SCENE_FAMILIES['saudi-outdoor'];
+      const fallbackSubScene = fam.subScenes[0];
+      const fallbackScene = getSceneAwareDefaults(chosenFamily, fallbackSubScene);
       const fallbackData: DirectedSceneResult = {
         sceneFamily: chosenFamily,
-        subScene: fam.subScenes[0],
-        activity: fam.activities[0],
-        pose: fam.poses[0],
+        subScene: fallbackSubScene,
+        activity: fallbackScene.activity,
+        pose: fallbackScene.pose,
         captureType: 'front-selfie',
         framing: 'chest-up',
         cameraAngle: 'eye-level',
