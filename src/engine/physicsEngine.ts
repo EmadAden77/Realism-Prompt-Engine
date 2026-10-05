@@ -966,6 +966,8 @@ function calculateDetailedPhysicalState(
     backgroundCompositionGoal: state.backgroundCompositionGoal,
     backgroundGeminiAssist: state.backgroundGeminiAssist,
     backgroundGeminiAdvice: state.backgroundGeminiAdvice,
+    groupSelfieEnabled: state.groupSelfieEnabled,
+    groupSelfieSize: state.groupSelfieSize,
     microLoc
   });
 
