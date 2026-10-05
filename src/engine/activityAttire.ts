@@ -1,5 +1,5 @@
 import type { OutfitItem } from '../data/clothingOutfits';
-import type { SceneFamilyId } from '../data/microLocations';
+import { getMicroLocation, type SceneFamilyId } from '../data/microLocations';
 
 export type OutfitWearStyle =
   | 'natural-neat'
@@ -288,10 +288,125 @@ const POSE_OPTIONS: Record<SceneFamilyId, string[]> = {
   ]
 };
 
-export function getActivityOptions(familyId: SceneFamilyId, _subScene = ''): ActivityDefinition[] {
-  const merged = [...COMMON_ACTIVITIES.filter(item => item.families.includes(familyId)), ...FAMILY_ACTIVITIES[familyId]];
+export interface SceneRecommendations {
+  activities: string[];
+  poses: string[];
+}
+
+type SceneRecommendationRule = {
+  family: SceneFamilyId;
+  match: RegExp;
+  activities: string[];
+  poses: string[];
+};
+
+const FAMILY_SCENE_RECOMMENDATIONS: Record<SceneFamilyId, SceneRecommendations> = {
+  'bedroom': {
+    activities: ['جالس بهدوء', 'يستخدم الهاتف', 'يقرأ رسالة'],
+    poses: ['واقف بثبات', 'جالس على حافة السرير', 'جالس على كرسي']
+  },
+  'living-room': {
+    activities: ['جالس بهدوء', 'يشرب قهوة', 'يستخدم الهاتف'],
+    poses: ['جالس على الكنبة', 'جالس على كرسي', 'واقف بثبات']
+  },
+  'saudi-outdoor': {
+    activities: ['واقف بشكل طبيعي', 'يمشي بهدوء', 'يستخدم الهاتف'],
+    poses: ['واقف بثبات', 'يمشي بخطوات طبيعية', 'واقف بجانب مدخل']
+  },
+  'gym': {
+    activities: ['يستريح بين الجولات', 'يشرب ماء', 'بعد التمرين'],
+    poses: ['واقف بجانب الأجهزة', 'جالس على مقعد التمرين', 'جالس للاستراحة']
+  },
+  'car': {
+    activities: ['جالس بهدوء داخل السيارة', 'ينظر للطريق', 'يستخدم الهاتف'],
+    poses: ['جالس باسترخاء في المقعد', 'جالس في مقعد السائق', 'متكئ على مسند المقعد']
+  },
+  'military-base': {
+    activities: ['عمل مكتبي', 'يستخدم الهاتف', 'ينتظر'],
+    poses: ['واقف باستقامة', 'جالس خلف المكتب', 'واقف بثبات']
+  }
+};
+
+const SCENE_RECOMMENDATION_RULES: SceneRecommendationRule[] = [
+  // Bedroom: furniture/contact surface drives the suggestion.
+  { family: 'bedroom', match: /مستلق|مستلقي/, activities: ['مستلقي بشكل طبيعي', 'يقرأ رسالة', 'ينظر للهاتف'], poses: ['مستلقي على السرير', 'نصف مستلقٍ على السرير', 'جالس على حافة السرير'] },
+  { family: 'bedroom', match: /حافة السرير|فوق السرير|بجانب السرير|أمام السرير|رأس السرير/, activities: ['جالس على حافة السرير', 'يقرأ رسالة', 'يستخدم الهاتف'], poses: ['جالس على حافة السرير', 'جالس فوق السرير', 'نصف مستلقٍ على السرير'] },
+  { family: 'bedroom', match: /مرآة/, activities: ['يلتقط سيلفي', 'يراجع الصورة', 'يرتب أغراضه'], poses: ['واقف أمام المرآة', 'واقف بثبات'] },
+  { family: 'bedroom', match: /كرسي/, activities: ['جالس بهدوء', 'يقرأ رسالة', 'يستخدم الهاتف'], poses: ['جالس على كرسي', 'واقف بجانب الكرسي'] },
+  { family: 'bedroom', match: /دولاب/, activities: ['يرتب أغراضه', 'واقف فقط', 'ينظر للهاتف'], poses: ['واقف أمام الدولاب', 'واقف بجانب الدولاب'] },
+  { family: 'bedroom', match: /ستائر|باب|جدار|زاوية|وسط الغرفة|بين السرير والدولاب/, activities: ['واقف بشكل طبيعي', 'ينظر حوله', 'يستخدم الهاتف'], poses: ['واقف بثبات', 'مستند على الجدار', 'واقف بجانب السرير'] },
+
+  // Living room.
+  { family: 'living-room', match: /كنبة/, activities: ['جالس على الكنبة', 'مسترخٍ على الكنبة', 'يشرب قهوة'], poses: ['جالس على الكنبة', 'مسترخٍ على الكنبة', 'جالس على طرف الكنبة'] },
+  { family: 'living-room', match: /طاولة/, activities: ['يشرب قهوة', 'يستخدم لابتوب', 'يقرأ'], poses: ['جالس على كرسي أمام طاولة الصالة', 'مستند على طاولة', 'واقف بجانب طاولة الصالة'] },
+  { family: 'living-room', match: /نافذة|ستارة/, activities: ['ينظر بعيدًا', 'يشرب قهوة', 'يستخدم الهاتف'], poses: ['واقف بجانب النافذة', 'جالس على كرسي', 'واقف بثبات'] },
+  { family: 'living-room', match: /كرسي منفرد/, activities: ['جالس بهدوء', 'يقرأ', 'يستخدم الهاتف'], poses: ['جالس على كرسي', 'واقف بجانب الكرسي'] },
+  { family: 'living-room', match: /تلفاز/, activities: ['جالس بهدوء', 'يستخدم الهاتف', 'ينظر حوله'], poses: ['جالس على الكنبة', 'جالس على كرسي', 'واقف بثبات'] },
+  { family: 'living-room', match: /مدخل|باب|ممر|منتصف|زاوية|جدار|تكييف/, activities: ['واقف بشكل طبيعي', 'يمشي بهدوء', 'يستخدم الهاتف'], poses: ['واقف بثبات', 'يمشي بخطوات طبيعية', 'مستند على الجدار'] },
+
+  // Ordinary Saudi places.
+  { family: 'saudi-outdoor', match: /مقهى/, activities: ['جالس في المقهى', 'يمسك كوب قهوة', 'ينتظر الطلب'], poses: ['جالس على كرسي أمام طاولة المقهى', 'جالس على كرسي', 'واقف بجانب مدخل المقهى'] },
+  { family: 'saudi-outdoor', match: /محلات|بقالة|خدمات/, activities: ['ينتظر الطلب', 'يستخدم الهاتف', 'ينظر حوله'], poses: ['واقف بجانب المدخل', 'واقف بثبات', 'جالس على كرسي انتظار'] },
+  { family: 'saudi-outdoor', match: /مدخل فيلا|سور منزل|أمام سور/, activities: ['واقف بشكل طبيعي', 'يستخدم الهاتف', 'ينظر بعيدًا'], poses: ['واقف بجانب مدخل', 'مستند بظهره على الجدار', 'واقف بثبات'] },
+  { family: 'saudi-outdoor', match: /موقف|مظلل/, activities: ['ينتظر السيارة', 'يستخدم الهاتف', 'ينظر حوله'], poses: ['واقف بثبات', 'واقف بجانب سيارة متوقفة', 'يمشي بخطوات طبيعية'] },
+  { family: 'saudi-outdoor', match: /حديقة|ممشى|ساحة/, activities: ['يمشي بهدوء', 'ينظر حوله', 'يستخدم الهاتف'], poses: ['يمشي بخطوات طبيعية', 'جالس على مقعد خارجي', 'واقف بثبات'] },
+  { family: 'saudi-outdoor', match: /شارع|رصيف|طريق|ممر جانبي/, activities: ['يمشي بهدوء', 'واقف على الرصيف', 'يراقب الحركة'], poses: ['يمشي بخطوات طبيعية', 'واقف بثبات', 'مستند بظهره على الجدار'] },
+  { family: 'saudi-outdoor', match: /منطقة انتظار/, activities: ['ينتظر', 'يقرأ رسالة', 'يستخدم الهاتف'], poses: ['جالس على كرسي انتظار', 'واقف بثبات'] },
+
+  // Gym.
+  { family: 'gym', match: /مرآة/, activities: ['يلتقط سيلفي', 'يراجع الصورة', 'بعد التمرين'], poses: ['واقف أمام المرآة', 'واقف بجانب المرآة'] },
+  { family: 'gym', match: /مقعد تمارين|استراحة/, activities: ['يستريح بين الجولات', 'يشرب ماء', 'يلتقط أنفاسه'], poses: ['جالس على مقعد التمرين', 'جالس للاستراحة', 'واقف بجانب الأجهزة'] },
+  { family: 'gym', match: /أثقال|دمبل|جهاز|تمارين حرة|معدات/, activities: ['قبل التمرين', 'يستريح بين الجولات', 'بعد التمرين'], poses: ['واقف بجانب الأجهزة', 'مستند على جهاز', 'جالس على مقعد التمرين'] },
+  { family: 'gym', match: /إحماء|تمدد/, activities: ['يتمدد بخفة', 'قبل التمرين', 'يلتقط أنفاسه'], poses: ['واقف بجانب الأجهزة', 'جالس للاستراحة'] },
+  { family: 'gym', match: /خزائن|غرفة الملابس|مدخل|نافذة|ممر/, activities: ['يشرب ماء', 'يمسك منشفة', 'يستخدم الهاتف'], poses: ['واقف بثبات', 'جالس للاستراحة', 'واقف ممسكًا بزجاجة ماء'] },
+
+  // Vehicle: distinguish cabin seats from exterior positions.
+  { family: 'car', match: /مقعد السائق|أمام المقود|قرب النافذة|الباب مغلق|الباب مفتوح/, activities: ['جالس في مقعد السائق', 'ممسك المقود', 'ينظر للطريق'], poses: ['جالس في مقعد السائق', 'مستند على المقود', 'متكئ على مسند المقعد'] },
+  { family: 'car', match: /المقعد الأمامي للراكب/, activities: ['جالس في مقعد الراكب', 'يستخدم الهاتف', 'ينظر للطريق'], poses: ['جالس في مقعد الراكب', 'جالس باسترخاء في المقعد', 'متكئ على مسند المقعد'] },
+  { family: 'car', match: /المقعد الخلفي|بين المقعدين/, activities: ['جالس في المقعد الخلفي', 'يقرأ رسالة', 'ينظر للطريق'], poses: ['جالس في المقعد الخلفي', 'جالس باسترخاء في المقعد'] },
+  { family: 'car', match: /بجانب السيارة|باب السائق|أمام السيارة|الرفرف|الجزء الخلفي|صندوق السيارة|موقف|رصيف|سور/, activities: ['واقف بشكل طبيعي', 'يستخدم الهاتف', 'ينظر حوله'], poses: ['واقف بجانب السيارة', 'واقف عند باب السائق', 'مستند بخفة على السيارة'] },
+
+  // Military workplace: make furniture/contact explicit instead of generic.
+  { family: 'military-base', match: /غرفة اجتماعات|طاولة الاجتماعات/, activities: ['يراجع ملفًا', 'ينتظر', 'يتحدث مع شخص خارج الكادر'], poses: ['جالس على كرسي أمام طاولة الاجتماعات', 'واقف بجانب طاولة الاجتماعات', 'واقف باستقامة'] },
+  { family: 'military-base', match: /منطقة انتظار|كراسي انتظار/, activities: ['ينتظر موعدًا', 'يقرأ رسالة', 'يستخدم الهاتف'], poses: ['جالس على كرسي انتظار', 'واقف بجانب كراسي الانتظار', 'واقف بثبات'] },
+  { family: 'military-base', match: /خلف مكتب العمل|مكتب إداري|مكتب موظف|مكتب مشترك|مكتب جانبي|بجانب مكتب العمل/, activities: ['عمل مكتبي', 'يراجع ملفًا', 'يستخدم الهاتف'], poses: ['جالس على كرسي المكتب أمام سطح المكتب', 'جالس خلف المكتب', 'واقف بجانب المكتب'] },
+  { family: 'military-base', match: /ممر/, activities: ['يمشي داخل المبنى', 'يقف في الممر', 'يستخدم الهاتف'], poses: ['يمشي في الممر', 'واقف في الممر', 'واقف بثبات'] },
+  { family: 'military-base', match: /درج|بسطة|درابزين/, activities: ['يمشي داخل المبنى', 'ينتظر', 'ينظر حوله'], poses: ['واقف عند درابزين الدرج', 'يمشي على الدرج', 'واقف بثبات'] },
+  { family: 'military-base', match: /موقف|سيارة متوقفة|صفوف السيارات/, activities: ['ينتظر السيارة', 'يستخدم الهاتف', 'ينظر حوله'], poses: ['واقف بجانب سيارة متوقفة', 'يمشي بين صفوف السيارات', 'واقف بثبات'] },
+  { family: 'military-base', match: /استراحة|قهوة|شاي/, activities: ['استراحة قصيرة', 'يشرب قهوة', 'يستخدم الهاتف'], poses: ['جالس على كرسي الاستراحة', 'واقف بجانب ركن القهوة', 'واقف بثبات'] },
+  { family: 'military-base', match: /باب|مدخل|واجهة|رصيف|ساحة|جانب المبنى|سور/, activities: ['ينتظر', 'واقف فقط', 'يستخدم الهاتف'], poses: ['واقف بجانب المدخل', 'واقف باستقامة', 'واقف بثبات'] }
+];
+
+const uniqueStrings = (items: string[]): string[] => [...new Set(items.filter(Boolean))];
+
+export function getSceneRecommendations(familyId: SceneFamilyId, subScene = ''): SceneRecommendations {
+  const microLoc = subScene ? getMicroLocation(familyId, subScene) : undefined;
+  const rule = SCENE_RECOMMENDATION_RULES.find(item => item.family === familyId && item.match.test(subScene));
+  const fallback = FAMILY_SCENE_RECOMMENDATIONS[familyId];
+
+  return {
+    activities: uniqueStrings([
+      ...(rule?.activities || []),
+      ...(microLoc?.recommendedActivities || []),
+      ...fallback.activities
+    ]).slice(0, 5),
+    poses: uniqueStrings([
+      ...(rule?.poses || []),
+      ...(microLoc?.recommendedPoses || []),
+      ...fallback.poses
+    ]).slice(0, 5)
+  };
+}
+
+export function getActivityOptions(familyId: SceneFamilyId, subScene = ''): ActivityDefinition[] {
+  const base = [...COMMON_ACTIVITIES.filter(item => item.families.includes(familyId)), ...FAMILY_ACTIVITIES[familyId]];
+  const recommended = getSceneRecommendations(familyId, subScene).activities.map(labelAR => {
+    const definition = getActivityDefinition(labelAR);
+    return definition.families.length > 0 ? definition : { ...definition, families: [familyId] };
+  });
+
   const seen = new Set<string>();
-  return merged.filter(item => {
+  return [...recommended, ...base].filter(item => {
     if (seen.has(item.labelAR)) return false;
     seen.add(item.labelAR);
     return true;
@@ -310,8 +425,9 @@ export function getActivityDefinition(activity: string): ActivityDefinition {
   };
 }
 
-export function getPoseOptions(familyId: SceneFamilyId): string[] {
-  return POSE_OPTIONS[familyId] ?? ['واقف بثبات'];
+export function getPoseOptions(familyId: SceneFamilyId, subScene = ''): string[] {
+  const recommended = getSceneRecommendations(familyId, subScene).poses;
+  return uniqueStrings([...recommended, ...(POSE_OPTIONS[familyId] ?? ['واقف بثبات'])]);
 }
 
 export function getOutfitCapabilities(outfit?: OutfitItem): OutfitCapabilities {
