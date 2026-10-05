@@ -802,8 +802,8 @@ const uniqueByLabel = (items: PoseSuggestion[]): PoseSuggestion[] => {
 };
 
 function inferStance(label: string): Stance {
-  if (/مستلق|مستلقي/.test(label)) return 'lying';
   if (/نصف مستلق|مسترخٍ/.test(label)) return 'reclined';
+  if (/مستلق|مستلقي/.test(label)) return 'lying';
   if (/يمشي|خطوات|يعبر/.test(label)) return 'walking';
   if (/جالس/.test(label)) return 'sitting';
   return 'standing';
@@ -821,7 +821,7 @@ function inferSupportSurface(familyId: SceneFamilyId, subScene: string, label: s
   if (familyId === 'gym' && /مقعد/.test(`${subScene} ${label}`)) return 'gym bench';
   if (familyId === 'car') {
     if (/راكب/.test(`${subScene} ${label}`)) return 'front passenger seat';
-    if (/الخلفي|الخلفي/.test(`${subScene} ${label}`)) return 'rear seat';
+    if (/الخلفي|الخلفيّ/.test(`${subScene} ${label}`)) return 'rear seat';
     return 'driver seat';
   }
   if (familyId === 'military-base' && /انتظار/.test(`${subScene} ${label}`)) return 'waiting chair';
