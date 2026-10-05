@@ -50,10 +50,7 @@ import {
   describeAttireControls,
   getAttireAwareBasePhysics,
   getAttireAwareOutfitPrompt,
-  getActivityDefinition,
-  getActivityOptions,
   getOutfitCapabilities,
-  getPoseOptions,
   OutfitWearStyle,
   GarmentWearContext,
   ShirtTuck,
@@ -69,6 +66,12 @@ import {
   GroupSelfieSize,
   GroupSelfieRelationship
 } from './engine/groupSelfie';
+import {
+  getSceneActivityPosePrompt,
+  getSceneCapabilities,
+  getSuggestedActivities,
+  getSuggestedPoses
+} from './engine/sceneActivityPose';
 
 // --- TYPES ---
 type CaptureType = 'front-selfie' | 'mirror-selfie' | 'third-person-candid';
@@ -756,7 +759,16 @@ const buildSemanticScene = (
   const attire = describeAttireControls(outfit, state);
   const attireBasePrompt = getAttireAwareOutfitPrompt(outfit, state);
   const attireBasePhysics = getAttireAwareBasePhysics(outfit, state);
-  const activityDefinition = getActivityDefinition(state.activity);
+  const microLoc = state.sceneFamily ? getMicroLocation(state.sceneFamily, state.subScene) : undefined;
+  const sceneAction = state.sceneFamily
+    ? getSceneActivityPosePrompt({
+        familyId: state.sceneFamily,
+        subScene: state.subScene,
+        activity: state.activity,
+        pose: state.pose,
+        microLoc
+      })
+    : null;
   const hair = HAIRSTYLES.find(h => h.id === state.hairStyle);
   const expression = EXPRESSIONS.find(e => e.id === state.expression);
 
@@ -810,7 +822,6 @@ const buildSemanticScene = (
     ? `${expression.prompt}. Facial muscle anatomy: ${expression.anatomy}${state.muscleFatigue !== 'none' ? `. Muscle fatigue & ocular state: ${derived.muscleFatigueEffects}` : ''}`
     : (state.muscleFatigue !== 'none' ? `Neutral resting expression with muscle fatigue: ${derived.muscleFatigueEffects}` : 'neutral resting expression');
 
-  const microLoc = getMicroLocation(state.sceneFamily, state.subScene);
   const locationLabel = state.sceneFamily ? SCENE_FAMILIES[state.sceneFamily]?.labelAR : '';
   const groupSelfieText = physicalState?.groupSelfie?.enabled
     ? physicalState.groupSelfie.prompt
@@ -856,7 +867,9 @@ const buildSemanticScene = (
     expression: expressionDetails,
     outfit: `${attireBasePrompt}. Wear configuration: ${attire.prompt}`,
     outfitPhysics: [...attireBasePhysics, ...derived.fabricBehavior, ...attire.physics].join(', '),
-    poseAndContact: `Pose: ${state.pose}. Activity: ${activityDefinition.prompt}. Activity mechanics: ${activityDefinition.mechanics}. Gaze behavior: ${activityDefinition.gaze}. Contact rules: ${derived.contactPhysics.filter(p => !p.includes('arm')).join('. ')}`,
+    poseAndContact: sceneAction
+      ? `${sceneAction.prompt} Additional contact rules: ${derived.contactPhysics.filter(p => !p.includes('arm')).join('. ')}`
+      : `Pose: ${state.pose}. Activity: ${state.activity}. Contact rules: ${derived.contactPhysics.filter(p => !p.includes('arm')).join('. ')}`,
     visibleEnvironment: visibleEnvironmentText,
     lighting: `Time: ${state.timeOfDay}. Lighting source: ${state.lightingMode}. Lighting Intensity: ${state.lightingIntensity}% (${derived.lightingIntensityDescription}). Ambient bounce: ${derived.environmentalLightBehavior}. Shadow Depth: ${state.shadowDepth}% (${derived.shadowDepthDescription}). Shadows: ${derived.shadowBehavior}.`,
     atmosphere: derived.atmosphericEffects,
@@ -1299,8 +1312,16 @@ export default function PhysFrameApp() {
   const activeFamily = state.sceneFamily ? SCENE_FAMILIES[state.sceneFamily] : null;
   const selectedOutfit = OUTFITS.find(o => o.id === state.outfitId);
   const outfitCapabilities = getOutfitCapabilities(selectedOutfit);
-  const activityOptions = state.sceneFamily ? getActivityOptions(state.sceneFamily, state.subScene) : [];
-  const poseOptions = state.sceneFamily ? getPoseOptions(state.sceneFamily) : [];
+  const currentMicroLocation = state.sceneFamily ? getMicroLocation(state.sceneFamily, state.subScene) : undefined;
+  const activityOptions = state.sceneFamily
+    ? getSuggestedActivities(state.sceneFamily, state.subScene, currentMicroLocation)
+    : [];
+  const poseOptions = state.sceneFamily
+    ? getSuggestedPoses(state.sceneFamily, state.subScene, state.activity, currentMicroLocation)
+    : [];
+  const sceneCapabilities = state.sceneFamily
+    ? getSceneCapabilities(state.sceneFamily, state.subScene, currentMicroLocation)
+    : null;
   const militarySubSceneGroups = state.sceneFamily === 'military-base'
     ? ['المكاتب', 'الممرات', 'الأبواب والمداخل', 'الانتظار والاجتماعات', 'الاستراحة والخدمات', 'الدرج', 'خارج المبنى', 'المواقف']
         .map(groupAR => ({
@@ -1314,7 +1335,6 @@ export default function PhysFrameApp() {
   const currentResolvedPreview = state.sceneFamily ? resolveScene(state as any) : null;
   const backgroundDecision = currentResolvedPreview?.physicalState.backgroundRealism ?? null;
   const selfieAngleDecision = currentResolvedPreview?.physicalState.selfieAngle ?? null;
-  const currentMicroLocation = state.sceneFamily ? getMicroLocation(state.sceneFamily, state.subScene) : undefined;
   const groupSelfiePreview = state.sceneFamily
     ? resolveGroupSelfie({
         enabled: state.groupSelfieEnabled,
@@ -2765,15 +2785,27 @@ export default function PhysFrameApp() {
                   <label className="text-[11px] text-[var(--text-muted)] block mb-1 font-semibold">ماذا يفعل؟</label>
                   <select
                     value={state.activity}
-                    onChange={e => setState({
-                      ...state,
-                      activity: e.target.value,
-                      selfieAngleAdvice: undefined
-                    })}
+                    onChange={e => {
+                      const nextActivity = e.target.value;
+                      const nextPoses = state.sceneFamily
+                        ? getSuggestedPoses(state.sceneFamily, state.subScene, nextActivity, currentMicroLocation)
+                        : [];
+                      const nextPose = nextPoses.some(item => item.labelAR === state.pose)
+                        ? state.pose
+                        : (nextPoses[0]?.labelAR || state.pose);
+
+                      setState({
+                        ...state,
+                        activity: nextActivity,
+                        pose: nextPose,
+                        selfieAngleAdvice: undefined,
+                        backgroundGeminiAdvice: undefined
+                      });
+                    }}
                     className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-xs text-[#F3EFE7] focus:outline-none focus:border-[var(--accent)] mb-3"
                   >
                     {activityOptions.map(item => (
-                      <option key={item.labelAR} value={item.labelAR}>{item.labelAR}</option>
+                      <option key={item.id} value={item.labelAR}>{item.labelAR}</option>
                     ))}
                   </select>
 
@@ -2783,15 +2815,18 @@ export default function PhysFrameApp() {
                     onChange={e => setState({
                       ...state,
                       pose: e.target.value,
-                      selfieAngleAdvice: undefined
+                      selfieAngleAdvice: undefined,
+                      backgroundGeminiAdvice: undefined
                     })}
                     className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-xs text-[#F3EFE7] focus:outline-none focus:border-[var(--accent)]"
                   >
-                    {poseOptions.map(p => <option key={p} value={p}>{p}</option>)}
+                    {poseOptions.map(item => (
+                      <option key={item.id} value={item.labelAR}>{item.labelAR}</option>
+                    ))}
                   </select>
 
                   <div className="mt-2.5 rounded-xl bg-black/20 border border-white/5 px-3 py-2 text-[9px] leading-relaxed text-[var(--text-muted)]">
-                    النشاط يغيّر تلقائيًا حركة الجسم، اتجاه النظر، وضع اليد، ويعيد حساب زاوية السيلفي الذكية عند الحاجة.
+                    تم توليد هذه الاقتراحات حسب عناصر المشهد المختار: {sceneCapabilities?.furniture.length || 0} أثاث/عنصر قابل للملامسة و{sceneCapabilities?.spatialFeatures.length || 0} خصائص مكانية. تغيير المشهد يغيّر النشاط والوضعية تلقائيًا، ثم يعاد حساب زاوية السيلفي والخلفية.
                   </div>
                 </section>
 
