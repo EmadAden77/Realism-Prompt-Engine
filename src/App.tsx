@@ -54,6 +54,7 @@ import {
   getActivityOptions,
   getOutfitCapabilities,
   getPoseOptions,
+  getSceneRecommendations,
   OutfitWearStyle,
   GarmentWearContext,
   ShirtTuck,
@@ -1300,7 +1301,12 @@ export default function PhysFrameApp() {
   const selectedOutfit = OUTFITS.find(o => o.id === state.outfitId);
   const outfitCapabilities = getOutfitCapabilities(selectedOutfit);
   const activityOptions = state.sceneFamily ? getActivityOptions(state.sceneFamily, state.subScene) : [];
-  const poseOptions = state.sceneFamily ? getPoseOptions(state.sceneFamily) : [];
+  const poseOptions = state.sceneFamily ? getPoseOptions(state.sceneFamily, state.subScene) : [];
+  const sceneRecommendations = state.sceneFamily
+    ? getSceneRecommendations(state.sceneFamily, state.subScene)
+    : { activities: [], poses: [] };
+  const recommendedActivitySet = new Set(sceneRecommendations.activities);
+  const recommendedPoseSet = new Set(sceneRecommendations.poses);
   const militarySubSceneGroups = state.sceneFamily === 'military-base'
     ? ['المكاتب', 'الممرات', 'الأبواب والمداخل', 'الانتظار والاجتماعات', 'الاستراحة والخدمات', 'الدرج', 'خارج المبنى', 'المواقف']
         .map(groupAR => ({
@@ -1532,7 +1538,7 @@ export default function PhysFrameApp() {
       sceneFamily: familyId,
       subScene: family.subScenes[0],
       activity: getActivityOptions(familyId, family.subScenes[0])[0]?.labelAR || family.activities[0],
-      pose: getPoseOptions(familyId)[0] || family.poses[0],
+      pose: getPoseOptions(familyId, family.subScenes[0])[0] || family.poses[0],
       lightingMode: family.allowedLighting[0],
       environmentRealism: family.environmentRealism[0],
       outfitId: state.outfitId || 'thobe_white_summer'
@@ -1760,12 +1766,16 @@ export default function PhysFrameApp() {
       : ['front-selfie', 'third-person-candid'];
     const chosenCapture = captureOptions[Math.floor(Math.random() * captureOptions.length)];
 
+    const randomSubScene = family.subScenes[Math.floor(Math.random() * family.subScenes.length)];
+    const randomActivityOptions = getActivityOptions(randomFamilyId, randomSubScene);
+    const randomPoseOptions = getPoseOptions(randomFamilyId, randomSubScene);
+
     let rawState: SceneState = {
       ...state,
       sceneFamily: randomFamilyId,
-      subScene: family.subScenes[Math.floor(Math.random() * family.subScenes.length)],
-      activity: family.activities[Math.floor(Math.random() * family.activities.length)],
-      pose: family.poses[Math.floor(Math.random() * family.poses.length)],
+      subScene: randomSubScene,
+      activity: randomActivityOptions[Math.floor(Math.random() * randomActivityOptions.length)]?.labelAR || family.activities[0],
+      pose: randomPoseOptions[Math.floor(Math.random() * randomPoseOptions.length)] || family.poses[0],
       lightingMode: family.allowedLighting[Math.floor(Math.random() * family.allowedLighting.length)],
       environmentRealism: family.environmentRealism[Math.floor(Math.random() * family.environmentRealism.length)],
       outfitId: availableOutfits[Math.floor(Math.random() * availableOutfits.length)]?.id || availableOutfits[0]?.id || 'thobe_white_summer',
@@ -2748,7 +2758,12 @@ export default function PhysFrameApp() {
                       {activeFamily?.subScenes.map(sub => (
                         <button
                           key={sub}
-                          onClick={() => setState({ ...state, subScene: sub })}
+                          onClick={() => setState(prev => ({
+                            ...prev,
+                            subScene: sub,
+                            selfieAngleAdvice: undefined,
+                            backgroundGeminiAdvice: undefined
+                          }))}
                           className={`px-3 py-1.5 rounded-xl text-xs border transition-colors ${state.subScene === sub ? 'bg-[var(--accent)]/15 border-[var(--border-accent)] text-[var(--accent)] font-bold' : 'border-[var(--border)] text-[var(--text-muted)] hover:bg-white/5'}`}
                         >
                           {sub}
@@ -2772,9 +2787,20 @@ export default function PhysFrameApp() {
                     })}
                     className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-xs text-[#F3EFE7] focus:outline-none focus:border-[var(--accent)] mb-3"
                   >
-                    {activityOptions.map(item => (
-                      <option key={item.labelAR} value={item.labelAR}>{item.labelAR}</option>
-                    ))}
+                    {sceneRecommendations.activities.length > 0 && (
+                      <optgroup label="★ مقترح لهذا المشهد">
+                        {sceneRecommendations.activities.map(labelAR => (
+                          <option key={`recommended-activity-${labelAR}`} value={labelAR}>{labelAR}</option>
+                        ))}
+                      </optgroup>
+                    )}
+                    <optgroup label="خيارات إضافية">
+                      {activityOptions
+                        .filter(item => !recommendedActivitySet.has(item.labelAR))
+                        .map(item => (
+                          <option key={item.labelAR} value={item.labelAR}>{item.labelAR}</option>
+                        ))}
+                    </optgroup>
                   </select>
 
                   <label className="text-[11px] text-[var(--text-muted)] block mb-1 font-semibold">فيزياء الوضعية والملامسة:</label>
@@ -2787,11 +2813,22 @@ export default function PhysFrameApp() {
                     })}
                     className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-xs text-[#F3EFE7] focus:outline-none focus:border-[var(--accent)]"
                   >
-                    {poseOptions.map(p => <option key={p} value={p}>{p}</option>)}
+                    {sceneRecommendations.poses.length > 0 && (
+                      <optgroup label="★ مقترح لهذا المشهد">
+                        {sceneRecommendations.poses.map(p => (
+                          <option key={`recommended-pose-${p}`} value={p}>{p}</option>
+                        ))}
+                      </optgroup>
+                    )}
+                    <optgroup label="خيارات إضافية">
+                      {poseOptions
+                        .filter(p => !recommendedPoseSet.has(p))
+                        .map(p => <option key={p} value={p}>{p}</option>)}
+                    </optgroup>
                   </select>
 
                   <div className="mt-2.5 rounded-xl bg-black/20 border border-white/5 px-3 py-2 text-[9px] leading-relaxed text-[var(--text-muted)]">
-                    النشاط يغيّر تلقائيًا حركة الجسم، اتجاه النظر، وضع اليد، ويعيد حساب زاوية السيلفي الذكية عند الحاجة.
+                    الاقتراحات الأولى تتغير تلقائيًا حسب الزاوية الفرعية المختارة، بما فيها الأثاث ونقاط الملامسة. النشاط يغيّر حركة الجسم واتجاه النظر ويعيد حساب زاوية السيلفي الذكية عند الحاجة.
                   </div>
                 </section>
 
