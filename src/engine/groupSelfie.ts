@@ -359,15 +359,34 @@ function resolveClothingOption(
 ): GroupClothingOption {
   const available = getGroupClothingOptions(familyId, microLoc);
   const explicit = available.find(option => option.id === requested);
-  if (explicit && explicit.id !== 'auto' && explicit.id !== 'mixed-natural') return explicit;
+  if (
+    explicit &&
+    explicit.id !== 'auto' &&
+    explicit.id !== 'mixed-natural' &&
+    explicit.id !== 'saudi-military-realistic'
+  ) return explicit;
 
   if (familyId === 'military-base') {
+    const isRealisticMilitary = requested === 'saudi-military-realistic';
     return {
-      id: requested === 'mixed-natural' ? 'mixed-natural' : 'auto',
-      labelAR: requested === 'mixed-natural' ? 'مزيج طبيعي حسب المكان' : 'تلقائي حسب المكان',
+      id: isRealisticMilitary
+        ? 'saudi-military-realistic'
+        : requested === 'mixed-natural'
+          ? 'mixed-natural'
+          : 'auto',
+      labelAR: isRealisticMilitary
+        ? 'لباس عسكري سعودي واقعي'
+        : requested === 'mixed-natural'
+          ? 'مزيج طبيعي حسب المكان'
+          : 'تلقائي حسب المكان',
       families:[familyId],
       outfits:getMilitaryAutoPool(microLoc),
-      realismRules:['micro-location-aware Saudi military/workplace clothing','avoid cloned outfit silhouettes']
+      realismRules:[
+        'micro-location-aware Saudi military/workplace clothing',
+        'administrative interiors favor office/daily-duty variations',
+        'outdoor and parking areas may use restrained field/jacket variations',
+        'avoid cloned outfit silhouettes'
+      ]
     };
   }
 
