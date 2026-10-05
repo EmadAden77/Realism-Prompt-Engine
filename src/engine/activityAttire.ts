@@ -1,5 +1,6 @@
 import type { OutfitItem } from '../data/clothingOutfits';
 import { getMicroLocation, type SceneFamilyId } from '../data/microLocations';
+import { getStructuredPoseSuggestions } from './sceneAffordances';
 
 export type OutfitWearStyle =
   | 'natural-neat'
@@ -384,6 +385,8 @@ export function getSceneRecommendations(familyId: SceneFamilyId, subScene = ''):
   const rule = SCENE_RECOMMENDATION_RULES.find(item => item.family === familyId && item.match.test(subScene));
   const fallback = FAMILY_SCENE_RECOMMENDATIONS[familyId];
 
+  const structuredPoses = getStructuredPoseSuggestions(familyId, subScene).map(item => item.labelAR);
+
   return {
     activities: uniqueStrings([
       ...(rule?.activities || []),
@@ -391,6 +394,7 @@ export function getSceneRecommendations(familyId: SceneFamilyId, subScene = ''):
       ...fallback.activities
     ]).slice(0, 5),
     poses: uniqueStrings([
+      ...structuredPoses,
       ...(rule?.poses || []),
       ...(microLoc?.recommendedPoses || []),
       ...fallback.poses

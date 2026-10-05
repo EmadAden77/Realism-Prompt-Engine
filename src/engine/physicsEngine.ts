@@ -32,6 +32,7 @@ import {
   GroupSelfieRelationship,
   ResolvedGroupSelfie
 } from './groupSelfie';
+import { deriveMicroPhysics } from './sceneAffordances';
 import type {
   OutfitWearStyle,
   GarmentWearContext,
@@ -1149,6 +1150,28 @@ function calculateDerivedState(
 
   if (microLoc?.spatialBehavior) derived.contactPhysics.push(microLoc.spatialBehavior);
   if (microLoc?.lightingHints) derived.environmentalLightBehavior += `; location-specific light cues: ${microLoc.lightingHints}`;
+
+  const microPhysics = deriveMicroPhysics({
+    familyId: state.sceneFamily || 'saudi-outdoor',
+    subScene: state.subScene,
+    pose: state.pose,
+    captureType: state.captureType,
+    timeOfDay: state.timeOfDay,
+    lightingIntensity: state.lightingIntensity
+  });
+
+  derived.contactPhysics.push(
+    `Structured pose affordance: ${microPhysics.poseSuggestion.promptAddon}`,
+    ...microPhysics.contactPhysics
+  );
+  derived.fabricBehavior.push(...microPhysics.fabricTension);
+  derived.realismConstraints.push(
+    `Eye convergence: ${microPhysics.eyeConvergence}`,
+    ...microPhysics.realismGuards
+  );
+  if (microPhysics.sensorArtifacts.length > 0) {
+    derived.lensEffects += `; ${microPhysics.sensorArtifacts.join('; ')}`;
+  }
 
   derived.realismConstraints.push(
     `Background visibility: ${physics.backgroundRealism.visibilityClass}; ${physics.backgroundRealism.depthLayers.join('; ')}`,
