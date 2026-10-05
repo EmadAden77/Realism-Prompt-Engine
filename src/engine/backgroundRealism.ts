@@ -60,10 +60,26 @@ export interface BackgroundSceneContext {
   groupSelfieEnabled?: boolean;
   groupSelfieSize?: 2 | 3 | 4 | 5;
   microLoc?: MicroLocation;
+
+  // Actual resolved camera geometry. These values make background limits depend
+  // on the real selfie angle/distance/FOV rather than only broad framing labels.
+  horizontalFovDeg?: number;
+  selfieDistanceCm?: number;
+  selfiePitchDeg?: number;
+  selfieYawDeg?: number;
+  selfieRollDeg?: number;
 }
 
 export interface BackgroundRealismState {
   visibilityClass: BackgroundVisibilityClass;
+  geometryVisibilityCap: BackgroundVisibilityClass;
+  cameraGeometry: {
+    horizontalFovDeg: number;
+    distanceCm: number;
+    pitchDeg: number;
+    yawDeg: number;
+    rollDeg: number;
+  };
   fovAllowsBackgroundLife: boolean;
   cappedByFraming: boolean;
   geminiApplied: boolean;
@@ -112,6 +128,24 @@ const disorderRank: Record<BackgroundDisorderLevel, number> = {
   light: 2,
   moderate: 3
 };
+
+const visibilityRank: Record<BackgroundVisibilityClass, number> = {
+  minimal: 0,
+  limited: 1,
+  moderate: 2,
+  expanded: 3
+};
+
+const visibilityFromRank = (rank: number): BackgroundVisibilityClass =>
+  rank <= 0 ? 'minimal' :
+  rank === 1 ? 'limited' :
+  rank === 2 ? 'moderate' : 'expanded';
+
+const capVisibility = (
+  requested: BackgroundVisibilityClass,
+  cap: BackgroundVisibilityClass
+): BackgroundVisibilityClass =>
+  visibilityRank[requested] <= visibilityRank[cap] ? requested : cap;
 
 const capDensity = (
   density: BackgroundEntityDensity,
@@ -281,22 +315,65 @@ export function deriveBackgroundRealism(
   );
   const isGymPublic = familyId === 'gym';
 
-  let visibilityClass: BackgroundVisibilityClass = 'limited';
-  if (framingClass === 'tight') {
-    visibilityClass = 'minimal';
-  } else if (framingClass === 'wide') {
-    visibilityClass = (isOutdoor || isGymPublic || isMilitaryPublic) ? 'expanded' : 'moderate';
-  } else if (cameraAngle === 'slightly-off-center') {
-    visibilityClass = 'moderate';
+  const defaultDistanceCm =
+    framingClass === 'tight' ? 42 :
+    framingClass === 'medium' ? 52 : 68;
+  const defaultPitchDeg =
+    cameraAngle === 'slightly-high' ? -14 :
+    cameraAngle === 'slightly-low' ? 14 :
+    cameraAngle === 'slightly-off-center' ? -5 : 0;
+  const defaultYawDeg = cameraAngle === 'slightly-off-center' ? 18 : 0;
+  const defaultRollDeg = cameraAngle === 'slightly-off-center' ? 1 : 0;
+  const defaultHorizontalFovDeg =
+    captureType === 'front-selfie' ? 79 :
+    captureType === 'mirror-selfie' ? 68 : 56;
+
+  const horizontalFovDeg = context.horizontalFovDeg ?? defaultHorizontalFovDeg;
+  const selfieDistanceCm = context.selfieDistanceCm ?? defaultDistanceCm;
+  const selfiePitchDeg = context.selfiePitchDeg ?? defaultPitchDeg;
+  const selfieYawDeg = context.selfieYawDeg ?? defaultYawDeg;
+  const selfieRollDeg = context.selfieRollDeg ?? defaultRollDeg;
+
+  // Start from framing, then refine the hard visibility envelope using the
+  // actual resolved phone geometry. Off-axis yaw and longer reach reveal more
+  // environment; very close reach and steep pitch reduce usable background.
+  let geometryRank =
+    framingClass === 'tight' ? 0 :
+    framingClass === 'medium' ? 1 : 2;
+
+  if (captureType === 'front-selfie') {
+    if (framingClass !== 'tight' && horizontalFovDeg >= 75 && Math.abs(selfieYawDeg) >= 8) {
+      geometryRank += 1;
+    }
+    if (framingClass !== 'tight' && selfieDistanceCm >= 60) {
+      geometryRank += 1;
+    }
+    if (selfieDistanceCm <= 46) {
+      geometryRank -= 1;
+    }
+    if (Math.abs(selfiePitchDeg) >= 13) {
+      geometryRank -= 1;
+    }
+  } else {
+    if (horizontalFovDeg < 65) geometryRank -= 1;
+    if (Math.abs(selfieYawDeg) >= 15 && framingClass !== 'tight') geometryRank += 1;
   }
 
-  if (framingClass !== 'tight') {
-    if (backgroundPresence === 'low') {
-      visibilityClass = framingClass === 'wide' ? 'moderate' : 'limited';
-    } else if (backgroundPresence === 'visible' || backgroundPresence === 'strong') {
-      visibilityClass = framingClass === 'wide' ? 'expanded' : 'moderate';
-    }
+  if (isPrivateInterior || isCarInterior) {
+    geometryRank = Math.min(geometryRank, 2);
   }
+
+  geometryRank = Math.max(0, Math.min(3, geometryRank));
+  const geometryVisibilityCap = visibilityFromRank(geometryRank);
+
+  const requestedVisibility: BackgroundVisibilityClass =
+    backgroundPresence === 'low' ? 'minimal' :
+    backgroundPresence === 'balanced' ? 'limited' :
+    backgroundPresence === 'visible' ? 'moderate' :
+    backgroundPresence === 'strong' ? 'expanded' :
+    geometryVisibilityCap;
+
+  const visibilityClass = capVisibility(requestedVisibility, geometryVisibilityCap);
 
   const surfaceLimit =
     visibilityClass === 'minimal' ? 1 :
@@ -314,32 +391,52 @@ export function deriveBackgroundRealism(
     activityDensity === 'moderate' ? 'active' :
     activityDensity === 'light' ? 'natural' : 'calm';
 
-  const activityLevel: Exclude<BackgroundActivityControl, 'auto'> =
+  const requestedActivityLevel: Exclude<BackgroundActivityControl, 'auto'> =
     backgroundMode === 'off'
       ? 'calm'
       : backgroundActivity === 'auto'
         ? autoActivityLevel
         : backgroundActivity;
 
+  const activityOrder: Record<Exclude<BackgroundActivityControl, 'auto'>, number> = {
+    calm: 0,
+    natural: 1,
+    active: 2
+  };
+  const activityCap: Exclude<BackgroundActivityControl, 'auto'> =
+    visibilityClass === 'minimal' ? 'calm' :
+    visibilityClass === 'limited' ? 'natural' : 'active';
+
+  const activityLevel: Exclude<BackgroundActivityControl, 'auto'> =
+    activityOrder[requestedActivityLevel] <= activityOrder[activityCap]
+      ? requestedActivityLevel
+      : activityCap;
+  const activityWasCapped = activityLevel !== requestedActivityLevel;
+
+  const geometryHumanCap: BackgroundEntityDensity =
+    visibilityClass === 'minimal' ? 'none' :
+    visibilityClass === 'limited' ? 'sparse' :
+    visibilityClass === 'moderate' ? 'light' : 'moderate';
+
   let autoHumanDensity: BackgroundEntityDensity = 'none';
-  if (framingClass !== 'tight' && publicScene) {
-    if (activityDensity === 'minimal') autoHumanDensity = framingClass === 'wide' ? 'sparse' : 'none';
-    else if (activityDensity === 'light') autoHumanDensity = framingClass === 'wide' ? 'light' : 'sparse';
-    else if (activityDensity === 'moderate') autoHumanDensity = framingClass === 'wide' ? 'moderate' : 'light';
+  if (visibilityClass !== 'minimal' && publicScene) {
+    if (activityDensity === 'minimal') autoHumanDensity = 'sparse';
+    else if (activityDensity === 'light') autoHumanDensity = visibilityClass === 'limited' ? 'sparse' : 'light';
+    else if (activityDensity === 'moderate') {
+      autoHumanDensity = visibilityClass === 'expanded' ? 'moderate' : 'light';
+    }
 
     if (activityLevel === 'calm') {
       autoHumanDensity = capDensity(autoHumanDensity, 'sparse');
-    } else if (activityLevel === 'active') {
-      autoHumanDensity = framingClass === 'wide' ? 'moderate' : 'light';
+    } else if (activityLevel === 'active' && visibilityClass === 'expanded') {
+      autoHumanDensity = 'moderate';
     }
+
+    autoHumanDensity = capDensity(autoHumanDensity, geometryHumanCap);
   }
 
   let physicalHumanMax: BackgroundEntityDensity =
-    !publicScene || framingClass === 'tight'
-      ? 'none'
-      : framingClass === 'wide'
-        ? 'moderate'
-        : 'light';
+    !publicScene ? 'none' : geometryHumanCap;
 
   if (isPassage && familyId === 'saudi-outdoor') {
     autoHumanDensity = capDensity(autoHumanDensity, 'sparse');
@@ -366,7 +463,7 @@ export function deriveBackgroundRealism(
   let autoVehicleDensity: BackgroundEntityDensity = 'none';
   let physicalVehicleMax: BackgroundEntityDensity = 'none';
 
-  if (framingClass !== 'tight') {
+  if (visibilityClass !== 'minimal') {
     if (isCarInterior) {
       const exteriorWindowCue = baseBg.some(item => /window|windshield|street|parked car|side mirror/i.test(item));
       if (exteriorWindowCue) {
@@ -374,8 +471,13 @@ export function deriveBackgroundRealism(
         physicalVehicleMax = 'sparse';
       }
     } else if (isOutdoor && vehicleCue) {
-      autoVehicleDensity = activityDensity === 'moderate' && framingClass === 'wide' ? 'light' : 'sparse';
-      physicalVehicleMax = framingClass === 'wide' ? 'light' : 'sparse';
+      const geometryVehicleCap: BackgroundEntityDensity =
+        visibilityClass === 'limited' ? 'sparse' : 'light';
+      autoVehicleDensity =
+        activityDensity === 'moderate' && visibilityClass === 'expanded'
+          ? 'light'
+          : 'sparse';
+      physicalVehicleMax = geometryVehicleCap;
     }
   }
 
@@ -390,7 +492,7 @@ export function deriveBackgroundRealism(
       : 'very-clean';
 
   let physicalDisorderMax: BackgroundDisorderLevel =
-    framingClass === 'tight'
+    visibilityClass === 'minimal' || visibilityClass === 'limited'
       ? 'light'
       : (isPrivateInterior || isCarInterior)
         ? 'light'
@@ -476,8 +578,9 @@ export function deriveBackgroundRealism(
   }
 
   const presenceCap: Exclude<BackgroundPresenceControl, 'auto'> =
-    framingClass === 'tight' ? 'low' :
-    framingClass === 'medium' ? 'visible' : 'strong';
+    visibilityClass === 'minimal' ? 'low' :
+    visibilityClass === 'limited' ? 'balanced' :
+    visibilityClass === 'moderate' ? 'visible' : 'strong';
 
   const presenceOrder: Record<Exclude<BackgroundPresenceControl, 'auto'>, number> = {
     low: 0,
@@ -507,7 +610,9 @@ export function deriveBackgroundRealism(
     compositionGoal = microLoc.cameraBias;
   }
 
-  if (framingClass === 'tight' && compositionGoal === 'background-priority') {
+  if (visibilityClass === 'minimal') {
+    compositionGoal = 'face-priority';
+  } else if (visibilityClass === 'limited' && compositionGoal === 'background-priority') {
     compositionGoal = 'balanced';
   }
 
@@ -576,7 +681,7 @@ export function deriveBackgroundRealism(
       mildDisorderElements.push('minor curb dust, asphalt patching, paint fading, service hardware, or slight parking misalignment appropriate to the selected location');
     }
 
-    if (disorderLevel === 'moderate' && framingClass === 'wide') {
+    if (disorderLevel === 'moderate' && visibilityClass === 'expanded') {
       mildDisorderElements.push('one additional small place-appropriate imperfection deeper in frame, visually secondary and never chaotic');
     }
   }
@@ -650,13 +755,18 @@ export function deriveBackgroundRealism(
     densityRank[densityFromControl(backgroundVehicles, autoVehicleDensity)] > densityRank[physicalVehicleMax] ||
     (backgroundDisorder !== 'auto' && disorderRank[disorderFromControl(backgroundDisorder, defaultDisorder)] > disorderRank[physicalDisorderMax]) ||
     presenceOrder[requestedPresenceLevel] > presenceOrder[presenceCap] ||
-    (backgroundCompositionGoal === 'background-priority' && framingClass === 'tight');
+    visibilityRank[requestedVisibility] > visibilityRank[geometryVisibilityCap] ||
+    activityWasCapped ||
+    (backgroundCompositionGoal === 'background-priority' && visibilityRank[visibilityClass] < visibilityRank.moderate);
 
   const decisionReasons: string[] = [];
-  if (framingClass === 'tight') {
-    decisionReasons.push('الكادر قريب جدًا، لذلك يمنع ظهور بشر أو سيارات كاملة في الخلفية.');
+  decisionReasons.push(
+    `هندسة السيلفي الفعلية: FOV أفقي ~${Math.round(horizontalFovDeg)}°، مسافة ~${Math.round(selfieDistanceCm)}cm، Yaw ${Math.round(selfieYawDeg)}°، Pitch ${Math.round(selfiePitchDeg)}°؛ الحد الأقصى لظهور الخلفية: ${geometryVisibilityCap}.`
+  );
+  if (visibilityClass === 'minimal') {
+    decisionReasons.push('الهندسة الحالية قريبة أو شديدة الميل، لذلك تمنع ظهور بشر أو سيارات كاملة في الخلفية.');
   } else {
-    decisionReasons.push('تم تقييد الخلفية حسب مجال الرؤية الفعلي للكادر وزاوية الكاميرا.');
+    decisionReasons.push('تم تقييد البشر والسيارات والفوضى والنشاط والحضور حسب زاوية الهاتف والمسافة والـFOV الفعلي.');
   }
   if (isPrivateInterior) {
     decisionReasons.push('المكان خاص، لذلك لا يسمح بأشخاص عشوائيين في الخلفية.');
@@ -678,6 +788,9 @@ export function deriveBackgroundRealism(
   }
   if (backgroundActivity !== 'auto') {
     decisionReasons.push(`نشاط المشهد: ${activityLevel}.`);
+  }
+  if (activityWasCapped) {
+    decisionReasons.push('تم خفض نشاط الخلفية لأن مساحة المشهد المرئية لا تسمح بنشاط أعلى بشكل مقنع.');
   }
 
   if (geminiApplied) {
@@ -714,6 +827,14 @@ export function deriveBackgroundRealism(
 
   return {
     visibilityClass,
+    geometryVisibilityCap,
+    cameraGeometry: {
+      horizontalFovDeg,
+      distanceCm: selfieDistanceCm,
+      pitchDeg: selfiePitchDeg,
+      yawDeg: selfieYawDeg,
+      rollDeg: selfieRollDeg
+    },
     fovAllowsBackgroundLife,
     cappedByFraming,
     geminiApplied,
