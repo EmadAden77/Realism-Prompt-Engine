@@ -687,7 +687,10 @@ ${JSON.stringify({
   backgroundActivity: sceneState.backgroundActivity,
   backgroundPresence: sceneState.backgroundPresence,
   backgroundCompositionGoal: sceneState.backgroundCompositionGoal,
-  backgroundAutoAngle: sceneState.backgroundAutoAngle
+  backgroundAutoAngle: sceneState.backgroundAutoAngle,
+  groupSelfieEnabled: sceneState.groupSelfieEnabled,
+  groupSelfieSize: sceneState.groupSelfieSize,
+  groupSelfieRelationship: sceneState.groupSelfieRelationship
 }, null, 2)}
 
 ELIGIBLE PHYSICALLY-BOUNDED SELFIE ANGLES:
@@ -702,19 +705,20 @@ Selection priorities:
 6. Never choose cinematic bird-eye, 90-degree profile, dramatic Dutch angle, DSLR, ARRI, 35mm, 85mm, or impossible floating-camera geometry.
 7. Roll is only natural handheld micro-tilt, never a dramatic Dutch angle.
 8. Return micro-variation offsets only; the local engine will clamp them to the preset's allowed range.
-9. BACKGROUND-ANGLE LINK: when backgroundAutoAngle is true, actively adapt the selfie angle to the requested background composition:
+9. GROUP SELFIE: when groupSelfieEnabled is true, the reference subject is the only phone holder. Favor enough one-arm distance and lateral/off-axis room to fit the resolved group size without shrinking faces unnaturally. For 4-5 people prefer physically eligible wide/environmental geometry. Never choose a close face-only angle that would crop companions.
+10. BACKGROUND-ANGLE LINK: when backgroundAutoAngle is true, actively adapt the selfie angle to the requested background composition:
    - face-priority / low presence / no humans+vehicles => prefer centered or closer face-oriented geometry.
    - balanced / visible presence / natural activity => prefer a mild off-axis angle that keeps face and context balanced.
    - background-priority / strong presence / active scene / higher people or vehicle density => prefer a wider-feeling or more off-axis eligible angle that exposes more physically visible context.
    - Never change to an angle that violates pose, arm reach, FOV, private-space rules, or cabin clearance.
    - Do not change the user's framing class. Select the best angle INSIDE the current framing.
-10. FOR CAR INTERIORS: first decide the photographic goal:
+11. FOR CAR INTERIORS: first decide the photographic goal:
    - face-priority = face remains dominant; steering wheel/dashboard/window only as secondary context.
    - cabin-context = deliberately reveal more steering wheel/dashboard/window/seat architecture while keeping the face primary enough to remain a selfie.
    - balanced = neither dominates.
-11. FOR CAR INTERIORS: respect the actual seat role. Driver angles must not be used for front/rear passenger positions and vice versa.
-12. FOR CAR INTERIORS: phone must remain physically inside the cabin, behind windshield/side-glass planes, below roof/headliner/visor, and clear of steering wheel, rearview mirror, A/B/C pillars, dashboard, center console, and gear selector.
-13. If lighting is "إضاءة شاشة الهاتف فقط", prefer a face-priority close/medium angle where the phone can plausibly illuminate the face; do not choose a distant cabin-context angle.
+12. FOR CAR INTERIORS: respect the actual seat role. Driver angles must not be used for front/rear passenger positions and vice versa.
+13. FOR CAR INTERIORS: phone must remain physically inside the cabin, behind windshield/side-glass planes, below roof/headliner/visor, and clear of steering wheel, rearview mirror, A/B/C pillars, dashboard, center console, and gear selector.
+14. If lighting is "إضاءة شاشة الهاتف فقط", prefer a face-priority close/medium angle where the phone can plausibly illuminate the face; do not choose a distant cabin-context angle.
 
 Return the exact carFocus associated with the selected catalog item (or "balanced" for non-car scenes), plus one or two concise Arabic reasons explaining why the angle fits this exact pose and scene.`,
       config: {
@@ -811,7 +815,9 @@ ${JSON.stringify({
   backgroundDisorder: sceneState.backgroundDisorder,
   backgroundActivity: sceneState.backgroundActivity,
   backgroundPresence: sceneState.backgroundPresence,
-  backgroundCompositionGoal: sceneState.backgroundCompositionGoal
+  backgroundCompositionGoal: sceneState.backgroundCompositionGoal,
+  groupSelfieEnabled: sceneState.groupSelfieEnabled,
+  groupSelfieSize: sceneState.groupSelfieSize
 }, null, 2)}
 
 LOCAL PHYSICAL LIMITS:
@@ -826,6 +832,7 @@ Rules:
 - No landmarks, staged crowds, decorative traffic, cinematic clutter, or tourist stereotypes.
 - Mild disorder must be place-appropriate and visually secondary.
 - The subject's actual activity and pose matter: background life must not obstruct or contradict what the subject is doing.
+- If groupSelfieEnabled is true, the selected group members occupy the primary people budget. Do not add random background people that make the frame look crowded; for 4-5-person groups prefer zero unrelated background people.
 - A walking subject may justify subtle background motion; a seated/reclined private scene should remain quieter.
 - Respect requested activity, background presence, and composition goal as explicit user intent.
 - Strong background presence does NOT authorize impossible crowding; it only increases contextual visibility inside the available FOV.
