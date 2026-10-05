@@ -201,7 +201,16 @@ export function getSceneCapabilities(
     if (containsAny(text, ['passenger', 'الراكب'])) addFurniture('passenger-seat');
     if (containsAny(text, ['rear seat', 'المقعد الخلفي', 'rear-seat'])) addFurniture('rear-seat');
     if (containsAny(text, ['door', 'باب'])) addSurfaces('car-door');
-    if (microLoc?.isOutdoor || containsAny(text, ['بجانب السيارة', 'parking', 'موقف', 'parked'])) {
+
+    // Do not treat a parked car merely visible through the windshield/window as
+    // the subject's physical car-side location. Exterior car interaction must
+    // come from the selected micro-location itself.
+    const carSubScene = (subScene || microLoc?.labelAR || '').toLowerCase();
+    const isExteriorCarLocation = Boolean(
+      microLoc?.isOutdoor ||
+      containsAny(carSubScene, ['بجانب السيارة', 'خارج السيارة', 'عند باب السيارة', 'موقف', 'parking', 'outside'])
+    );
+    if (isExteriorCarLocation) {
       addFurniture('parked-car');
       addFeatures('parking', 'exterior-open');
       addSurfaces('car-door');
