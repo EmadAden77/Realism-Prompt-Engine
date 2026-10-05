@@ -3,6 +3,24 @@ import type { MicroLocation, SceneFamilyId } from '../data/microLocations';
 
 export type GroupSelfieSize = 2 | 3 | 4 | 5;
 export type GroupSelfieRelationship = 'auto' | 'coworkers' | 'friends' | 'family' | 'gym-friends';
+export type GroupClothingDiversity = 'low' | 'natural' | 'high';
+export type GroupUniformConsistency = 'unified' | 'mostly-unified' | 'naturally-varied';
+export type GroupClothingPresetId =
+  | 'auto'
+  | 'saudi-military-realistic'
+  | 'saudi-military-admin'
+  | 'saudi-military-daily'
+  | 'saudi-military-field'
+  | 'saudi-military-winter'
+  | 'civil-admin'
+  | 'saudi-thobe'
+  | 'business-casual'
+  | 'saudi-casual'
+  | 'mixed-natural'
+  | 'gym-training'
+  | 'gym-post-workout'
+  | 'home-casual'
+  | 'everyday-casual';
 
 export interface GroupCompanionProfile {
   id: string;
@@ -31,6 +49,9 @@ export interface GroupSelfieInput {
   subScene: string;
   framing: Framing;
   microLoc?: MicroLocation;
+  clothingPreset?: GroupClothingPresetId;
+  clothingDiversity?: GroupClothingDiversity;
+  uniformConsistency?: GroupUniformConsistency;
 }
 
 export interface ResolvedGroupSelfie {
@@ -40,6 +61,10 @@ export interface ResolvedGroupSelfie {
   companionCount: number;
   maxByLocation: GroupSelfieSize;
   relationship: Exclude<GroupSelfieRelationship, 'auto'>;
+  clothingPreset: GroupClothingPresetId;
+  clothingPresetLabelAR: string;
+  clothingDiversity: GroupClothingDiversity;
+  uniformConsistency: GroupUniformConsistency;
   arrangement: string;
   requiredFraming: Framing;
   recommendedDistanceCm: number;
@@ -196,6 +221,182 @@ const OUTFITS: Record<SceneFamilyId, string[]> = {
   ]
 };
 
+export interface GroupClothingOption {
+  id: GroupClothingPresetId;
+  labelAR: string;
+  families: SceneFamilyId[];
+  zones?: string[];
+  outfits: string[];
+  realismRules: string[];
+}
+
+const MILITARY_ADMIN_OUTFITS = [
+  'realistic Saudi military administrative duty uniform in a restrained olive tone, neat tucked duty shirt with matching trousers, practical black duty shoes, subtle non-readable name/role patches, no ceremonial decoration',
+  'realistic Saudi military office-duty uniform in a sand-khaki tone, structured long-sleeve shirt with matching duty trousers and practical black footwear, restrained workplace presentation',
+  'realistic Saudi military administrative uniform in a darker olive duty variation, clean matte fabric, matching trousers, ordinary service footwear, minimal non-readable insignia',
+  'realistic Saudi military office uniform with a lightweight duty overshirt over matching trousers, practical footwear, subtle person-specific fit differences and no theatrical styling'
+];
+
+const MILITARY_DAILY_OUTFITS = [
+  'realistic Saudi military daily-duty uniform in an olive duty tone, structured shirt and trousers, practical boots, natural work creases, restrained non-readable patches',
+  'realistic Saudi military daily-duty uniform in a sand-toned variation, practical cargo-cut trousers, matte duty shirt, ordinary service boots, no combat posing',
+  'realistic Saudi military everyday duty uniform with sleeves naturally down, practical belt, matching trousers and work boots, slight lived-in fabric creasing',
+  'realistic Saudi military daily-duty clothing with a neat duty shirt, matching trousers, practical boots and a subtle cap variation appropriate to routine work'
+];
+
+const MILITARY_FIELD_OUTFITS = [
+  'realistic Saudi military field-duty camouflage uniform with practical cargo pockets and service boots, restrained everyday field presentation, no special-forces exaggeration',
+  'realistic Saudi military field-style duty uniform in a plausible desert-oriented camouflage variation, practical boots, matte fabric and mild natural work wear',
+  'realistic Saudi military field-duty uniform with a practical cap, cargo trousers and ordinary service boots, restrained equipment load and no ceremonial elements',
+  'realistic Saudi military field-duty clothing with slightly different camouflage tonal balance, practical boots and natural fabric wear appropriate to an outdoor work area'
+];
+
+const MILITARY_WINTER_OUTFITS = [
+  'realistic Saudi military duty uniform with a lightweight olive field jacket layered over the standard uniform, practical trousers and boots',
+  'realistic Saudi military cold-weather duty variation with a darker service jacket, matching duty trousers and practical black footwear',
+  'realistic Saudi military layered duty uniform with a lightweight sand-toned jacket, ordinary service trousers and boots, natural jacket folds',
+  'realistic Saudi military winter-duty variation with a restrained field jacket over daily-duty clothing, practical footwear and no theatrical tactical accessories'
+];
+
+const CIVIL_ADMIN_OUTFITS = [
+  'sand-khaki civilian administrative shirt with charcoal trousers and black work shoes',
+  'light-blue long-sleeve office shirt with dark navy trousers and simple black shoes',
+  'medium-grey work shirt with black trousers, sleeves naturally down and ordinary office shoes',
+  'white business shirt with charcoal trousers and understated black footwear'
+];
+
+const SAUDI_THOBE_OUTFITS = [
+  'plain white Saudi thobe with understated everyday styling and ordinary footwear',
+  'off-white Saudi thobe with natural fabric drape and simple everyday sandals or shoes',
+  'clean white Saudi thobe with subtle person-specific collar and fabric variation, no ceremonial styling'
+];
+
+const BUSINESS_CASUAL_OUTFITS = [
+  'navy long-sleeve casual shirt with stone chinos and understated leather shoes',
+  'beige button-up shirt with dark trousers and simple everyday shoes',
+  'medium-grey polo with charcoal trousers and clean casual footwear',
+  'olive overshirt over a plain cream T-shirt with black trousers'
+];
+
+const SAUDI_CASUAL_OUTFITS = [
+  'plain charcoal T-shirt with dark jeans and ordinary sneakers',
+  'navy polo shirt with stone chinos and casual shoes',
+  'beige linen shirt with off-white trousers and understated footwear',
+  'olive overshirt over a cream T-shirt with black trousers and casual shoes'
+];
+
+const GYM_TRAINING_OUTFITS = [
+  'black training T-shirt with charcoal athletic shorts and practical training shoes',
+  'grey performance top with black training trousers and neutral gym shoes',
+  'olive athletic T-shirt with dark shorts and practical trainers',
+  'navy lightweight training top with black joggers and ordinary gym footwear'
+];
+
+const GYM_POST_OUTFITS = [
+  'dark training T-shirt with lightweight zip hoodie, black joggers and gym shoes after a workout',
+  'grey performance top with a towel over one shoulder, dark training trousers and practical gym shoes',
+  'navy sports T-shirt with relaxed black joggers and ordinary trainers, mild post-workout fabric wear'
+];
+
+const HOME_CASUAL_OUTFITS = [
+  'soft heather-grey T-shirt with dark lounge trousers',
+  'plain navy polo with relaxed cotton trousers',
+  'lightweight cream sweatshirt with charcoal joggers',
+  'plain dark T-shirt with relaxed lounge trousers'
+];
+
+export const GROUP_CLOTHING_OPTIONS: GroupClothingOption[] = [
+  { id:'auto', labelAR:'تلقائي حسب المكان', families:['military-base','saudi-outdoor','car','living-room','bedroom','gym'], outfits:[], realismRules:['derive companion clothing only from the selected place and micro-location'] },
+  { id:'saudi-military-realistic', labelAR:'لباس عسكري سعودي واقعي', families:['military-base'], outfits:[...MILITARY_ADMIN_OUTFITS,...MILITARY_DAILY_OUTFITS,...MILITARY_FIELD_OUTFITS,...MILITARY_WINTER_OUTFITS], realismRules:['use realistic Saudi military workplace variations','no fantasy uniform','no ceremonial excess','no duplicated exact outfit in naturally-varied mode'] },
+  { id:'saudi-military-admin', labelAR:'زي عسكري سعودي إداري', families:['military-base'], zones:['office','meeting','waiting','break','corridor','entrance'], outfits:MILITARY_ADMIN_OUTFITS, realismRules:['administrative workplace presentation','avoid heavy field styling'] },
+  { id:'saudi-military-daily', labelAR:'زي عسكري سعودي يومي', families:['military-base'], zones:['office','meeting','waiting','break','corridor','entrance','exterior','parking'], outfits:MILITARY_DAILY_OUTFITS, realismRules:['ordinary daily-duty presentation','restrained work wear'] },
+  { id:'saudi-military-field', labelAR:'زي عسكري سعودي ميداني', families:['military-base'], zones:['corridor','entrance','exterior','parking'], outfits:MILITARY_FIELD_OUTFITS, realismRules:['field-duty styling only where context supports it','no cinematic special-forces styling'] },
+  { id:'saudi-military-winter', labelAR:'زي عسكري سعودي شتوي / جاكيت', families:['military-base'], zones:['corridor','entrance','exterior','parking','office','meeting'], outfits:MILITARY_WINTER_OUTFITS, realismRules:['layer only where plausible','natural jacket weight and folds'] },
+  { id:'civil-admin', labelAR:'ملابس موظفين إدارية مدنية', families:['military-base'], zones:['office','meeting','waiting','break','corridor','entrance'], outfits:CIVIL_ADMIN_OUTFITS, realismRules:['ordinary civilian administrative clothing'] },
+  { id:'saudi-thobe', labelAR:'ثوب سعودي', families:['military-base','saudi-outdoor','car','living-room','bedroom'], outfits:SAUDI_THOBE_OUTFITS, realismRules:['ordinary Saudi everyday styling'] },
+  { id:'business-casual', labelAR:'Business casual', families:['military-base','saudi-outdoor','car'], outfits:BUSINESS_CASUAL_OUTFITS, realismRules:['ordinary non-staged workplace or street styling'] },
+  { id:'saudi-casual', labelAR:'كاجوال سعودي يومي', families:['saudi-outdoor','car'], outfits:SAUDI_CASUAL_OUTFITS, realismRules:['ordinary everyday Saudi casual clothing'] },
+  { id:'mixed-natural', labelAR:'مزيج طبيعي حسب المكان', families:['military-base','saudi-outdoor','car','living-room','bedroom','gym'], outfits:[], realismRules:['mix compatible clothing categories without clone repetition'] },
+  { id:'gym-training', labelAR:'ملابس تمرين', families:['gym'], outfits:GYM_TRAINING_OUTFITS, realismRules:['practical gym clothing only'] },
+  { id:'gym-post-workout', labelAR:'ملابس ما بعد التمرين', families:['gym'], outfits:GYM_POST_OUTFITS, realismRules:['mild post-workout wear without theatrical sweat'] },
+  { id:'home-casual', labelAR:'ملابس منزلية يومية', families:['living-room','bedroom'], outfits:HOME_CASUAL_OUTFITS, realismRules:['comfortable everyday home clothing'] },
+  { id:'everyday-casual', labelAR:'كاجوال يومي', families:['saudi-outdoor','car','living-room','bedroom'], outfits:SAUDI_CASUAL_OUTFITS, realismRules:['ordinary casual clothing appropriate to the place'] }
+];
+
+export function getGroupClothingOptions(
+  familyId: SceneFamilyId,
+  microLoc?: MicroLocation
+): GroupClothingOption[] {
+  const zone = microLoc?.zone;
+  return GROUP_CLOTHING_OPTIONS.filter(option => {
+    if (!option.families.includes(familyId)) return false;
+    if (!option.zones || option.zones.length === 0 || !zone) return true;
+    return option.zones.includes(zone);
+  });
+}
+
+function getMilitaryAutoPool(microLoc?: MicroLocation): string[] {
+  const zone = microLoc?.zone;
+  if (zone === 'office' || zone === 'meeting' || zone === 'waiting') {
+    return [...MILITARY_ADMIN_OUTFITS, ...MILITARY_DAILY_OUTFITS];
+  }
+  if (zone === 'parking' || zone === 'exterior') {
+    return [...MILITARY_DAILY_OUTFITS, ...MILITARY_FIELD_OUTFITS, ...MILITARY_WINTER_OUTFITS];
+  }
+  if (zone === 'corridor' || zone === 'entrance') {
+    return [...MILITARY_ADMIN_OUTFITS, ...MILITARY_DAILY_OUTFITS, ...MILITARY_FIELD_OUTFITS];
+  }
+  if (zone === 'break' || zone === 'service') {
+    return [...MILITARY_ADMIN_OUTFITS, ...MILITARY_DAILY_OUTFITS];
+  }
+  return [...MILITARY_ADMIN_OUTFITS, ...MILITARY_DAILY_OUTFITS];
+}
+
+function resolveClothingOption(
+  familyId: SceneFamilyId,
+  microLoc: MicroLocation | undefined,
+  requested: GroupClothingPresetId
+): GroupClothingOption {
+  const available = getGroupClothingOptions(familyId, microLoc);
+  const explicit = available.find(option => option.id === requested);
+  if (explicit && explicit.id !== 'auto' && explicit.id !== 'mixed-natural') return explicit;
+
+  if (familyId === 'military-base') {
+    return {
+      id: requested === 'mixed-natural' ? 'mixed-natural' : 'auto',
+      labelAR: requested === 'mixed-natural' ? 'مزيج طبيعي حسب المكان' : 'تلقائي حسب المكان',
+      families:[familyId],
+      outfits:getMilitaryAutoPool(microLoc),
+      realismRules:['micro-location-aware Saudi military/workplace clothing','avoid cloned outfit silhouettes']
+    };
+  }
+
+  if (familyId === 'gym') return {
+    id: requested === 'mixed-natural' ? 'mixed-natural' : 'auto',
+    labelAR: requested === 'mixed-natural' ? 'مزيج طبيعي حسب المكان' : 'تلقائي حسب المكان',
+    families:[familyId],
+    outfits:[...GYM_TRAINING_OUTFITS,...GYM_POST_OUTFITS],
+    realismRules:['gym-appropriate clothing only']
+  };
+
+  if (familyId === 'living-room' || familyId === 'bedroom') return {
+    id: requested === 'mixed-natural' ? 'mixed-natural' : 'auto',
+    labelAR: requested === 'mixed-natural' ? 'مزيج طبيعي حسب المكان' : 'تلقائي حسب المكان',
+    families:[familyId],
+    outfits:[...HOME_CASUAL_OUTFITS,...SAUDI_THOBE_OUTFITS],
+    realismRules:['ordinary home clothing']
+  };
+
+  return {
+    id: requested === 'mixed-natural' ? 'mixed-natural' : 'auto',
+    labelAR: requested === 'mixed-natural' ? 'مزيج طبيعي حسب المكان' : 'تلقائي حسب المكان',
+    families:[familyId],
+    outfits:[...SAUDI_CASUAL_OUTFITS,...SAUDI_THOBE_OUTFITS,...BUSINESS_CASUAL_OUTFITS],
+    realismRules:['ordinary place-compatible everyday clothing']
+  };
+}
+
+
 const hash = (value: string): number => {
   let h = 2166136261;
   for (let i = 0; i < value.length; i++) {
@@ -299,9 +500,13 @@ function buildProfiles(
   subScene: string,
   companionCount: number,
   relationship: Exclude<GroupSelfieRelationship, 'auto'>,
-  arrangement: string
+  arrangement: string,
+  outfitPool: string[],
+  clothingDiversity: GroupClothingDiversity,
+  uniformConsistency: GroupUniformConsistency
 ): GroupCompanionProfile[] {
-  const seed = hash(`${familyId}|${subScene}|${relationship}`);
+  const safePool = outfitPool.length > 0 ? outfitPool : OUTFITS[familyId];
+  const seed = hash(`${familyId}|${subScene}|${relationship}|${clothingDiversity}|${uniformConsistency}`);
   const offsets = {
     face: seed % FACE_SHAPES.length,
     jaw: (seed + 1) % JAWS.length,
@@ -311,7 +516,21 @@ function buildProfiles(
     beard: (seed + 5) % FACIAL_HAIR.length,
     build: (seed + 6) % BUILDS.length,
     height: (seed + 7) % HEIGHTS.length,
-    outfit: (seed + 2) % OUTFITS[familyId].length
+    outfit: (seed + 2) % safePool.length
+  };
+
+  const outfitFor = (index: number): string => {
+    if (uniformConsistency === 'unified') return safePool[offsets.outfit];
+    if (uniformConsistency === 'mostly-unified') {
+      const width = Math.min(2, safePool.length);
+      return safePool[(offsets.outfit + (index % width)) % safePool.length];
+    }
+    if (clothingDiversity === 'low') {
+      const width = Math.min(2, safePool.length);
+      return safePool[(offsets.outfit + (index % width)) % safePool.length];
+    }
+    const step = clothingDiversity === 'high' ? 2 : 1;
+    return safePool[(offsets.outfit + index * step) % safePool.length];
   };
 
   return Array.from({ length: companionCount }, (_, i) => ({
@@ -327,7 +546,7 @@ function buildProfiles(
     facialHair: pickDistinct(FACIAL_HAIR, offsets.beard, i),
     eyewear: pickDistinct(EYEWEAR, seed % EYEWEAR.length, i),
     complexion: pickDistinct(COMPLEXIONS, (seed + 3) % COMPLEXIONS.length, i),
-    outfit: pickDistinct(OUTFITS[familyId], offsets.outfit, i),
+    outfit: outfitFor(i),
     position: `position ${i + 1} within: ${arrangement}; each face occupies a distinct depth/side slot`,
     gaze: i % 3 === 0
       ? 'looking naturally toward the phone lens'
@@ -342,7 +561,10 @@ function buildProfiles(
   }));
 }
 
-export function evaluateAntiCloning(profiles: GroupCompanionProfile[]): { passed: boolean; score: number; notes: string[] } {
+export function evaluateAntiCloning(
+  profiles: GroupCompanionProfile[],
+  allowSharedOutfit = false
+): { passed: boolean; score: number; notes: string[] } {
   let penalty = 0;
   const notes: string[] = [];
   for (let i = 0; i < profiles.length; i++) {
@@ -358,7 +580,7 @@ export function evaluateAntiCloning(profiles: GroupCompanionProfile[]): { passed
         a.facialHair === b.facialHair,
         a.bodyBuild === b.bodyBuild,
         a.heightCm === b.heightCm,
-        a.outfit === b.outfit
+        !allowSharedOutfit && a.outfit === b.outfit
       ].filter(Boolean).length;
 
       if (same >= 3) {
@@ -384,8 +606,25 @@ export function resolveGroupSelfie(input: GroupSelfieInput): ResolvedGroupSelfie
   const companionCount = resolvedSize - 1;
   const requiredFraming = getRequiredGroupFraming(resolvedSize);
   const arrangement = resolveArrangement(input.familyId, input.microLoc, resolvedSize);
-  const profiles = buildProfiles(input.familyId, input.subScene, companionCount, relationship, arrangement);
-  const uniqueness = evaluateAntiCloning(profiles);
+  const requestedClothingPreset = input.clothingPreset ?? 'auto';
+  const clothingDiversity = input.clothingDiversity ?? 'natural';
+  const uniformConsistency = input.uniformConsistency ?? 'naturally-varied';
+  const clothingOption = resolveClothingOption(input.familyId, input.microLoc, requestedClothingPreset);
+  const profiles = buildProfiles(
+    input.familyId,
+    input.subScene,
+    companionCount,
+    relationship,
+    clothingPreset: clothingOption.id,
+    clothingPresetLabelAR: clothingOption.labelAR,
+    clothingDiversity,
+    uniformConsistency,
+    arrangement,
+    clothingOption.outfits,
+    clothingDiversity,
+    uniformConsistency
+  );
+  const uniqueness = evaluateAntiCloning(profiles, uniformConsistency === 'unified');
 
   const recommendedDistanceCm =
     resolvedSize === 2 ? 46 :
@@ -406,7 +645,7 @@ export function resolveGroupSelfie(input: GroupSelfieInput): ResolvedGroupSelfie
   ).join('\n');
 
   const prompt = input.enabled
-    ? `GROUP SELFIE MODE: total people=${resolvedSize}. The reference-image subject remains the only identity-locked person and the only person holding the Xiaomi 15 Ultra front-camera phone. Relationship: ${relationshipLabel(relationship)}. Arrangement: ${arrangement}. Camera distance should be about ${recommendedDistanceCm}cm, remaining within real one-arm reach.\n${cast}\nANTI-CLONING: every companion must be a genuinely different individual. Do not reuse the reference subject's face, skull shape, hairline, beard pattern, body proportions, height, or outfit. Do not reuse one companion's face on another companion. Preserve the listed differences in face geometry, height, body build, hair, facial hair, complexion, eyewear, and clothing. Faces must not look like siblings, twins, clones, face-swaps, or variations of one latent identity.`
+    ? `GROUP SELFIE MODE: total people=${resolvedSize}. The reference-image subject remains the only identity-locked person and the only person holding the Xiaomi 15 Ultra front-camera phone. The main subject's outfit remains controlled exclusively by the main clothing selector and MUST NOT be changed by group clothing controls. Relationship: ${relationshipLabel(relationship)}. Arrangement: ${arrangement}. Camera distance should be about ${recommendedDistanceCm}cm, remaining within real one-arm reach. GROUP COMPANION CLOTHING: preset=${clothingOption.labelAR}; diversity=${clothingDiversity}; consistency=${uniformConsistency}. ${clothingOption.realismRules.join('; ')}.\n${cast}\nANTI-CLONING: every companion must be a genuinely different individual. Do not reuse the reference subject's face, skull shape, hairline, beard pattern, body proportions, height, or outfit. Do not reuse one companion's face on another companion. Preserve the listed differences in face geometry, height, body build, hair, facial hair, complexion, eyewear, and clothing. Faces must not look like siblings, twins, clones, face-swaps, or variations of one latent identity.`
     : '';
 
   const physicsGuards = input.enabled ? [
