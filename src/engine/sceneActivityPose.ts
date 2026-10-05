@@ -588,6 +588,17 @@ const ACTIVITY_CATALOG: SceneActivityDefinition[] = [
     tags: ['seated','relaxed']
   },
   {
+    id: 'lie-on-bed',
+    labelAR: 'مستلقي',
+    prompt: 'lying naturally on the bed without posing',
+    mechanics: 'body weight is distributed through the mattress with visible pillow/mattress support rather than unsupported floating posture',
+    gaze: 'soft relaxed gaze toward the reachable phone position or slightly off-camera',
+    handBehavior: 'free arm rests under gravity while the capturing arm remains within realistic reclined selfie reach',
+    requiresFurnitureAny: ['bed'],
+    compatiblePoseIds: ['lie-bed','recline-bed'],
+    tags: ['reclined','bed']
+  },
+  {
     id: 'sit-bed-edge',
     labelAR: 'جالس على حافة السرير',
     prompt: 'sitting naturally on the edge of the bed',
