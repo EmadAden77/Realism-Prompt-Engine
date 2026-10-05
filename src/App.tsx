@@ -1038,7 +1038,15 @@ const buildBackgroundReasoningKey = (state: SceneState): string => JSON.stringif
   framing: state.framing,
   cameraAngle: state.cameraAngle,
   cameraAngleMode: state.cameraAngleMode,
-  selfieAngleId: state.selfieAngleAdvice?.angleId,
+  selfieAngle: state.selfieAngleAdvice
+    ? {
+        id: state.selfieAngleAdvice.angleId,
+        pitchOffsetDeg: state.selfieAngleAdvice.pitchOffsetDeg,
+        yawOffsetDeg: state.selfieAngleAdvice.yawOffsetDeg,
+        rollOffsetDeg: state.selfieAngleAdvice.rollOffsetDeg,
+        distanceOffsetCm: state.selfieAngleAdvice.distanceOffsetCm
+      }
+    : null,
   lightingMode: state.lightingMode,
   backgroundMode: state.backgroundMode,
   backgroundHumans: state.backgroundHumans,
@@ -1259,17 +1267,20 @@ export default function PhysFrameApp() {
   };
 
   const updateBackgroundControls = (patch: Partial<SceneState>) => {
-    setState(prev => ({
-      ...prev,
-      ...patch,
-      backgroundGeminiAdvice: undefined,
-      ...(prev.backgroundAutoAngle
-        ? {
-            cameraAngleMode: 'gemini-smart' as SelfieAngleMode,
-            selfieAngleAdvice: undefined
-          }
-        : {})
-    }));
+    setState(prev => {
+      const linked = patch.backgroundAutoAngle ?? prev.backgroundAutoAngle;
+      return {
+        ...prev,
+        ...patch,
+        backgroundGeminiAdvice: undefined,
+        ...(linked
+          ? {
+              cameraAngleMode: 'gemini-smart' as SelfieAngleMode,
+              selfieAngleAdvice: undefined
+            }
+          : {})
+      };
+    });
   };
 
   const updateGroupSelfieControls = (patch: Partial<SceneState>) => {
@@ -1305,6 +1316,21 @@ export default function PhysFrameApp() {
           if (!validOutfit) {
             parsed.outfitId = DEFAULT_STATE.outfitId;
           }
+
+          // V2 migration: background realism is now physically linked to the
+          // resolved selfie geometry (distance + pitch/yaw/roll + FOV). Enable
+          // the link once for existing installs that may have persisted OFF
+          // before the geometry-aware solver existed. The user can still turn
+          // it off again afterward from the same existing control.
+          const backgroundLinkMigrationKey = 'physframe_background_geometry_link_v2';
+          if (!localStorage.getItem(backgroundLinkMigrationKey)) {
+            parsed.backgroundAutoAngle = true;
+            parsed.cameraAngleMode = 'gemini-smart';
+            parsed.selfieAngleAdvice = undefined;
+            parsed.backgroundGeminiAdvice = undefined;
+            localStorage.setItem(backgroundLinkMigrationKey, '1');
+          }
+
           setState({ ...DEFAULT_STATE, ...parsed });
         }
 
