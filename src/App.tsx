@@ -64,6 +64,11 @@ import {
   HoodPosition,
   ThobeCollar
 } from './engine/activityAttire';
+import {
+  resolveGroupSelfie,
+  GroupSelfieSize,
+  GroupSelfieRelationship
+} from './engine/groupSelfie';
 
 // --- TYPES ---
 type CaptureType = 'front-selfie' | 'mirror-selfie' | 'third-person-candid';
@@ -139,6 +144,11 @@ interface SceneState {
   // Smart Xiaomi selfie camera director
   cameraAngleMode: SelfieAngleMode;
   selfieAngleAdvice?: SelfieAngleAdvice;
+
+  // Dynamic scene-aware group selfie
+  groupSelfieEnabled: boolean;
+  groupSelfieSize: GroupSelfieSize;
+  groupSelfieRelationship: GroupSelfieRelationship;
 }
 
 interface DerivedSceneState {
@@ -175,6 +185,7 @@ interface SemanticScene {
   skinResponse: string;
   cameraRealism: string;
   styleConstraints: string;
+  groupSelfie?: string;
 }
 
 interface SavedPreset {
@@ -801,6 +812,9 @@ const buildSemanticScene = (
 
   const microLoc = getMicroLocation(state.sceneFamily, state.subScene);
   const locationLabel = state.sceneFamily ? SCENE_FAMILIES[state.sceneFamily]?.labelAR : '';
+  const groupSelfieText = physicalState?.groupSelfie?.enabled
+    ? physicalState.groupSelfie.prompt
+    : '';
 
   let visibleEnvironmentText = '';
   if (physicalState?.visibleEnvironment) {
@@ -848,7 +862,8 @@ const buildSemanticScene = (
     atmosphere: derived.atmosphericEffects,
     skinResponse: derived.skinResponse,
     cameraRealism: cameraRealism,
-    styleConstraints: styleConstraintsList.join('. ')
+    styleConstraints: styleConstraintsList.join('. '),
+    groupSelfie: groupSelfieText
   };
 };
 
@@ -856,6 +871,9 @@ const buildPromptText = (semantic: SemanticScene, aiType: 'chatgpt' | 'gemini'):
   let prompt = `Generate a realistic photograph with the following strict constraints:\n\n`;
   prompt += `[SUBJECT & IDENTITY LOCK]\n${semantic.identity}\nBody: ${semantic.body}\nEyeglasses: ${semantic.glasses}\nExpression: ${semantic.expression}\nHair: ${semantic.hair}\n\n`;
   prompt += `[ATTIRE & PHYSICS]\nOutfit: ${semantic.outfit}\nFabric Behavior: ${semantic.outfitPhysics}\nSkin State: ${semantic.skinResponse}\n\n`;
+  if (semantic.groupSelfie) {
+    prompt += `[GROUP SELFIE CAST & ANTI-CLONING]\n${semantic.groupSelfie}\n\n`;
+  }
   prompt += `[CAMERA & FRAMING]\n${semantic.captureMechanics}\n${semantic.cameraRealism}\n\n`;
   prompt += `[ENVIRONMENT & ATMOSPHERE]\nLocation: ${semantic.visibleEnvironment}\nAtmospheric Condition: ${semantic.atmosphere}\nLighting: ${semantic.lighting}\n\n`;
   prompt += `[POSE & CONTACT]\n${semantic.poseAndContact}\n\n`;
@@ -885,6 +903,10 @@ const buildNegativeConstraints = (state: SceneState, derived: DerivedSceneState)
 
   if (state.captureType === 'front-selfie') {
     neg += `floating camera, third-person perspective, impossible selfie arm length, professional studio bokeh on selfie, DSLR extreme shallow depth of field. `;
+  }
+
+  if (state.groupSelfieEnabled) {
+    neg += `cloned faces, twin-like companions, repeated face identity, duplicated skull geometry, duplicated hairline, identical beard patterns, identical body builds, identical heights, duplicated outfits, face-swapped companions, repeated hands, mirrored duplicate poses, every person holding a phone, multiple selfie arms, perfectly symmetric group arrangement. `;
   }
 
   if (state.shirtButtons === 'fully-buttoned') {
@@ -1003,6 +1025,9 @@ const buildSelfieAngleReasoningKey = (state: SceneState): string => JSON.stringi
   framing: state.framing,
   timeOfDay: state.timeOfDay,
   lightingMode: state.lightingMode,
+  groupSelfie: state.groupSelfieEnabled
+    ? { size: state.groupSelfieSize, relationship: state.groupSelfieRelationship }
+    : 'off',
   backgroundAngleLink: state.backgroundAutoAngle
     ? {
         mode: state.backgroundMode,
@@ -1035,6 +1060,8 @@ const buildEligibleSelfieAngleCatalog = (state: SceneState) => {
     backgroundActivity: state.backgroundActivity,
     backgroundPresence: state.backgroundPresence,
     backgroundCompositionGoal: state.backgroundCompositionGoal,
+    groupSelfieEnabled: state.groupSelfieEnabled,
+    groupSelfieSize: state.groupSelfieSize,
     mode: 'gemini-smart'
   });
 
@@ -1138,7 +1165,10 @@ const DEFAULT_STATE: SceneState = {
   backgroundCompositionGoal: 'auto',
   backgroundAutoAngle: true,
   backgroundGeminiAssist: true,
-  cameraAngleMode: 'gemini-smart'
+  cameraAngleMode: 'gemini-smart',
+  groupSelfieEnabled: false,
+  groupSelfieSize: 2,
+  groupSelfieRelationship: 'auto'
 };
 
 export default function PhysFrameApp() {
@@ -1202,6 +1232,25 @@ export default function PhysFrameApp() {
     }));
   };
 
+  const updateGroupSelfieControls = (patch: Partial<SceneState>) => {
+    setState(prev => {
+      const next: SceneState = {
+        ...prev,
+        ...patch,
+        captureType: patch.groupSelfieEnabled === false
+          ? prev.captureType
+          : (patch.groupSelfieEnabled === true || prev.groupSelfieEnabled)
+            ? 'front-selfie'
+            : prev.captureType,
+        cameraAngleMode: (patch.groupSelfieEnabled === true || prev.groupSelfieEnabled)
+          ? 'gemini-smart'
+          : prev.cameraAngleMode,
+        selfieAngleAdvice: undefined
+      };
+      return next.sceneFamily ? resolveConflicts(next) : next;
+    });
+  };
+
   useEffect(() => {
     const loadInitialData = async () => {
       try {
@@ -1261,6 +1310,18 @@ export default function PhysFrameApp() {
   const currentResolvedPreview = state.sceneFamily ? resolveScene(state as any) : null;
   const backgroundDecision = currentResolvedPreview?.physicalState.backgroundRealism ?? null;
   const selfieAngleDecision = currentResolvedPreview?.physicalState.selfieAngle ?? null;
+  const currentMicroLocation = state.sceneFamily ? getMicroLocation(state.sceneFamily, state.subScene) : undefined;
+  const groupSelfiePreview = state.sceneFamily
+    ? resolveGroupSelfie({
+        enabled: state.groupSelfieEnabled,
+        requestedSize: state.groupSelfieSize,
+        relationship: state.groupSelfieRelationship,
+        familyId: state.sceneFamily,
+        subScene: state.subScene,
+        framing: state.framing,
+        microLoc: currentMicroLocation
+      })
+    : null;
 
   useEffect(() => {
     if (state.sceneFamily) {
@@ -1269,7 +1330,7 @@ export default function PhysFrameApp() {
          setState(resolved);
       }
     }
-  }, [state.sceneFamily, state.lightingMode, state.timeOfDay, state.captureType, state.activity, state.foregroundObstruction]);
+  }, [state.sceneFamily, state.subScene, state.lightingMode, state.timeOfDay, state.captureType, state.activity, state.foregroundObstruction, state.groupSelfieEnabled, state.groupSelfieSize, state.framing]);
 
   useEffect(() => {
     if (
@@ -2752,6 +2813,72 @@ export default function PhysFrameApp() {
                         </button>
                       ))}
                    </div>
+
+                   {state.captureType === 'front-selfie' && (
+                     <div className="mb-3 rounded-xl border border-white/10 bg-black/20 p-3">
+                       <button
+                         type="button"
+                         onClick={() => updateGroupSelfieControls({
+                           groupSelfieEnabled: !state.groupSelfieEnabled
+                         })}
+                         className={`w-full flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-right transition-colors ${state.groupSelfieEnabled ? 'bg-[var(--accent)]/10 border-[var(--accent)]/50' : 'bg-white/5 border-white/10'}`}
+                       >
+                         <div>
+                           <div className="text-[11px] font-bold text-white">سيلفي جماعي ديناميكي</div>
+                           <div className="text-[9px] text-[var(--text-muted)] mt-0.5">ليس قالبًا ثابتًا: المكان يحدد التوزيع والمسافة وملابس الأشخاص</div>
+                         </div>
+                         <span className={`text-[10px] font-bold ${state.groupSelfieEnabled ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}>
+                           {state.groupSelfieEnabled ? 'ON' : 'OFF'}
+                         </span>
+                       </button>
+
+                       {state.groupSelfieEnabled && groupSelfiePreview && (
+                         <div className="mt-3">
+                           <div className="grid grid-cols-2 gap-2 mb-2">
+                             <div>
+                               <label className="text-[10px] text-[var(--text-muted)] block mb-1">عدد الأشخاص</label>
+                               <select
+                                 value={state.groupSelfieSize}
+                                 onChange={e => updateGroupSelfieControls({
+                                   groupSelfieSize: Number(e.target.value) as GroupSelfieSize
+                                 })}
+                                 className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white"
+                               >
+                                 {[2,3,4,5].map(size => (
+                                   <option key={size} value={size} disabled={size > groupSelfiePreview.maxByLocation}>
+                                     {size} أشخاص{size > groupSelfiePreview.maxByLocation ? ' · غير مناسب للمكان' : ''}
+                                   </option>
+                                 ))}
+                               </select>
+                             </div>
+                             <div>
+                               <label className="text-[10px] text-[var(--text-muted)] block mb-1">نوع المجموعة</label>
+                               <select
+                                 value={state.groupSelfieRelationship}
+                                 onChange={e => updateGroupSelfieControls({
+                                   groupSelfieRelationship: e.target.value as GroupSelfieRelationship
+                                 })}
+                                 className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white"
+                               >
+                                 <option value="auto">تلقائي حسب المكان</option>
+                                 <option value="coworkers">زملاء عمل</option>
+                                 <option value="friends">أصدقاء</option>
+                                 <option value="family">عائلة</option>
+                                 <option value="gym-friends">أصدقاء النادي</option>
+                               </select>
+                             </div>
+                           </div>
+
+                           <div className="rounded-lg border border-[#2C5A43] bg-[#102219] px-3 py-2 text-[9px] leading-relaxed text-[#8FD2A6]">
+                             <div className="font-bold mb-1">Anti-Cloning: {groupSelfiePreview.antiCloningPassed ? 'PASS ✓' : 'يحتاج تصحيح'}</div>
+                             <div>التوزيع: {groupSelfiePreview.arrangement}</div>
+                             <div className="mt-1">الحد الواقعي للمكان: {groupSelfiePreview.maxByLocation} · المسافة المقترحة: {groupSelfiePreview.recommendedDistanceCm}cm</div>
+                             <div className="mt-1">كل مرافق له وجه وشعر ولحية وطول وبنية وملابس مختلفة عن الآخرين، وصاحب الصورة المرجعية وحده مثبت الهوية ويحمل الهاتف.</div>
+                           </div>
+                         </div>
+                       )}
+                     </div>
+                   )}
 
                    <div className="flex gap-2 mb-3">
                       {[
