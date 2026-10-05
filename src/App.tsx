@@ -1248,6 +1248,14 @@ export default function PhysFrameApp() {
   const outfitCapabilities = getOutfitCapabilities(selectedOutfit);
   const activityOptions = state.sceneFamily ? getActivityOptions(state.sceneFamily, state.subScene) : [];
   const poseOptions = state.sceneFamily ? getPoseOptions(state.sceneFamily) : [];
+  const militarySubSceneGroups = state.sceneFamily === 'military-base'
+    ? ['المكاتب', 'الممرات', 'الأبواب والمداخل', 'الانتظار والاجتماعات', 'الاستراحة والخدمات', 'الدرج', 'خارج المبنى', 'المواقف']
+        .map(groupAR => ({
+          groupAR,
+          locations: MICRO_LOCATIONS['military-base'].filter(location => location.groupAR === groupAR)
+        }))
+        .filter(group => group.locations.length > 0)
+    : [];
   const backgroundReasoningKey = buildBackgroundReasoningKey(state);
   const selfieAngleReasoningKey = buildSelfieAngleReasoningKey(state);
   const currentResolvedPreview = state.sceneFamily ? resolveScene(state as any) : null;
@@ -2639,17 +2647,50 @@ export default function PhysFrameApp() {
                   </div>
 
                   <label className="text-[11px] text-[var(--text-muted)] block mb-2 font-bold">الزاوية الفرعية الدقيقة:</label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {activeFamily?.subScenes.map(sub => (
-                      <button
-                        key={sub}
-                        onClick={() => setState({ ...state, subScene: sub })}
-                        className={`px-3 py-1.5 rounded-xl text-xs border transition-colors ${state.subScene === sub ? 'bg-[var(--accent)]/15 border-[var(--border-accent)] text-[var(--accent)] font-bold' : 'border-[var(--border)] text-[var(--text-muted)] hover:bg-white/5'}`}
-                      >
-                        {sub}
-                      </button>
-                    ))}
-                  </div>
+                  {state.sceneFamily === 'military-base' ? (
+                    <div className="space-y-3">
+                      {militarySubSceneGroups.map(group => (
+                        <div key={group.groupAR} className="rounded-xl border border-white/5 bg-black/10 p-2.5">
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <span className="text-[10px] font-bold text-white">{group.groupAR}</span>
+                            <span className="text-[9px] text-[var(--text-muted)]">{group.locations.length} زوايا</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {group.locations.map(location => (
+                              <button
+                                key={location.id}
+                                type="button"
+                                onClick={() => setState(prev => ({
+                                  ...prev,
+                                  subScene: location.labelAR,
+                                  selfieAngleAdvice: undefined,
+                                  backgroundGeminiAdvice: undefined
+                                }))}
+                                className={`px-2.5 py-1.5 rounded-xl text-[10px] border transition-colors ${state.subScene === location.labelAR ? 'bg-[var(--accent)]/15 border-[var(--border-accent)] text-[var(--accent)] font-bold' : 'border-[var(--border)] text-[var(--text-muted)] hover:bg-white/5'}`}
+                              >
+                                {location.labelAR}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                      <div className="text-[9px] leading-relaxed text-[var(--text-muted)] px-1">
+                        كل زاوية تحمل حدودًا مستقلة للبشر والسيارات والفوضى والإضاءة، وتعيد حساب الخلفية والزاوية الذكية عند تغييرها.
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {activeFamily?.subScenes.map(sub => (
+                        <button
+                          key={sub}
+                          onClick={() => setState({ ...state, subScene: sub })}
+                          className={`px-3 py-1.5 rounded-xl text-xs border transition-colors ${state.subScene === sub ? 'bg-[var(--accent)]/15 border-[var(--border-accent)] text-[var(--accent)] font-bold' : 'border-[var(--border)] text-[var(--text-muted)] hover:bg-white/5'}`}
+                        >
+                          {sub}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </section>
 
                 {/* Activity & Pose */}
