@@ -872,6 +872,9 @@ function calculateDetailedPhysicalState(
         enabled: true,
         requestedSize: state.groupSelfieSize ?? 2,
         relationship: state.groupSelfieRelationship ?? 'auto',
+        clothingPreset: state.groupClothingPreset ?? 'auto',
+        clothingDiversity: state.groupClothingDiversity ?? 'natural',
+        uniformConsistency: state.groupUniformConsistency ?? 'naturally-varied',
         familyId,
         subScene: state.subScene,
         framing: state.framing,
@@ -1011,7 +1014,21 @@ function calculateDetailedPhysicalState(
   }
 
   // --- 5. Scene-aware Background Realism ---
-  // Visibility is derived from the actual micro-location and selfie geometry.
+  // Visibility is derived from the actual micro-location and the resolved camera
+  // geometry, not just the broad framing label.
+  const backgroundPitchDeg = selfieAngle?.pitchDeg
+    ?? (effectiveCameraAngle === 'slightly-high' ? -14
+      : effectiveCameraAngle === 'slightly-low' ? 14
+      : effectiveCameraAngle === 'slightly-off-center' ? -5 : 0);
+  const backgroundYawDeg = selfieAngle?.yawDeg
+    ?? (effectiveCameraAngle === 'slightly-off-center' ? 18 : 0);
+  const backgroundRollDeg = selfieAngle?.rollDeg
+    ?? (effectiveCameraAngle === 'slightly-off-center' ? 1 : 0);
+  const horizontalFovDeg =
+    state.captureType === 'front-selfie' ? 79
+      : state.captureType === 'mirror-selfie' ? 68
+      : 56;
+
   const activityDensity = deriveActivityDensity(familyId, state.subScene, state.timeOfDay, framingClass);
   const backgroundRealism = deriveBackgroundRealism({
     familyId,
@@ -1034,7 +1051,12 @@ function calculateDetailedPhysicalState(
     backgroundGeminiAdvice: state.backgroundGeminiAdvice,
     groupSelfieEnabled: state.groupSelfieEnabled,
     groupSelfieSize: state.groupSelfieSize,
-    microLoc
+    microLoc,
+    horizontalFovDeg,
+    selfieDistanceCm: distanceCm,
+    selfiePitchDeg: backgroundPitchDeg,
+    selfieYawDeg: backgroundYawDeg,
+    selfieRollDeg: backgroundRollDeg
   });
 
   let visibleEnvironment = backgroundRealism.environmentalSurfaces.join(', ');
