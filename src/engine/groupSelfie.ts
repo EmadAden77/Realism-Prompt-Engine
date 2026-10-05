@@ -388,7 +388,7 @@ export function resolveGroupSelfie(input: GroupSelfieInput): ResolvedGroupSelfie
   const uniqueness = evaluateAntiCloning(profiles);
 
   const recommendedDistanceCm =
-    resolvedSize === 2 ? 50 :
+    resolvedSize === 2 ? 46 :
     resolvedSize === 3 ? 56 :
     resolvedSize === 4 ? 65 : 69;
 
