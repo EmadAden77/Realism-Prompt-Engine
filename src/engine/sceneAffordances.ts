@@ -1449,9 +1449,29 @@ export function normalizePoseHierarchy(
   const allowed = getAllowedStanceCategories(familyId);
   const legacyPose = requestedDetailedPose || requestedPoseLabel || '';
   const inferred = legacyPose ? inferCategoryFromPose(familyId, legacyPose) : undefined;
+
+  // For legacy/saved states that do not yet have an explicit hierarchy,
+  // preserve the user's selected micro-location when possible. Example:
+  // driver seat + stale "standing" pose must become a seated driver pose,
+  // not silently move the scene outside the car.
+  const requestedLocationExists = MICRO_LOCATIONS[familyId].some(location =>
+    location.id === requestedSubScene || location.labelAR === requestedSubScene
+  );
+  const locationCompatibleStances = requestedLocationExists
+    ? allowed.filter(category =>
+        getDetailedPoseSuggestions(familyId, category).some(pose =>
+          getCompatibleMicroLocations(familyId, category, pose.id).some(location =>
+            location.id === requestedSubScene || location.labelAR === requestedSubScene
+          )
+        )
+      )
+    : [];
+
   const stanceCategory = requestedStance && allowed.includes(requestedStance)
     ? requestedStance
-    : inferred || allowed[0];
+    : inferred && (!requestedLocationExists || locationCompatibleStances.includes(inferred))
+      ? inferred
+      : locationCompatibleStances[0] || inferred || allowed[0];
 
   const detailedOptions = getDetailedPoseSuggestions(familyId, stanceCategory);
   const selected = detailedOptions.find(item =>
