@@ -25,6 +25,13 @@ import {
   SelfieAngleAdvice,
   SelfieAngleMode
 } from './selfieAngles';
+import {
+  resolveGroupSelfie,
+  widenFramingForGroup,
+  GroupSelfieSize,
+  GroupSelfieRelationship,
+  ResolvedGroupSelfie
+} from './groupSelfie';
 import type {
   OutfitWearStyle,
   GarmentWearContext,
@@ -109,6 +116,11 @@ export interface SceneState {
   // Gemini-assisted selfie camera direction. Local physics always validates/caps it.
   cameraAngleMode?: SelfieAngleMode;
   selfieAngleAdvice?: SelfieAngleAdvice;
+
+  // Dynamic group selfie. The reference subject remains the sole identity-locked phone holder.
+  groupSelfieEnabled?: boolean;
+  groupSelfieSize?: GroupSelfieSize;
+  groupSelfieRelationship?: GroupSelfieRelationship;
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -145,6 +157,7 @@ export interface DerivedPhysicalState {
   lightingCausality: LightingCausalityState;
   plausibility: ScenePlausibilityState;
   selfieAngle: ResolvedSelfieAngle | null;
+  groupSelfie: ResolvedGroupSelfie | null;
 }
 
 // Backward-compatible interface for existing App.tsx consumers
@@ -352,6 +365,49 @@ export function resolveScene(rawState: SceneState): ResolvedScene {
   const isOutdoor = microLoc ? microLoc.isOutdoor : (familyId === 'saudi-outdoor');
   const isNight = s.timeOfDay === 'night';
   const isDay = ['morning', 'midday', 'afternoon'].includes(s.timeOfDay);
+
+  if (s.groupSelfieEnabled) {
+    const group = resolveGroupSelfie({
+      enabled: true,
+      requestedSize: s.groupSelfieSize ?? 2,
+      relationship: s.groupSelfieRelationship ?? 'auto',
+      familyId,
+      subScene: s.subScene,
+      framing: s.framing,
+      microLoc
+    });
+
+    if (s.captureType !== 'front-selfie') {
+      issues.push({
+        type: 'contradiction',
+        field: 'captureType',
+        description: 'Group selfie mode requires the direct Xiaomi 15 Ultra front camera.',
+        autoResolvedBy: 'Capture type changed to front-selfie.'
+      });
+      s.captureType = 'front-selfie';
+    }
+
+    if ((s.groupSelfieSize ?? 2) !== group.resolvedSize) {
+      issues.push({
+        type: 'physical_impossibility',
+        field: 'groupSelfieSize',
+        description: `Requested group size ${s.groupSelfieSize ?? 2} exceeds the physical capacity of ${s.subScene || familyId}.`,
+        autoResolvedBy: `Group size capped to ${group.resolvedSize} people for this micro-location.`
+      });
+      s.groupSelfieSize = group.resolvedSize;
+    }
+
+    const widenedFraming = widenFramingForGroup(s.framing, group.resolvedSize);
+    if (widenedFraming !== s.framing) {
+      issues.push({
+        type: 'contradiction',
+        field: 'framing',
+        description: `${s.framing} is too tight for a ${group.resolvedSize}-person group selfie.`,
+        autoResolvedBy: `Framing widened to ${widenedFraming} while preserving Xiaomi front-camera geometry.`
+      });
+      s.framing = widenedFraming;
+    }
+  }
 
   // Canonical Xiaomi 15 Ultra front-camera lock.
   if (s.captureType === 'front-selfie' && (s.lensCondition === 'modern-iphone' || s.lensCondition === 'budget-android')) {
@@ -601,6 +657,47 @@ export function validateScene(inputState: SceneState | ResolvedScene): Validatio
   const isNight = state.timeOfDay === 'night';
   const isDay = ['morning', 'midday', 'afternoon'].includes(state.timeOfDay);
 
+  if (state.groupSelfieEnabled) {
+    const group = resolveGroupSelfie({
+      enabled: true,
+      requestedSize: state.groupSelfieSize ?? 2,
+      relationship: state.groupSelfieRelationship ?? 'auto',
+      familyId,
+      subScene: state.subScene,
+      framing: state.framing,
+      microLoc
+    });
+
+    if (state.captureType !== 'front-selfie') {
+      issues.push({
+        type: 'contradiction',
+        field: 'groupSelfieEnabled',
+        description: 'Group selfie mode is enabled but capture type is not front-selfie.'
+      });
+    }
+    if ((state.groupSelfieSize ?? 2) > group.maxByLocation) {
+      issues.push({
+        type: 'physical_impossibility',
+        field: 'groupSelfieSize',
+        description: `Group size exceeds selected micro-location capacity (${group.maxByLocation}).`
+      });
+    }
+    if (widenFramingForGroup(state.framing, group.resolvedSize) !== state.framing) {
+      issues.push({
+        type: 'contradiction',
+        field: 'framing',
+        description: `Selected framing is too tight for ${group.resolvedSize} people.`
+      });
+    }
+    if (!group.antiCloningPassed) {
+      issues.push({
+        type: 'contradiction',
+        field: 'groupSelfieProfiles',
+        description: 'Generated companion profiles are not visually distinct enough.'
+      });
+    }
+  }
+
   // 1. Mirror Selfie Check
   if (state.captureType === 'mirror-selfie') {
     const mirrorAllowedFamilies = ['bedroom', 'gym', 'living-room'];
@@ -697,11 +794,24 @@ function calculateDetailedPhysicalState(
     backgroundActivity: state.backgroundActivity,
     backgroundPresence: state.backgroundPresence,
     backgroundCompositionGoal: state.backgroundCompositionGoal,
+    groupSelfieEnabled: state.groupSelfieEnabled,
+    groupSelfieSize: state.groupSelfieSize,
     mode: state.cameraAngleMode ?? 'manual',
     advice: state.selfieAngleAdvice
   });
 
   const effectiveCameraAngle = selfieAngle?.legacyAngle ?? state.cameraAngle;
+  const groupSelfie = state.groupSelfieEnabled
+    ? resolveGroupSelfie({
+        enabled: true,
+        requestedSize: state.groupSelfieSize ?? 2,
+        relationship: state.groupSelfieRelationship ?? 'auto',
+        familyId,
+        subScene: state.subScene,
+        framing: state.framing,
+        microLoc
+      })
+    : null;
 
   // --- 1. Camera Distance, Arm Reach & Optics ---
   let cameraDistance = 'approx 52cm';
@@ -729,6 +839,12 @@ function calculateDetailedPhysicalState(
       distanceCm = 68;
       cameraDistance = 'approx 65-70cm (maximum functional arm reach)';
       armReach = 'dominant arm extended near full reach (~70cm) with subtle upper torso tilt compensating for wide framing, smartphone held off-camera';
+    }
+
+    if (groupSelfie) {
+      distanceCm = Math.max(distanceCm, groupSelfie.recommendedDistanceCm);
+      cameraDistance = `approx ${Math.round(distanceCm)}cm (group selfie reach, physically bounded by one extended arm)`;
+      armReach = `reference subject alone holds the Xiaomi 15 Ultra at about ${Math.round(distanceCm)}cm; companions lean into the shared FOV without duplicating the phone-holding arm`;
     }
 
     fieldOfView = XIAOMI_15_ULTRA_FRONT_CAMERA_PROFILE.fieldOfView;
@@ -961,7 +1077,8 @@ function calculateDetailedPhysicalState(
     backgroundRealism,
     lightingCausality,
     plausibility,
-    selfieAngle
+    selfieAngle,
+    groupSelfie
   };
 }
 
@@ -1012,7 +1129,10 @@ function calculateDerivedState(
       `Lighting causality: ${physics.lightingCausality.inverseSquareBehavior}`,
       `Lighting guards: ${physics.lightingCausality.consistencyGuards.join('; ')}`,
       `Scene plausibility: status=${physics.plausibility.overallStatus}, score=${physics.plausibility.overallScore}/100; ${physics.plausibility.constraints.join('; ') || 'no additional constraints'}`,
-      `Physical lived-in disorder: ${physics.disorderBehavior}`
+      `Physical lived-in disorder: ${physics.disorderBehavior}`,
+      physics.groupSelfie
+        ? `Group selfie physics: ${physics.groupSelfie.physicsGuards.join('; ')}`
+        : 'Group selfie physics: not enabled'
     ],
     lensEffects: state.captureType === 'front-selfie'
       ? `${XIAOMI_15_ULTRA_FRONT_CAMERA_PROFILE.depthOfField}; clean Xiaomi 15 Ultra front-camera optical response`
