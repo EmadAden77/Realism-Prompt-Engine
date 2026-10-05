@@ -32,6 +32,7 @@ import {
   GroupSelfieRelationship,
   ResolvedGroupSelfie
 } from './groupSelfie';
+import { resolveSceneActivityPose } from './sceneActivityPose';
 import type {
   OutfitWearStyle,
   GarmentWearContext,
@@ -366,6 +367,34 @@ export function resolveScene(rawState: SceneState): ResolvedScene {
   const isNight = s.timeOfDay === 'night';
   const isDay = ['morning', 'midday', 'afternoon'].includes(s.timeOfDay);
 
+  const sceneActivityPose = resolveSceneActivityPose({
+    familyId,
+    subScene: s.subScene,
+    activity: s.activity,
+    pose: s.pose,
+    microLoc
+  });
+
+  if (sceneActivityPose.activityChanged) {
+    issues.push({
+      type: 'contradiction',
+      field: 'activity',
+      description: `Activity "${s.activity}" is not supported by the selected micro-location "${s.subScene}".`,
+      autoResolvedBy: `Activity changed to "${sceneActivityPose.activity}" using scene furniture and spatial capabilities.`
+    });
+    s.activity = sceneActivityPose.activity;
+  }
+
+  if (sceneActivityPose.poseChanged) {
+    issues.push({
+      type: 'physical_impossibility',
+      field: 'pose',
+      description: `Pose "${s.pose}" is not physically supported by the selected micro-location/activity combination.`,
+      autoResolvedBy: `Pose changed to "${sceneActivityPose.pose}" using actual furniture/contact surfaces in the scene.`
+    });
+    s.pose = sceneActivityPose.pose;
+  }
+
   if (s.groupSelfieEnabled) {
     const group = resolveGroupSelfie({
       enabled: true,
@@ -656,6 +685,30 @@ export function validateScene(inputState: SceneState | ResolvedScene): Validatio
   const isOutdoor = microLoc ? microLoc.isOutdoor : (familyId === 'saudi-outdoor');
   const isNight = state.timeOfDay === 'night';
   const isDay = ['morning', 'midday', 'afternoon'].includes(state.timeOfDay);
+
+  const sceneActivityPose = resolveSceneActivityPose({
+    familyId,
+    subScene: state.subScene,
+    activity: state.activity,
+    pose: state.pose,
+    microLoc
+  });
+
+  if (sceneActivityPose.activityChanged) {
+    issues.push({
+      type: 'contradiction',
+      field: 'activity',
+      description: `Activity "${state.activity}" is unavailable in the selected micro-location "${state.subScene}".`
+    });
+  }
+
+  if (sceneActivityPose.poseChanged) {
+    issues.push({
+      type: 'physical_impossibility',
+      field: 'pose',
+      description: `Pose "${state.pose}" requires furniture or contact geometry not available for the selected scene/activity.`
+    });
+  }
 
   if (state.groupSelfieEnabled) {
     const group = resolveGroupSelfie({

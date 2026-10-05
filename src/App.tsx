@@ -50,10 +50,7 @@ import {
   describeAttireControls,
   getAttireAwareBasePhysics,
   getAttireAwareOutfitPrompt,
-  getActivityDefinition,
-  getActivityOptions,
   getOutfitCapabilities,
-  getPoseOptions,
   OutfitWearStyle,
   GarmentWearContext,
   ShirtTuck,
@@ -69,6 +66,12 @@ import {
   GroupSelfieSize,
   GroupSelfieRelationship
 } from './engine/groupSelfie';
+import {
+  getSceneActivityPosePrompt,
+  getSceneCapabilities,
+  getSuggestedActivities,
+  getSuggestedPoses
+} from './engine/sceneActivityPose';
 
 // --- TYPES ---
 type CaptureType = 'front-selfie' | 'mirror-selfie' | 'third-person-candid';
@@ -310,51 +313,60 @@ const SCENE_FAMILIES: Record<SceneFamilyId, {
   'military-base': {
     labelAR: 'مبنى عمل عسكري',
     subScenes: MICRO_LOCATIONS['military-base'].map(m => m.labelAR),
-    activities: getActivityOptions('military-base' as SceneFamilyId).map(item => item.labelAR),
-    poses: getPoseOptions('military-base' as SceneFamilyId),
+    activities: [],
+    poses: [],
     allowedLighting: ['إضاءة مكتب فلورسنت', 'ضوء نهاري من النافذة', 'إضاءة ممرات متوازية', 'شمس الظهر'],
     environmentRealism: ['رسمية ومنظمة', 'نشطة (عمل يومي)']
   },
   'saudi-outdoor': {
     labelAR: 'أماكن سعودية',
     subScenes: MICRO_LOCATIONS['saudi-outdoor'].map(m => m.labelAR),
-    activities: getActivityOptions('saudi-outdoor' as SceneFamilyId).map(item => item.labelAR),
-    poses: getPoseOptions('saudi-outdoor' as SceneFamilyId),
+    activities: [],
+    poses: [],
     allowedLighting: ['ضوء نهاري طبيعي', 'شمس الظهر', 'ساعة ذهبية (شروق/غروب)', 'إنارة شارع دافئة', 'إنارة نيون تجارية متناثرة'],
     environmentRealism: ['هادئ', 'طبيعي', 'نشط']
   },
   'car': {
     labelAR: 'السيارة',
     subScenes: MICRO_LOCATIONS['car'].map(m => m.labelAR),
-    activities: getActivityOptions('car' as SceneFamilyId).map(item => item.labelAR),
-    poses: getPoseOptions('car' as SceneFamilyId),
+    activities: [],
+    poses: [],
     allowedLighting: ['ضوء نهاري طبيعي', 'شمس الظهر', 'إضاءة داخل السيارة', 'إضاءة الشارع عبر زجاج السيارة', 'إضاءة شاشة الهاتف فقط'],
     environmentRealism: ['مرتبة', 'طبيعية', 'مستخدمة يوميًا']
   },
   'living-room': {
     labelAR: 'صالة منزلية',
     subScenes: MICRO_LOCATIONS['living-room'].map(m => m.labelAR),
-    activities: getActivityOptions('living-room' as SceneFamilyId).map(item => item.labelAR),
-    poses: getPoseOptions('living-room' as SceneFamilyId),
+    activities: [],
+    poses: [],
     allowedLighting: ['ضوء نهاري طبيعي', 'إضاءة سقف', 'إنارة ليلية مختلطة', 'إضاءة شاشة الهاتف فقط'],
     environmentRealism: ['مرتبة', 'طبيعية', 'مستخدمة يوميًا']
   },
   'bedroom': {
     labelAR: 'غرفة نوم',
     subScenes: MICRO_LOCATIONS['bedroom'].map(m => m.labelAR),
-    activities: getActivityOptions('bedroom' as SceneFamilyId).map(item => item.labelAR),
-    poses: getPoseOptions('bedroom' as SceneFamilyId),
+    activities: [],
+    poses: [],
     allowedLighting: ['ضوء نهاري طبيعي', 'إضاءة سقف', 'إضاءة أباجورة دافئة', 'إضاءة شاشة الهاتف فقط'],
     environmentRealism: ['مرتبة', 'طبيعية', 'مستخدمة يوميًا']
   },
   'gym': {
     labelAR: 'نادي رياضي',
     subScenes: MICRO_LOCATIONS['gym'].map(m => m.labelAR),
-    activities: getActivityOptions('gym' as SceneFamilyId).map(item => item.labelAR),
-    poses: getPoseOptions('gym' as SceneFamilyId),
+    activities: [],
+    poses: [],
     allowedLighting: ['إضاءة النادي الرياضي', 'ضوء نهاري طبيعي'],
     environmentRealism: ['هادئ', 'طبيعي', 'نشط']
   }
+};
+
+const getSceneAwareDefaults = (familyId: SceneFamilyId, subScene: string) => {
+  const microLoc = getMicroLocation(familyId, subScene);
+  const activities = getSuggestedActivities(familyId, subScene, microLoc);
+  const activity = activities[0]?.labelAR || 'واقف بشكل طبيعي';
+  const poses = getSuggestedPoses(familyId, subScene, activity, microLoc);
+  const pose = poses[0]?.labelAR || 'واقف باسترخاء طبيعي';
+  return { microLoc, activities, activity, poses, pose };
 };
 
 const HAIRSTYLES = [
@@ -756,7 +768,16 @@ const buildSemanticScene = (
   const attire = describeAttireControls(outfit, state);
   const attireBasePrompt = getAttireAwareOutfitPrompt(outfit, state);
   const attireBasePhysics = getAttireAwareBasePhysics(outfit, state);
-  const activityDefinition = getActivityDefinition(state.activity);
+  const microLoc = state.sceneFamily ? getMicroLocation(state.sceneFamily, state.subScene) : undefined;
+  const sceneAction = state.sceneFamily
+    ? getSceneActivityPosePrompt({
+        familyId: state.sceneFamily,
+        subScene: state.subScene,
+        activity: state.activity,
+        pose: state.pose,
+        microLoc
+      })
+    : null;
   const hair = HAIRSTYLES.find(h => h.id === state.hairStyle);
   const expression = EXPRESSIONS.find(e => e.id === state.expression);
 
@@ -810,7 +831,6 @@ const buildSemanticScene = (
     ? `${expression.prompt}. Facial muscle anatomy: ${expression.anatomy}${state.muscleFatigue !== 'none' ? `. Muscle fatigue & ocular state: ${derived.muscleFatigueEffects}` : ''}`
     : (state.muscleFatigue !== 'none' ? `Neutral resting expression with muscle fatigue: ${derived.muscleFatigueEffects}` : 'neutral resting expression');
 
-  const microLoc = getMicroLocation(state.sceneFamily, state.subScene);
   const locationLabel = state.sceneFamily ? SCENE_FAMILIES[state.sceneFamily]?.labelAR : '';
   const groupSelfieText = physicalState?.groupSelfie?.enabled
     ? physicalState.groupSelfie.prompt
@@ -856,7 +876,9 @@ const buildSemanticScene = (
     expression: expressionDetails,
     outfit: `${attireBasePrompt}. Wear configuration: ${attire.prompt}`,
     outfitPhysics: [...attireBasePhysics, ...derived.fabricBehavior, ...attire.physics].join(', '),
-    poseAndContact: `Pose: ${state.pose}. Activity: ${activityDefinition.prompt}. Activity mechanics: ${activityDefinition.mechanics}. Gaze behavior: ${activityDefinition.gaze}. Contact rules: ${derived.contactPhysics.filter(p => !p.includes('arm')).join('. ')}`,
+    poseAndContact: sceneAction
+      ? `${sceneAction.prompt} Additional contact rules: ${derived.contactPhysics.filter(p => !p.includes('arm')).join('. ')}`
+      : `Pose: ${state.pose}. Activity: ${state.activity}. Contact rules: ${derived.contactPhysics.filter(p => !p.includes('arm')).join('. ')}`,
     visibleEnvironment: visibleEnvironmentText,
     lighting: `Time: ${state.timeOfDay}. Lighting source: ${state.lightingMode}. Lighting Intensity: ${state.lightingIntensity}% (${derived.lightingIntensityDescription}). Ambient bounce: ${derived.environmentalLightBehavior}. Shadow Depth: ${state.shadowDepth}% (${derived.shadowDepthDescription}). Shadows: ${derived.shadowBehavior}.`,
     atmosphere: derived.atmosphericEffects,
@@ -1299,8 +1321,16 @@ export default function PhysFrameApp() {
   const activeFamily = state.sceneFamily ? SCENE_FAMILIES[state.sceneFamily] : null;
   const selectedOutfit = OUTFITS.find(o => o.id === state.outfitId);
   const outfitCapabilities = getOutfitCapabilities(selectedOutfit);
-  const activityOptions = state.sceneFamily ? getActivityOptions(state.sceneFamily, state.subScene) : [];
-  const poseOptions = state.sceneFamily ? getPoseOptions(state.sceneFamily) : [];
+  const currentMicroLocation = state.sceneFamily ? getMicroLocation(state.sceneFamily, state.subScene) : undefined;
+  const activityOptions = state.sceneFamily
+    ? getSuggestedActivities(state.sceneFamily, state.subScene, currentMicroLocation)
+    : [];
+  const poseOptions = state.sceneFamily
+    ? getSuggestedPoses(state.sceneFamily, state.subScene, state.activity, currentMicroLocation)
+    : [];
+  const sceneCapabilities = state.sceneFamily
+    ? getSceneCapabilities(state.sceneFamily, state.subScene, currentMicroLocation)
+    : null;
   const militarySubSceneGroups = state.sceneFamily === 'military-base'
     ? ['المكاتب', 'الممرات', 'الأبواب والمداخل', 'الانتظار والاجتماعات', 'الاستراحة والخدمات', 'الدرج', 'خارج المبنى', 'المواقف']
         .map(groupAR => ({
@@ -1314,7 +1344,6 @@ export default function PhysFrameApp() {
   const currentResolvedPreview = state.sceneFamily ? resolveScene(state as any) : null;
   const backgroundDecision = currentResolvedPreview?.physicalState.backgroundRealism ?? null;
   const selfieAngleDecision = currentResolvedPreview?.physicalState.selfieAngle ?? null;
-  const currentMicroLocation = state.sceneFamily ? getMicroLocation(state.sceneFamily, state.subScene) : undefined;
   const groupSelfiePreview = state.sceneFamily
     ? resolveGroupSelfie({
         enabled: state.groupSelfieEnabled,
@@ -1527,15 +1556,19 @@ export default function PhysFrameApp() {
 
   const handleSceneSelect = (familyId: SceneFamilyId) => {
     const family = SCENE_FAMILIES[familyId];
+    const subScene = family.subScenes[0];
+    const sceneDefaults = getSceneAwareDefaults(familyId, subScene);
     setState({
       ...state,
       sceneFamily: familyId,
-      subScene: family.subScenes[0],
-      activity: getActivityOptions(familyId, family.subScenes[0])[0]?.labelAR || family.activities[0],
-      pose: getPoseOptions(familyId)[0] || family.poses[0],
+      subScene,
+      activity: sceneDefaults.activity,
+      pose: sceneDefaults.pose,
       lightingMode: family.allowedLighting[0],
       environmentRealism: family.environmentRealism[0],
-      outfitId: state.outfitId || 'thobe_white_summer'
+      outfitId: state.outfitId || 'thobe_white_summer',
+      selfieAngleAdvice: undefined,
+      backgroundGeminiAdvice: undefined
     });
   };
 
@@ -1760,12 +1793,19 @@ export default function PhysFrameApp() {
       : ['front-selfie', 'third-person-candid'];
     const chosenCapture = captureOptions[Math.floor(Math.random() * captureOptions.length)];
 
+    const randomSubScene = family.subScenes[Math.floor(Math.random() * family.subScenes.length)];
+    const randomMicroLoc = getMicroLocation(randomFamilyId, randomSubScene);
+    const randomActivities = getSuggestedActivities(randomFamilyId, randomSubScene, randomMicroLoc);
+    const randomActivity = randomActivities[Math.floor(Math.random() * randomActivities.length)]?.labelAR || 'واقف بشكل طبيعي';
+    const randomPoses = getSuggestedPoses(randomFamilyId, randomSubScene, randomActivity, randomMicroLoc);
+    const randomPose = randomPoses[Math.floor(Math.random() * randomPoses.length)]?.labelAR || 'واقف باسترخاء طبيعي';
+
     let rawState: SceneState = {
       ...state,
       sceneFamily: randomFamilyId,
-      subScene: family.subScenes[Math.floor(Math.random() * family.subScenes.length)],
-      activity: family.activities[Math.floor(Math.random() * family.activities.length)],
-      pose: family.poses[Math.floor(Math.random() * family.poses.length)],
+      subScene: randomSubScene,
+      activity: randomActivity,
+      pose: randomPose,
       lightingMode: family.allowedLighting[Math.floor(Math.random() * family.allowedLighting.length)],
       environmentRealism: family.environmentRealism[Math.floor(Math.random() * family.environmentRealism.length)],
       outfitId: availableOutfits[Math.floor(Math.random() * availableOutfits.length)]?.id || availableOutfits[0]?.id || 'thobe_white_summer',
@@ -1970,11 +2010,13 @@ export default function PhysFrameApp() {
         else if (/نادي|جيم|تمرين/.test(directorVibeInput)) chosenFamily = 'gym';
       }
       const fam = SCENE_FAMILIES[chosenFamily] || SCENE_FAMILIES['saudi-outdoor'];
+      const fallbackSubScene = fam.subScenes[0];
+      const fallbackScene = getSceneAwareDefaults(chosenFamily, fallbackSubScene);
       const fallbackData: DirectedSceneResult = {
         sceneFamily: chosenFamily,
-        subScene: fam.subScenes[0],
-        activity: fam.activities[0],
-        pose: fam.poses[0],
+        subScene: fallbackSubScene,
+        activity: fallbackScene.activity,
+        pose: fallbackScene.pose,
         captureType: 'front-selfie',
         framing: 'chest-up',
         cameraAngle: 'eye-level',
@@ -2765,15 +2807,27 @@ export default function PhysFrameApp() {
                   <label className="text-[11px] text-[var(--text-muted)] block mb-1 font-semibold">ماذا يفعل؟</label>
                   <select
                     value={state.activity}
-                    onChange={e => setState({
-                      ...state,
-                      activity: e.target.value,
-                      selfieAngleAdvice: undefined
-                    })}
+                    onChange={e => {
+                      const nextActivity = e.target.value;
+                      const nextPoses = state.sceneFamily
+                        ? getSuggestedPoses(state.sceneFamily, state.subScene, nextActivity, currentMicroLocation)
+                        : [];
+                      const nextPose = nextPoses.some(item => item.labelAR === state.pose)
+                        ? state.pose
+                        : (nextPoses[0]?.labelAR || state.pose);
+
+                      setState({
+                        ...state,
+                        activity: nextActivity,
+                        pose: nextPose,
+                        selfieAngleAdvice: undefined,
+                        backgroundGeminiAdvice: undefined
+                      });
+                    }}
                     className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-xs text-[#F3EFE7] focus:outline-none focus:border-[var(--accent)] mb-3"
                   >
                     {activityOptions.map(item => (
-                      <option key={item.labelAR} value={item.labelAR}>{item.labelAR}</option>
+                      <option key={item.id} value={item.labelAR}>{item.labelAR}</option>
                     ))}
                   </select>
 
@@ -2783,15 +2837,18 @@ export default function PhysFrameApp() {
                     onChange={e => setState({
                       ...state,
                       pose: e.target.value,
-                      selfieAngleAdvice: undefined
+                      selfieAngleAdvice: undefined,
+                      backgroundGeminiAdvice: undefined
                     })}
                     className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-xs text-[#F3EFE7] focus:outline-none focus:border-[var(--accent)]"
                   >
-                    {poseOptions.map(p => <option key={p} value={p}>{p}</option>)}
+                    {poseOptions.map(item => (
+                      <option key={item.id} value={item.labelAR}>{item.labelAR}</option>
+                    ))}
                   </select>
 
                   <div className="mt-2.5 rounded-xl bg-black/20 border border-white/5 px-3 py-2 text-[9px] leading-relaxed text-[var(--text-muted)]">
-                    النشاط يغيّر تلقائيًا حركة الجسم، اتجاه النظر، وضع اليد، ويعيد حساب زاوية السيلفي الذكية عند الحاجة.
+                    تم توليد هذه الاقتراحات حسب عناصر المشهد المختار: {sceneCapabilities?.furniture.length || 0} أثاث/عنصر قابل للملامسة و{sceneCapabilities?.spatialFeatures.length || 0} خصائص مكانية. تغيير المشهد يغيّر النشاط والوضعية تلقائيًا، ثم يعاد حساب زاوية السيلفي والخلفية.
                   </div>
                 </section>
 

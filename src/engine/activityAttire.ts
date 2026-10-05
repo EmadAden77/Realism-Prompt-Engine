@@ -360,9 +360,26 @@ const wearContextPrompt: Record<Exclude<GarmentWearContext, 'auto'>, string> = {
 
 export function inferGarmentWearContext(activity: string): Exclude<GarmentWearContext, 'auto'> {
   const definition = getActivityDefinition(activity);
-  if (definition.tags.includes('sport') || definition.tags.includes('fatigue')) return 'post-workout';
-  if (definition.tags.includes('walking') || definition.tags.includes('motion') || definition.tags.includes('transition')) return 'after-walking';
-  if (definition.tags.includes('seated') || definition.tags.includes('reclined')) return 'after-sitting';
+  const normalized = activity || '';
+  if (
+    definition.tags.includes('sport') ||
+    definition.tags.includes('fatigue') ||
+    /تمرين|الجولات|العرق|gym|workout/i.test(normalized)
+  ) return 'post-workout';
+
+  if (
+    definition.tags.includes('walking') ||
+    definition.tags.includes('motion') ||
+    definition.tags.includes('transition') ||
+    /يمشي|يدخل|خارج من|يعبر|walking|entering|leaving/i.test(normalized)
+  ) return 'after-walking';
+
+  if (
+    definition.tags.includes('seated') ||
+    definition.tags.includes('reclined') ||
+    /جالس|مستلقي|مسترخ.*السرير|seated|reclined/i.test(normalized)
+  ) return 'after-sitting';
+
   return 'neutral';
 }
 
