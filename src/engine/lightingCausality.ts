@@ -212,15 +212,19 @@ export function deriveLightingCausality(input: LightingCausalityInput): Lighting
     bounceSurfaces.push('matte wall plane', 'ceiling', 'floor and nearby furniture');
   }
 
-  for (const source of input.backgroundLightSources ?? []) {
-    secondarySources.push({
-      name: source,
-      role: 'practical',
-      direction: 'background-local direction only',
-      distanceBehavior: 'secondary contribution attenuated by distance and occlusion',
-      contribution: 'background realism cue that must remain weaker than the subject-driving primary source',
-      physicalOrigin: 'physically visible or strongly implied background practical'
-    });
+  // Phone-screen-only is a hard single-source mode. Background realism may
+  // describe fixtures, but those fixtures must not become active emitters.
+  if (!phoneOnly) {
+    for (const source of input.backgroundLightSources ?? []) {
+      secondarySources.push({
+        name: source,
+        role: 'practical',
+        direction: 'background-local direction only',
+        distanceBehavior: 'secondary contribution attenuated by distance and occlusion',
+        contribution: 'background realism cue that must remain weaker than the subject-driving primary source',
+        physicalOrigin: 'physically visible or strongly implied background practical'
+      });
+    }
   }
 
   let shadowBehavior: string;
