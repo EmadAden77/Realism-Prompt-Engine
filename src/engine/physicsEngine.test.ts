@@ -529,6 +529,10 @@ assert(
   resolvedBedroom.physicalState.lightingCausality.falloffBehavior.includes('rapid'),
   'Phone-screen-only mode must preserve rapid light falloff'
 );
+assert(
+  resolvedBedroom.physicalState.lightingCausality.secondarySources.length === 0,
+  'Phone-screen-only mode must not activate background practical lights as secondary emitters'
+);
 
 console.log('▶ Test 22: Midday Saudi outdoor lighting has directional sun plus real bounce');
 const streetMiddayState: SceneState = {
