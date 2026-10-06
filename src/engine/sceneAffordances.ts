@@ -1,6 +1,7 @@
-import { getMicroLocation, type SceneFamilyId } from '../data/microLocations';
+import { MICRO_LOCATIONS, getMicroLocation, type MicroLocation, type SceneFamilyId } from '../data/microLocations';
 
 export type Stance = 'standing' | 'sitting' | 'lying' | 'reclined' | 'walking';
+export type StanceCategory = 'standing' | 'sitting' | 'lying';
 
 export interface PoseSuggestion {
   id: string;
@@ -883,8 +884,11 @@ export function resolveStructuredPoseSuggestion(
   subScene: string,
   selectedPose: string
 ): PoseSuggestion {
+  const extra = findExtraDetailedPose(familyId, subScene, selectedPose);
+  if (extra) return extra.suggestion;
+
   const suggestions = getStructuredPoseSuggestions(familyId, subScene);
-  return suggestions.find(item => item.labelAR === selectedPose)
+  return suggestions.find(item => item.labelAR === selectedPose || item.id === selectedPose)
     ?? inferPoseSuggestion(familyId, subScene, selectedPose || suggestions[0]?.labelAR || 'واقف بثبات');
 }
 
@@ -959,5 +963,547 @@ export function deriveMicroPhysics(input: MicroPhysicsInput): MicroPhysicsState 
     eyeConvergence,
     sensorArtifacts,
     realismGuards
+  };
+}
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// HIERARCHICAL POSE FLOW
+// Main place -> stance category -> detailed pose -> compatible micro-location.
+// This is a reverse index over the same scene-affordance engine, not a second
+// competing pose engine.
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export interface DetailedPoseRule {
+  family: SceneFamilyId;
+  stanceCategory: StanceCategory;
+  compatibleSubScene: RegExp;
+  suggestion: PoseSuggestion;
+}
+
+const categoryOfStance = (stance: Stance): StanceCategory => {
+  if (stance === 'sitting') return 'sitting';
+  if (stance === 'lying' || stance === 'reclined') return 'lying';
+  return 'standing';
+};
+
+export const ALLOWED_STANCE_CATEGORIES: Record<SceneFamilyId, StanceCategory[]> = {
+  bedroom: ['standing', 'sitting', 'lying'],
+  'living-room': ['standing', 'sitting'],
+  'saudi-outdoor': ['standing', 'sitting'],
+  gym: ['standing', 'sitting'],
+  car: ['standing', 'sitting'],
+  'military-base': ['standing', 'sitting']
+};
+
+const detailed = (
+  family: SceneFamilyId,
+  stanceCategory: StanceCategory,
+  compatibleSubScene: RegExp,
+  suggestion: PoseSuggestion
+): DetailedPoseRule => ({ family, stanceCategory, compatibleSubScene, suggestion });
+
+const EXTRA_DETAILED_POSES: DetailedPoseRule[] = [
+  // Bedroom sitting.
+  detailed('bedroom', 'sitting', /سرير|كرسي/, pose(
+    'bed_sit_cross_leg',
+    'جالس ورجل على رجل',
+    'sitting',
+    'mattress edge or chair',
+    'seat surface',
+    'sitting cross-legged in a relaxed everyday way',
+    'pelvis remains fully supported; one thigh crosses over the opposite thigh with asymmetric hip rotation, elevated knee overlap, natural ankle placement, torso counterbalances slightly, and there are no leg intersections',
+    'sitting naturally with one leg crossed over the other, pelvis fully supported, asymmetric knee height, realistic ankle placement, and believable balance'
+  )),
+  detailed('bedroom', 'sitting', /سرير|كرسي/, pose(
+    'bed_sit_forward',
+    'جالس مائل قليلًا للأمام',
+    'sitting',
+    'mattress edge or chair',
+    'thighs or knees',
+    'leaning slightly forward while seated',
+    'pelvis stays supported while the torso rotates forward from the hips; elbows or forearms may approach the thighs without collapsing the spine',
+    'sitting with a small natural forward lean from the hips, grounded lower body, and relaxed shoulders'
+  )),
+  detailed('bedroom', 'sitting', /سرير|كرسي/, pose(
+    'bed_sit_forearms_thighs',
+    'جالس مع الساعدين على الفخذين',
+    'sitting',
+    'mattress edge or chair',
+    'thighs',
+    'resting forearms on thighs',
+    'forearms make broad low-pressure contact with the thighs, shoulders drop naturally, and elbows remain inside anatomically plausible range',
+    'sitting naturally with forearms resting on the thighs and a relaxed forward body balance'
+  )),
+
+  // Bedroom lying.
+  detailed('bedroom', 'lying', /مستلق|السرير|رأس السرير|بجانب السرير|فوق السرير/, pose(
+    'bed_lie_pillow',
+    'مستلقي والرأس على وسادة',
+    'lying',
+    'mattress',
+    'pillow and bedding',
+    'resting with head on a pillow',
+    'head weight visibly indents the pillow, cervical alignment remains relaxed, torso and hips compress the mattress, and bedding folds redirect around the shoulders and body mass',
+    'lying naturally with the head supported by a visibly compressed pillow, relaxed neck alignment, mattress deformation under torso and hips, and displaced bedding folds'
+  )),
+  detailed('bedroom', 'lying', /مستلق|السرير|رأس السرير|بجانب السرير|فوق السرير/, pose(
+    'bed_lie_side',
+    'مستلقي على الجانب',
+    'lying',
+    'mattress',
+    'pillow and bedding',
+    'resting on one side',
+    'body weight concentrates along shoulder, lateral torso, hip and outer leg contact zones; the pillow supports the side of the head and bedding bunches along the lower body',
+    'lying naturally on one side with realistic shoulder and hip mattress compression, side-head pillow support, and gravity-driven bedding folds'
+  )),
+  detailed('bedroom', 'lying', /مستلق|السرير|رأس السرير|بجانب السرير|فوق السرير/, pose(
+    'bed_lie_hand_head',
+    'مستلقي مع يد خلف الرأس',
+    'lying',
+    'mattress',
+    'pillow',
+    'resting with one hand behind the head',
+    'one elbow bends outward within shoulder range while the hand supports only a small fraction of head load; the pillow and mattress remain the primary support surfaces',
+    'lying naturally with one hand behind the head, believable shoulder and elbow range, and the pillow still carrying the head weight'
+  )),
+  detailed('bedroom', 'lying', /مستلق|السرير|رأس السرير|بجانب السرير|فوق السرير/, pose(
+    'bed_lie_phone',
+    'مستلقي ينظر للهاتف',
+    'lying',
+    'mattress',
+    'phone held above or beside torso',
+    'looking at the phone while lying down',
+    'the phone is held at a reachable angle with supported shoulder mechanics; gaze converges at near distance without both arms floating symmetrically',
+    'lying naturally while looking at the phone at a physically reachable angle, with one supported shoulder and realistic near-screen gaze'
+  )),
+
+  // Living room.
+  detailed('living-room', 'sitting', /كنبة|كرسي|طاولة/, pose(
+    'living_cross_leg',
+    'جالس ورجل على رجل',
+    'sitting',
+    'sofa cushion or chair',
+    'seat',
+    'sitting cross-legged',
+    'pelvis remains supported while one thigh crosses over the opposite thigh; knee heights become asymmetric and torso makes a subtle balance correction',
+    'sitting naturally with one leg crossed over the other, realistic asymmetric knee height, supported pelvis, and relaxed torso compensation'
+  )),
+  detailed('living-room', 'sitting', /كنبة|كرسي|طاولة/, pose(
+    'living_ankle_knee',
+    'جالس مع الكاحل فوق الركبة',
+    'sitting',
+    'sofa cushion or chair',
+    'seat',
+    'resting ankle over opposite knee',
+    'one ankle rests above the opposite knee with externally rotated hip, visible triangular leg spacing, and no knee or ankle intersection',
+    'sitting casually with one ankle resting over the opposite knee, realistic hip rotation, open triangular leg spacing, and stable seated balance'
+  )),
+  detailed('living-room', 'sitting', /كنبة|كرسي|طاولة/, pose(
+    'living_phone_sit',
+    'جالس ينظر للهاتف',
+    'sitting',
+    'sofa cushion or chair',
+    'smartphone',
+    'looking at the phone',
+    'seat supports the body while the phone stays within comfortable reading distance and elbows remain relaxed',
+    'sitting naturally while looking at a smartphone held at believable reading distance'
+  )),
+  detailed('living-room', 'standing', /منتصف|كنبة|طاولة|جدار|نافذة|مدخل|باب|ممر|تلفاز|ستارة|تكييف/, pose(
+    'living_hand_pocket',
+    'واقف مع يد في الجيب',
+    'standing',
+    'living-room floor',
+    undefined,
+    'standing casually with one hand in a pocket',
+    'feet remain grounded with mild weight asymmetry; one shoulder relaxes slightly toward the pocket side without twisting the pelvis unnaturally',
+    'standing casually with one hand in a pocket, grounded feet, and a small natural weight shift'
+  )),
+
+  // Saudi outdoor.
+  detailed('saudi-outdoor', 'sitting', /مقهى|حديقة|ممشى|ساحة|انتظار/, pose(
+    'outdoor_cross_leg',
+    'جالس ورجل على رجل',
+    'sitting',
+    'cafe chair or outdoor bench',
+    'seat',
+    'sitting cross-legged',
+    'pelvis remains supported while one thigh crosses over the other; trousers bunch asymmetrically at lap and knee and the free foot remains naturally placed',
+    'sitting naturally outdoors with one leg crossed over the other, realistic trouser bunching, asymmetric knee height, and stable seat support'
+  )),
+  detailed('saudi-outdoor', 'sitting', /مقهى|حديقة|ممشى|ساحة|انتظار/, pose(
+    'outdoor_phone_sit',
+    'جالس ينظر للهاتف',
+    'sitting',
+    'cafe chair or outdoor bench',
+    'smartphone',
+    'looking at the phone while seated',
+    'seat supports the pelvis and the phone remains at ordinary reading distance with relaxed elbows',
+    'sitting naturally outdoors while looking at a phone, with believable seated support and casual arm mechanics'
+  )),
+  detailed('saudi-outdoor', 'standing', /شارع|حي|مدخل|سور|رصيف|محلات|بقالة|موقف|طريق|ممر|حديقة|ممشى|ساحة|خدمات|انتظار/, pose(
+    'outdoor_hand_pocket',
+    'واقف مع يد في الجيب',
+    'standing',
+    'pavement',
+    undefined,
+    'standing casually with one hand in a pocket',
+    'feet remain grounded with a small weight shift; the pocket-side elbow and shoulder settle naturally without staged symmetry',
+    'standing casually on ordinary pavement with one hand in a pocket and realistic weight distribution'
+  )),
+  detailed('saudi-outdoor', 'standing', /سور|جدار|مبنى|محلات|خدمات|مدخل/, pose(
+    'outdoor_wall_shoulder',
+    'واقف وكتفه على الجدار',
+    'standing',
+    'pavement',
+    'wall',
+    'resting one shoulder lightly on the wall',
+    'a broad low-pressure shoulder contact touches the wall while both feet remain the primary load-bearing support',
+    'standing with one shoulder lightly touching the wall while both feet continue to carry nearly all body weight'
+  )),
+
+  // Gym.
+  detailed('gym', 'sitting', /مقعد|استراحة|خزائن|غرفة الملابس/, pose(
+    'gym_phone_sit',
+    'جالس ينظر للهاتف',
+    'sitting',
+    'gym bench or chair',
+    'smartphone',
+    'checking the phone during a break',
+    'seat supports the pelvis; mild post-exertion posture remains visible while the phone stays at reachable reading distance',
+    'sitting naturally during a gym break while looking at a phone, with supported pelvis and mild post-exertion body language'
+  )),
+  detailed('gym', 'sitting', /مقعد|استراحة|خزائن|غرفة الملابس/, pose(
+    'gym_towel_sit',
+    'جالس ممسك منشفة',
+    'sitting',
+    'gym bench or chair',
+    'towel',
+    'holding a towel while resting',
+    'body weight is supported by the seat while the towel hangs under gravity from one relaxed hand or across the thigh',
+    'sitting naturally for a gym rest while holding a towel that hangs realistically under gravity'
+  )),
+  detailed('gym', 'standing', /أثقال|دمبل|جهاز|تمارين|معدات|مرآة|إحماء|تمدد|مدخل|ممر|نافذة/, pose(
+    'gym_water_stand',
+    'واقف ممسكًا بزجاجة ماء',
+    'standing',
+    'gym floor',
+    'water bottle',
+    'standing while holding a water bottle',
+    'feet stay grounded while one hand supports the bottle close to the torso with believable wrist loading',
+    'standing naturally in the gym while holding a water bottle close to the torso with realistic hand and wrist support'
+  )),
+
+  // Car cabin.
+  detailed('car', 'sitting', /مقعد السائق|أمام المقود|قرب النافذة|الباب مغلق|الباب مفتوح/, pose(
+    'car_driver_wheel_hold',
+    'جالس ممسك المقود',
+    'sitting',
+    'driver seat',
+    'steering wheel',
+    'resting a hand naturally on the steering wheel while parked',
+    'seat carries body weight; one or both hands contact the steering rim without crossing, floating, or intersecting the dashboard; knees stay below the wheel',
+    'sitting naturally in the parked driver seat with believable hand contact on the steering wheel and correct dashboard clearance'
+  )),
+  detailed('car', 'sitting', /المقعد الأمامي للراكب|المقعد الخلفي|بين المقعدين/, pose(
+    'car_phone_sit',
+    'جالس ينظر للهاتف داخل السيارة',
+    'sitting',
+    'vehicle seat',
+    'smartphone',
+    'looking at the phone while seated in the stationary vehicle',
+    'seat supports the back and pelvis while the phone stays within reachable cabin space and elbows remain clear of door and console',
+    'sitting naturally in a stationary vehicle seat while looking at a phone, with realistic door and console clearance'
+  )),
+
+  // Car exterior.
+  detailed('car', 'standing', /بجانب السيارة|باب السائق|أمام السيارة|الرفرف|الجزء الخلفي|صندوق السيارة|موقف|رصيف|سور/, pose(
+    'car_hand_door',
+    'واقف ويد على باب السيارة',
+    'standing',
+    'pavement',
+    'vehicle door or handle',
+    'standing with one hand touching the vehicle door',
+    'feet remain outside the vehicle footprint while one hand makes real contact with the door or handle; arm length, mirror clearance, and door swing remain plausible',
+    'standing naturally beside the parked car with one hand physically contacting the driver door or handle and realistic mirror and door clearance'
+  )),
+
+  // Military workplace sitting.
+  detailed('military-base', 'sitting', /مكتب|اجتماعات|انتظار|استراحة|قهوة|شاي/, pose(
+    'mil_cross_leg',
+    'جالس ورجل على رجل',
+    'sitting',
+    'office, meeting, waiting, or break-room chair',
+    'chair',
+    'sitting cross-legged in a restrained workplace posture',
+    'pelvis and back remain supported; one thigh crosses over the opposite thigh with asymmetric hip rotation and knee height, torso counterbalances slightly, and trousers bunch naturally at lap and knee',
+    'sitting naturally in a workplace chair with one leg crossed over the other, supported pelvis, asymmetric knee height, realistic trouser folds, and restrained professional posture'
+  )),
+  detailed('military-base', 'sitting', /مكتب|اجتماعات|انتظار|استراحة|قهوة|شاي/, pose(
+    'mil_ankle_knee',
+    'جالس مع الكاحل فوق الركبة',
+    'sitting',
+    'office, meeting, waiting, or break-room chair',
+    'chair',
+    'resting ankle over opposite knee',
+    'one ankle rests above the opposite knee with controlled external hip rotation, triangular leg spacing, stable pelvis support, and no limb intersection',
+    'sitting with one ankle resting over the opposite knee, realistic hip rotation and stable professional seated balance'
+  )),
+  detailed('military-base', 'sitting', /مكتب|اجتماعات|انتظار|استراحة|قهوة|شاي/, pose(
+    'mil_forward_sit',
+    'جالس مائل قليلًا للأمام',
+    'sitting',
+    'workplace chair',
+    'thighs or nearby table',
+    'leaning slightly forward while seated',
+    'pelvis stays fully supported while the torso inclines forward from the hips and shoulders remain relaxed',
+    'sitting in a workplace chair with a restrained natural forward lean from the hips'
+  )),
+  detailed('military-base', 'sitting', /مكتب|اجتماعات|انتظار|استراحة|قهوة|شاي/, pose(
+    'mil_forearms_thighs',
+    'جالس مع الساعدين على الفخذين',
+    'sitting',
+    'workplace chair',
+    'thighs',
+    'resting forearms on thighs',
+    'forearms make broad natural contact with the thighs while elbows and shoulders remain relaxed and anatomically plausible',
+    'sitting naturally with forearms resting on the thighs and a calm professional posture'
+  )),
+  detailed('military-base', 'sitting', /مكتب|اجتماعات|قهوة|شاي|استراحة/, pose(
+    'mil_hand_table',
+    'جالس مع يد على الطاولة',
+    'sitting',
+    'office or meeting chair',
+    'desk or table',
+    'resting one hand on the table',
+    'seat carries body weight while one hand or forearm makes light contact with the reachable tabletop; desk edge occlusion remains correct',
+    'sitting naturally with one hand resting on the nearby desk or table, correct chair support, and realistic tabletop occlusion'
+  )),
+  detailed('military-base', 'sitting', /مكتب|اجتماعات|انتظار|استراحة/, pose(
+    'mil_backrest',
+    'جالس متكئ على مسند الكرسي',
+    'sitting',
+    'workplace chair',
+    'chair backrest',
+    'resting against the chair back',
+    'back and pelvis are supported by the chair with realistic backrest compression and relaxed shoulder position',
+    'sitting naturally with the back resting against the chair backrest and realistic supported posture'
+  )),
+  detailed('military-base', 'sitting', /مكتب|اجتماعات|انتظار|استراحة/, pose(
+    'mil_half_side',
+    'جالس نصف جانبي',
+    'sitting',
+    'workplace chair',
+    'chair',
+    'sitting at a mild diagonal',
+    'pelvis stays centered on the chair while the torso rotates slightly relative to the seat; knees follow a believable partial turn without twisting through the hips',
+    'sitting in a mild half-side orientation with stable chair support and believable torso-pelvis rotation'
+  )),
+  detailed('military-base', 'sitting', /مكتب|اجتماعات|انتظار|استراحة|قهوة|شاي/, pose(
+    'mil_phone_sit',
+    'جالس ينظر للهاتف',
+    'sitting',
+    'workplace chair',
+    'smartphone',
+    'looking at the phone while seated',
+    'seat supports body weight while the phone remains at ordinary reading distance and elbows stay within surrounding furniture clearance',
+    'sitting naturally in the workplace while looking at a phone held at believable reading distance'
+  )),
+  detailed('military-base', 'sitting', /مكتب|اجتماعات/, pose(
+    'mil_review_file_sit',
+    'جالس يراجع ملفًا',
+    'sitting',
+    'office or conference chair',
+    'desk, meeting table, or file',
+    'reviewing an administrative file',
+    'chair supports the body while the file rests on or just above a reachable work surface and gaze follows the pages',
+    'sitting naturally while reviewing an administrative file supported by the nearby desk or meeting table'
+  )),
+
+  // Military workplace standing.
+  detailed('military-base', 'standing', /مكتب|ممر|باب|مدخل|انتظار|اجتماعات|استراحة|خدمات|درج|واجهة|جانب المبنى|ساحة|رصيف|سور|موقف|سيارة/, pose(
+    'mil_weight_shift',
+    'واقف مع توزيع وزن طبيعي',
+    'standing',
+    'floor or pavement',
+    undefined,
+    'standing with relaxed weight distribution',
+    'both feet remain grounded while one leg carries slightly more load, producing subtle pelvis and shoulder asymmetry without a staged parade stance',
+    'standing naturally with a mild left-right weight shift, grounded feet, and restrained professional posture'
+  )),
+  detailed('military-base', 'standing', /مكتب|ممر|باب|مدخل|انتظار|اجتماعات|استراحة|خدمات|واجهة|جانب المبنى|ساحة|رصيف|سور|موقف|سيارة/, pose(
+    'mil_hand_pocket',
+    'واقف مع يد في الجيب',
+    'standing',
+    'floor or pavement',
+    undefined,
+    'standing casually with one hand in a pocket',
+    'feet remain grounded, pocket-side shoulder drops slightly, and posture stays professional rather than theatrical',
+    'standing casually with one hand in a pocket, realistic weight distribution, and restrained workplace posture'
+  )),
+  detailed('military-base', 'standing', /مكتب|ممر|باب|مدخل|انتظار|اجتماعات|استراحة|خدمات|واجهة|جانب المبنى|ساحة|رصيف|سور|موقف|سيارة/, pose(
+    'mil_phone_stand',
+    'واقف يستخدم الهاتف',
+    'standing',
+    'floor or pavement',
+    'smartphone',
+    'using the phone while standing',
+    'one hand holds the phone within ordinary viewing range while the free arm remains relaxed and feet stay grounded',
+    'standing naturally while using a smartphone at believable viewing distance'
+  )),
+  detailed('military-base', 'standing', /جدار|سور|واجهة|ممر|جانب المبنى/, pose(
+    'mil_wall_lean',
+    'واقف مع اتكاء خفيف على الجدار',
+    'standing',
+    'floor or pavement',
+    'wall',
+    'leaning lightly on the wall',
+    'one shoulder or upper back makes a broad low-pressure wall contact while both feet remain the primary support',
+    'standing with a light shoulder or upper-back contact against the wall while both feet continue carrying most body weight'
+  ))
+];
+
+function findExtraDetailedPose(
+  familyId: SceneFamilyId,
+  subScene: string,
+  poseIdOrLabel: string
+): DetailedPoseRule | undefined {
+  return EXTRA_DETAILED_POSES.find(item =>
+    item.family === familyId &&
+    item.compatibleSubScene.test(subScene) &&
+    (item.suggestion.id === poseIdOrLabel || item.suggestion.labelAR === poseIdOrLabel)
+  );
+}
+
+export function getAllowedStanceCategories(familyId: SceneFamilyId): StanceCategory[] {
+  return [...ALLOWED_STANCE_CATEGORIES[familyId]];
+}
+
+export function getDetailedPoseSuggestions(
+  familyId: SceneFamilyId,
+  stanceCategory: StanceCategory
+): PoseSuggestion[] {
+  const fromExisting = MICRO_LOCATIONS[familyId]
+    .flatMap(location => getStructuredPoseSuggestions(familyId, location.labelAR))
+    .filter(item => categoryOfStance(item.stance) === stanceCategory);
+
+  const extras = EXTRA_DETAILED_POSES
+    .filter(item => item.family === familyId && item.stanceCategory === stanceCategory)
+    .map(item => item.suggestion);
+
+  return uniqueByLabel([...extras, ...fromExisting]);
+}
+
+export function getCompatibleMicroLocations(
+  familyId: SceneFamilyId,
+  stanceCategory: StanceCategory,
+  poseIdOrLabel: string
+): MicroLocation[] {
+  const extraRules = EXTRA_DETAILED_POSES.filter(item =>
+    item.family === familyId &&
+    item.stanceCategory === stanceCategory &&
+    (item.suggestion.id === poseIdOrLabel || item.suggestion.labelAR === poseIdOrLabel)
+  );
+
+  const matches = MICRO_LOCATIONS[familyId].filter(location => {
+    if (extraRules.some(rule => rule.compatibleSubScene.test(location.labelAR))) return true;
+
+    return getStructuredPoseSuggestions(familyId, location.labelAR).some(item =>
+      categoryOfStance(item.stance) === stanceCategory &&
+      (item.id === poseIdOrLabel || item.labelAR === poseIdOrLabel)
+    );
+  });
+
+  return matches;
+}
+
+function inferCategoryFromPose(familyId: SceneFamilyId, poseIdOrLabel: string): StanceCategory | undefined {
+  const allowed = getAllowedStanceCategories(familyId);
+  for (const category of allowed) {
+    if (getDetailedPoseSuggestions(familyId, category).some(item =>
+      item.id === poseIdOrLabel || item.labelAR === poseIdOrLabel
+    )) return category;
+  }
+
+  if (/مستلق|مستلقي/.test(poseIdOrLabel)) return allowed.includes('lying') ? 'lying' : undefined;
+  if (/جالس|مقعد|الكنبة/.test(poseIdOrLabel)) return allowed.includes('sitting') ? 'sitting' : undefined;
+  if (/واقف|يمشي|مستند/.test(poseIdOrLabel)) return allowed.includes('standing') ? 'standing' : undefined;
+  return undefined;
+}
+
+export interface NormalizedPoseHierarchy {
+  stanceCategory: StanceCategory;
+  detailedPoseId: string;
+  pose: string;
+  subScene: string;
+  compatibleLocations: MicroLocation[];
+}
+
+export function normalizePoseHierarchy(
+  familyId: SceneFamilyId,
+  requestedStance: StanceCategory | undefined,
+  requestedDetailedPose: string | undefined,
+  requestedPoseLabel: string | undefined,
+  requestedSubScene: string | undefined
+): NormalizedPoseHierarchy {
+  const allowed = getAllowedStanceCategories(familyId);
+  const legacyPose = requestedDetailedPose || requestedPoseLabel || '';
+  const inferred = legacyPose ? inferCategoryFromPose(familyId, legacyPose) : undefined;
+
+  // For legacy/saved states that do not yet have an explicit hierarchy,
+  // preserve the user's selected micro-location when possible. Example:
+  // driver seat + stale "standing" pose must become a seated driver pose,
+  // not silently move the scene outside the car.
+  const requestedLocationExists = MICRO_LOCATIONS[familyId].some(location =>
+    location.id === requestedSubScene || location.labelAR === requestedSubScene
+  );
+  const locationCompatibleStances = requestedLocationExists
+    ? allowed.filter(category =>
+        getDetailedPoseSuggestions(familyId, category).some(pose =>
+          getCompatibleMicroLocations(familyId, category, pose.id).some(location =>
+            location.id === requestedSubScene || location.labelAR === requestedSubScene
+          )
+        )
+      )
+    : [];
+
+  const stanceCategory = requestedStance && allowed.includes(requestedStance)
+    ? requestedStance
+    : inferred && (!requestedLocationExists || locationCompatibleStances.includes(inferred))
+      ? inferred
+      : locationCompatibleStances[0] || inferred || allowed[0];
+
+  const detailedOptions = getDetailedPoseSuggestions(familyId, stanceCategory);
+  const selected = detailedOptions.find(item =>
+    item.id === requestedDetailedPose ||
+    item.labelAR === requestedDetailedPose ||
+    item.labelAR === requestedPoseLabel ||
+    item.id === requestedPoseLabel
+  ) || detailedOptions[0];
+
+  const detailedPoseId = selected?.id || '';
+  const poseLabel = selected?.labelAR || requestedPoseLabel || 'واقف بثبات';
+  let compatibleLocations = getCompatibleMicroLocations(familyId, stanceCategory, detailedPoseId || poseLabel);
+
+  if (compatibleLocations.length === 0) {
+    compatibleLocations = MICRO_LOCATIONS[familyId].filter(location =>
+      getStructuredPoseSuggestions(familyId, location.labelAR).some(item =>
+        categoryOfStance(item.stance) === stanceCategory
+      )
+    );
+  }
+  if (compatibleLocations.length === 0) compatibleLocations = [...MICRO_LOCATIONS[familyId]];
+
+  const requestedLocation = compatibleLocations.find(location =>
+    location.id === requestedSubScene || location.labelAR === requestedSubScene
+  );
+  const subScene = (requestedLocation || compatibleLocations[0])?.labelAR || MICRO_LOCATIONS[familyId][0]?.labelAR || '';
+
+  return {
+    stanceCategory,
+    detailedPoseId,
+    pose: poseLabel,
+    subScene,
+    compatibleLocations
   };
 }
