@@ -94,6 +94,9 @@ assert.equal(ambiguous.status, 'ambiguous');
 const neutral = 'Generate a realistic photograph.';
 assert.match(adaptPromptToPlatform(neutral, 'chatgpt'), /attached reference photo/);
 assert.match(adaptPromptToPlatform(neutral, 'gemini'), /sole identity reference/);
+assert.equal(PLATFORM_CAPABILITY_REGISTRY.chatgpt.defaultModel, 'gpt-image-2.5-flare');
+assert.equal(PLATFORM_CAPABILITY_REGISTRY.gemini.defaultModel, 'gemini-nano-banana-2.1');
 assert.equal(PLATFORM_CAPABILITY_REGISTRY.midjourney.defaultVersion, '8.2');
+assert.match(adaptPromptToPlatform(neutral, 'midjourney'), /--v 8\.2 --raw$/);
 
 console.log('causalPipeline tests passed');
