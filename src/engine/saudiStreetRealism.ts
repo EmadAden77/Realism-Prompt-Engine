@@ -37,12 +37,20 @@ const chooseSurface = (subScene: string): string => {
   return 'ordinary Saudi asphalt with fine aggregate texture, restrained cracks and patching, faded lane or parking paint where present, realistic tire marks and thin sand-dust accumulation';
 };
 
-const chooseArchitecture = (subScene: string): string | undefined => {
-  if (containsAny(subScene, ['بقالة'])) return ruleText('ss_building_baqala');
-  if (containsAny(subScene, ['فيلا', 'سور منزل', 'فلل'])) return ruleText('ss_building_villa');
-  if (containsAny(subScene, ['مبنى', 'عمارة'])) return ruleText('ss_building_apartment');
-  if (containsAny(subScene, ['ممر جانبي', 'بين المباني'])) return ruleText('ss_building_modern_wall_ac');
-  return ruleText('ss_building_peeling_wall');
+const chooseArchitecture = (subScene: string): string => {
+  if (containsAny(subScene, ['بقالة'])) {
+    return 'ordinary neighborhood grocery frontage with glass entry, generic Arabic signage, localized wall wear, exterior AC/service hardware and believable material aging; no unrelated vehicle or lighting system is invented';
+  }
+  if (containsAny(subScene, ['فيلا', 'سور منزل', 'فلل'])) {
+    return 'ordinary low-rise Saudi villa or boundary wall with off-white plaster, localized paint chipping near service hardware, restrained AC condensate streaking, exterior AC unit and utility box where physically visible';
+  }
+  if (containsAny(subScene, ['مبنى', 'عمارة'])) {
+    return 'ordinary low-rise apartment or service building with off-white plaster, localized paint wear, exterior AC units, utility boxes and practical entrance materials without landmark styling';
+  }
+  if (containsAny(subScene, ['ممر جانبي', 'بين المباني'])) {
+    return 'narrow building-side passage with textured plaster walls, exterior AC unit, drainage/service conduits and localized weathering appropriate to the visible surfaces';
+  }
+  return 'ordinary Saudi exterior plaster or stone wall with restrained localized wear, minor paint variation, service hardware and physically plausible weathering';
 };
 
 const chooseDisorder = (subScene: string): string | undefined => {
@@ -83,7 +91,8 @@ const choosePeople = (subScene: string): string | undefined => {
 
 const choosePeopleClothing = (subScene: string): string | undefined => {
   if (containsAny(subScene, ['ممشى', 'حديقة'])) return ruleText('ss_clothing_sports');
-  if (containsAny(subScene, ['محلات', 'تجاري', 'بقالة'])) return ruleText('ss_clothing_worker');
+  if (containsAny(subScene, ['بقالة'])) return ruleText('ss_clothing_youth_jeans');
+  if (containsAny(subScene, ['محلات', 'تجاري'])) return ruleText('ss_clothing_worker');
   return ruleText('ss_clothing_thobe');
 };
 
@@ -96,9 +105,13 @@ export function deriveSaudiStreetRealism(
   }
 
   const background = physical?.backgroundRealism;
-  const frameAllowsContext = physical
+  const visibleEnvironment = physical
     ? Boolean(physical.visibleEnvironment?.trim())
     : true;
+  const frameAllowsContext = physical
+    ? visibleEnvironment && physical.backgroundRealism.visibilityClass !== 'minimal'
+    : state.framing !== 'head-shoulders';
+  const architectureVisible = visibleEnvironment;
   const allowsVehicles = physical
     ? Boolean(
         physical.visibleVehicles.length ||
@@ -142,7 +155,7 @@ export function deriveSaudiStreetRealism(
   return {
     active: true,
     surface: frameAllowsContext ? chooseSurface(state.subScene) : undefined,
-    architecture: frameAllowsContext ? chooseArchitecture(state.subScene) : undefined,
+    architecture: architectureVisible ? chooseArchitecture(state.subScene) : undefined,
     disorder: frameAllowsContext && allowsDisorder
       ? [ruleText('ss_gold_chaos'), chooseDisorder(state.subScene)]
           .filter((item): item is string => Boolean(item))
