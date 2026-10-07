@@ -36,6 +36,7 @@ import {
 import { MICRO_LOCATIONS, getMicroLocation, MicroLocation } from './data/microLocations';
 import { OUTFITS, OutfitItem } from './data/clothingOutfits';
 import { resolveScene, validateScene, validatePrompt, ResolvedScene, ValidationResult, DerivedPhysicalState } from './engine/physicsEngine';
+import { analyzeAndRepairScene } from './engine/realismIntelligence';
 import {
   BackgroundMode,
   BackgroundControlDensity,
@@ -2150,13 +2151,13 @@ export default function PhysFrameApp() {
       setAutoFixStatus('processing');
       setAutoFixMessage(null);
 
-      // 1. Read current SceneState & run deterministic Physical Scene Resolver
-      const resolved = resolveScene(state as any);
-
-      // 2. Commit the complete canonical resolved state in one pass.
-      const correctedState = resolved.state as SceneState;
-      const finalResolved = resolveScene(correctedState as any);
-      const postValidation = validateScene(finalResolved);
+      // 1. Run the unified Realism Intelligence layer once.
+      // It resolves scene conflicts, validates the canonical result, and reports what changed.
+      const intelligence = analyzeAndRepairScene(
+        state as unknown as Record<string, unknown>
+      );
+      const finalResolved = intelligence.finalResolved;
+      const postValidation = intelligence.validation;
       const finalState = finalResolved.state as SceneState;
 
       setState(finalState);
@@ -2174,7 +2175,7 @@ export default function PhysFrameApp() {
         setEnhancedPrompts(prev => ({
           ...prev,
           gemini: cleanPromptText,
-          chatgpt: validatePrompt(buildPromptText(semantic, 'chatgpt'), resolved, buildNegativeConstraints(finalState, derived)).cleanPrompt
+          chatgpt: validatePrompt(buildPromptText(semantic, 'chatgpt'), finalResolved, buildNegativeConstraints(finalState, derived)).cleanPrompt
         }));
       }
 
@@ -2204,15 +2205,11 @@ export default function PhysFrameApp() {
           : ['المشهد جاهز للتوليد من ناحية الاتساق الفيزيائي المحلي.']
       };
 
-      if (postValidation.isValid && validatedPrompt.contradictionsFound.length === 0) {
-        setAutoFixMessage('تم التصحيح الكامل محليًا ✓');
-      } else {
-        setAutoFixMessage('تم تطبيق جميع التصحيحات الفيزيائية المتاحة ✓');
-      }
+      setAutoFixMessage(intelligence.summaryAR);
 
       setAuditResult(localFixedAudit);
       setAutoFixStatus('success');
-      showToast('تم التصحيح الفيزيائي فورًا ✓');
+      showToast(intelligence.summaryAR);
 
       // Gemini re-audit is secondary and runs without blocking the Auto-Fix button.
       void fetch('/api/ai/audit-realism', {
@@ -4358,7 +4355,7 @@ export default function PhysFrameApp() {
                       ) : (
                         <>
                           <Sparkles className="w-3.5 h-3.5 text-black" />
-                          <span>تصحيح تلقائي</span>
+                          <span>تحليل المشهد وإصلاحه</span>
                         </>
                       )}
                     </button>
