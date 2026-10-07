@@ -70,8 +70,13 @@ assert.match(chatgptIdentity, /Do not copy the reference image composition/i);
 assert.doesNotMatch(chatgptIdentity, /composition guidance only where explicitly requested/i);
 
 const geminiIdentity = adaptPromptToPlatform(neutralPrompt, 'gemini', defaultPlan);
-assert.match(geminiIdentity, /provided reference image only to preserve/i);
-assert.match(geminiIdentity, /Do not copy the reference image composition/i);
+assert.match(geminiIdentity, /provided image input only to preserve/i);
+assert.match(geminiIdentity, /Do not inherit the reference composition/i);
+
+const midjourneyIdentity = adaptPromptToPlatform(neutralPrompt, 'midjourney', defaultPlan);
+assert.match(midjourneyIdentity, /Midjourney Edit Model reference/i);
+assert.match(midjourneyIdentity, /Do not inherit the reference composition/i);
+assert.match(midjourneyIdentity, /--v 8\.2 --raw$/);
 
 const noReferencePrompt = adaptPromptToPlatform(neutralPrompt, 'chatgpt', noReferencePlan);
 assert.equal(noReferencePrompt, neutralPrompt);
@@ -112,10 +117,16 @@ assert.deepEqual(
 
 const chatgptManifest = createSceneManifest(base, 'chatgpt');
 const geminiManifest = createSceneManifest(base, 'gemini');
+const midjourneyManifest = createSceneManifest(base, 'midjourney');
 assert.deepEqual(
   chatgptManifest.referencePlan,
   geminiManifest.referencePlan,
   'Platform target must not mutate reference intent'
+);
+assert.deepEqual(
+  geminiManifest.referencePlan,
+  midjourneyManifest.referencePlan,
+  'Midjourney target must not mutate reference intent'
 );
 
 console.log('referenceRouter tests passed');
