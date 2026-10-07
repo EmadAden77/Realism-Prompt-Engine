@@ -48,9 +48,16 @@ assert.match(
 );
 assert.match(pipeline.platforms.chatgpt.prompt, /SUBJECT & IDENTITY LOCK/);
 assert.match(pipeline.platforms.gemini.prompt, /SUBJECT & IDENTITY LOCK/);
+assert.match(pipeline.platforms.midjourney.prompt, /SUBJECT & IDENTITY LOCK/);
+assert.match(pipeline.platforms.midjourney.prompt, /--v 8\.2 --raw$/);
+assert.equal(pipeline.platforms.chatgpt.adapter.recommendedModel, 'gpt-image-2.5-sunburst');
+assert.equal(pipeline.platforms.gemini.adapter.recommendedModel, 'gemini-nano-banana-2.1');
+assert.equal(pipeline.platforms.midjourney.adapter.referenceWorkflow, 'midjourney_edit_model');
+assert.equal(pipeline.platforms.midjourney.adapter.referenceLimit, 4);
 
 assert.equal(pipeline.platforms.chatgpt.validation.isValid, true);
 assert.equal(pipeline.platforms.gemini.validation.isValid, true);
+assert.equal(pipeline.platforms.midjourney.validation.isValid, true);
 assert.equal(pipeline.diagnostics.negativeConflicts.length, 0);
 assert.equal(pipeline.diagnostics.isValid, true);
 assert(pipeline.neutral.compression.savedChars > 0);
@@ -64,7 +71,12 @@ assert.match(pipeline.negative.text, /floating camera/);
 assert.equal(
   pipeline.platforms.chatgpt.negativePrompt,
   pipeline.platforms.gemini.negativePrompt,
-  'Both platform outputs must share one reconciled negative prompt'
+  'ChatGPT and Gemini must share one reconciled negative prompt'
+);
+assert.equal(
+  pipeline.platforms.chatgpt.negativePrompt,
+  pipeline.platforms.midjourney.negativePrompt,
+  'Midjourney must share the same canonical negative constraints'
 );
 
 const withoutReference = compileUnifiedPromptPipeline({
@@ -80,6 +92,14 @@ assert.doesNotMatch(
   withoutReference.platforms.gemini.rawPrompt,
   /provided reference image/i
 );
+assert.doesNotMatch(
+  withoutReference.platforms.midjourney.rawPrompt,
+  /Edit Model reference/i
+);
+assert.equal(
+  withoutReference.platforms.chatgpt.adapter.recommendedModel,
+  'gpt-image-2.5-flare'
+);
 
 const wearGlasses = compileUnifiedPromptPipeline({
   ...base,
@@ -94,6 +114,7 @@ assert.equal(
   'Valid "no eyeglasses" absence-constraint must not be misread as a prohibition on glasses'
 );
 assert.equal(wearGlasses.platforms.gemini.validation.contradictionsFound.length, 0);
+assert.equal(wearGlasses.platforms.midjourney.validation.contradictionsFound.length, 0);
 
 const noGlasses = compileUnifiedPromptPipeline({
   ...base,
@@ -149,6 +170,10 @@ assert.equal(
 assert.equal(
   repeated.platforms.gemini.prompt,
   pipeline.platforms.gemini.prompt
+);
+assert.equal(
+  repeated.platforms.midjourney.prompt,
+  pipeline.platforms.midjourney.prompt
 );
 
 const outfitChanged = compileUnifiedPromptPipeline({
