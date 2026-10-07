@@ -83,6 +83,7 @@ export interface SceneState {
   hoodPosition?: HoodPosition;
   thobeCollar?: ThobeCollar;
   hairStyle: string;
+  hairPhysicsPreset?: string;
   expression: string;
   timeOfDay: TimeOfDay;
   lightingMode: string;
