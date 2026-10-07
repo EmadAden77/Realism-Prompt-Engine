@@ -2817,10 +2817,16 @@ export default function PhysFrameApp() {
                          onChange={e => setState({ ...state, expression: e.target.value })}
                          className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-[var(--accent)]"
                        >
-                         {EXPRESSIONS.map(e => (
-                           <option key={e.id} value={e.id}>
-                             {e.labelAR}
-                           </option>
+                         {Array.from(new Set(EXPRESSIONS.map(e => e.categoryAR))).map(category => (
+                           <optgroup key={category} label={category}>
+                             {EXPRESSIONS
+                               .filter(e => e.categoryAR === category)
+                               .map(e => (
+                                 <option key={e.id} value={e.id}>
+                                   {e.labelAR}
+                                 </option>
+                               ))}
+                           </optgroup>
                          ))}
                        </select>
                      </div>
