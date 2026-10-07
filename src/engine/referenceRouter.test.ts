@@ -65,8 +65,8 @@ assert.equal(hasReferenceIntent(multiIntent, 'visual_style_guidance'), true);
 
 const neutralPrompt = 'Generate a realistic photograph.';
 const chatgptIdentity = adaptPromptToPlatform(neutralPrompt, 'chatgpt', defaultPlan);
-assert.match(chatgptIdentity, /attached reference image only to preserve/i);
-assert.match(chatgptIdentity, /Do not copy the reference image composition/i);
+assert.match(chatgptIdentity, /attached image input only to preserve/i);
+assert.match(chatgptIdentity, /Do not inherit the reference composition/i);
 assert.doesNotMatch(chatgptIdentity, /composition guidance only where explicitly requested/i);
 
 const geminiIdentity = adaptPromptToPlatform(neutralPrompt, 'gemini', defaultPlan);
