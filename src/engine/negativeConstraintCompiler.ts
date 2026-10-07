@@ -405,14 +405,84 @@ export function auditNegativeConstraintConsistency(
  * Positive semantic state has higher priority than a conflicting negative
  * fragment. Any detected conflicting fragment is omitted before prompt output.
  */
+
+export function auditNegativeAgainstPositivePrompt(
+  positivePrompt: string,
+  fragments: NegativeConstraintFragment[]
+): NegativeConstraintConflict[] {
+  const positive = positivePrompt.toLowerCase();
+  const byId = new Set(fragments.map(item => item.id));
+  const conflicts: NegativeConstraintConflict[] = [];
+
+  if (
+    byId.has('NEG_GLASSES_ABSENT') &&
+    /wearing black rectangular full-rim eyeglasses|wearing eyeglasses|wearing spectacles/.test(positive)
+  ) {
+    conflicts.push({
+      code: 'NEGATIVE_FORBIDS_REQUIRED_GLASSES',
+      fragmentId: 'NEG_GLASSES_ABSENT',
+      message: 'Negative constraints forbid glasses while the final positive prompt explicitly requires wearing them.',
+    });
+  }
+
+  if (
+    byId.has('NEG_GLASSES_REQUIRED') &&
+    /not wearing glasses|without glasses|bare-faced without eyewear/.test(positive)
+  ) {
+    conflicts.push({
+      code: 'NEGATIVE_REQUIRES_FORBIDDEN_GLASSES',
+      fragmentId: 'NEG_GLASSES_REQUIRED',
+      message: 'Negative constraints require glasses while the final positive prompt explicitly removes them.',
+    });
+  }
+
+  if (
+    byId.has('NEG_FRONT_SELFIE_CAMERA') &&
+    /third-person candid photograph|smartphone mirror selfie/.test(positive)
+  ) {
+    conflicts.push({
+      code: 'FRONT_SELFIE_NEGATIVE_WITH_NON_FRONT_CAPTURE',
+      fragmentId: 'NEG_FRONT_SELFIE_CAMERA',
+      message: 'Front-selfie negative constraints conflict with the final positive capture topology.',
+    });
+  }
+
+  if (
+    byId.has('NEG_PHONE_ONLY_LIGHT') &&
+    /lighting source:\s*(?:إضاءة سقف|ضوء نهاري|ceiling|overhead|daylight)|ceiling lights?\s+(?:on|active)/i.test(positivePrompt)
+  ) {
+    conflicts.push({
+      code: 'PHONE_ONLY_NEGATIVE_WITH_POSITIVE_AMBIENT_LIGHT',
+      fragmentId: 'NEG_PHONE_ONLY_LIGHT',
+      message: 'Phone-only negative constraints conflict with a final positive ambient/daylight source.',
+    });
+  }
+
+  return conflicts;
+}
+
+const dedupeConflicts = (
+  conflicts: NegativeConstraintConflict[]
+): NegativeConstraintConflict[] => {
+  const seen = new Set<string>();
+  return conflicts.filter(conflict => {
+    const key = `${conflict.code}:${conflict.fragmentId}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 export function compileNegativeConstraints(
   state: NegativeConstraintState,
-  semantic?: SemanticPromptScene
+  semantic?: SemanticPromptScene,
+  positivePrompt?: string
 ): CompiledNegativeConstraints {
   const rawFragments = buildRawNegativeFragments(state);
-  const conflicts = semantic
-    ? auditNegativeConstraintConsistency(semantic, rawFragments)
-    : [];
+  const conflicts = dedupeConflicts([
+    ...(semantic ? auditNegativeConstraintConsistency(semantic, rawFragments) : []),
+    ...(positivePrompt ? auditNegativeAgainstPositivePrompt(positivePrompt, rawFragments) : []),
+  ]);
   const conflictIds = new Set(conflicts.map(conflict => conflict.fragmentId));
 
   const fragments = rawFragments.filter(item => !conflictIds.has(item.id));
