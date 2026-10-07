@@ -39,7 +39,7 @@ import { resolveScene, validateScene, validatePrompt, ResolvedScene, ValidationR
 import { createSceneManifest } from './engine/causalPipeline';
 import { adaptPromptToPlatform } from './engine/platformAdapter';
 import { compileNeutralPrompt, type SemanticPromptScene } from './engine/promptCompiler';
-import { deriveRealismState, type DerivedSceneState } from './engine/realismDeriver';
+import { compileNegativeConstraints } from './engine/negativeConstraintCompiler';
 import {
   buildSemanticScene,
   HAIRSTYLES,
@@ -341,81 +341,6 @@ const buildNeutralPromptText = (
   semantic: SemanticScene,
   knowledgeDecisions: KnowledgeRuleDecision[] = []
 ): string => compileNeutralPrompt(semantic, knowledgeDecisions).text;
-
-const buildNegativeConstraints = (state: SceneState, derived: DerivedSceneState): string => {
-  let neg = `identity drift, altered facial proportions, changed hairline, increased hair density, filled sparse hair, beautification filters, airbrushing, waxy skin, CGI appearance, synthetic face, perfect symmetry, cartoon, illustration, extra fingers, malformed hands, missing limbs, floating objects. `;
-
-  if (state.glassesMode === 'no_glasses') {
-    neg += `eyeglasses, spectacles, sunglasses, reading glasses, frames on face, tinted lenses. `;
-  } else if (state.glassesMode === 'wear_glasses') {
-    neg += `missing glasses, bare eyes without frames, no eyeglasses. `;
-  }
-
-  if (state.realismStyle === 'anti-ai-raw') {
-     neg += `masterpiece, award-winning photography, studio lighting, flawless skin, magazine cover, retouched, cinematic color grading, 3D render, octane render, unreal engine, smooth skin, plastic, digital painting, over-sharpened, denoised, pristine, clear, professional portrait. `;
-  } else {
-     neg += `plastic skin, 3D render look. `;
-  }
-
-  if (state.captureType === 'front-selfie') {
-    neg += `floating camera, third-person perspective, impossible selfie arm length, professional studio bokeh on selfie, DSLR extreme shallow depth of field. `;
-  }
-
-  if (state.groupSelfieEnabled) {
-    neg += `cloned faces, twin-like companions, repeated face identity, duplicated skull geometry, duplicated hairline, identical beard patterns, identical body builds, identical heights, duplicated outfits, face-swapped companions, repeated hands, mirrored duplicate poses, every person holding a phone, multiple selfie arms, perfectly symmetric group arrangement. `;
-  }
-
-  if (state.shirtButtons === 'fully-buttoned') {
-    neg += `open shirt collar, unbuttoned shirt placket, exposed upper chest through shirt opening. `;
-  } else if (state.shirtButtons === 'top-one-open') {
-    neg += `fully buttoned shirt collar, two or more open shirt buttons, deep shirt opening. `;
-  } else if (state.shirtButtons === 'top-two-open') {
-    neg += `fully buttoned shirt collar, three or more open shirt buttons, excessively deep shirt opening. `;
-  }
-
-  if (state.shirtTuck === 'tucked') {
-    neg += `untucked shirt hem, shirt hanging over waistband, half-tucked shirt. `;
-  } else if (state.shirtTuck === 'untucked') {
-    neg += `fully tucked shirt, shirt hem disappearing uniformly inside waistband. `;
-  }
-
-  if (state.sleeveStyle === 'down') {
-    neg += `rolled sleeves, exposed forearms from rolled cuffs. `;
-  } else if (state.sleeveStyle === 'rolled-forearm') {
-    neg += `fully lowered sleeves, cuffs covering wrists. `;
-  }
-
-  if (state.lightingMode === 'إضاءة شاشة الهاتف فقط') {
-    neg += `glowing skin, bright background, ceiling lights on, impossible room-wide ambient light, daylight. `;
-  }
-
-  if (state.sceneFamily === 'military-base') {
-    neg += `sci-fi armor, futuristic military, non-saudi military uniform, excessive medals, combat action, weapons drawn. `;
-  }
-
-  if (state.atmosphericCondition === 'high-humidity') {
-    neg += `matte powder-dry airbrushed skin, studio dehumidified air, perfectly dry hair. `;
-  } else if (state.atmosphericCondition === 'dusty-haze') {
-    neg += `sterile hospital-clean air, zero airborne particles, crystal clear infinite contrast. `;
-  } else if (state.atmosphericCondition === 'breezy') {
-    neg += `static frozen stiff fabric, motionless helmet hair, mannequin stillness. `;
-  }
-
-  if (state.muscleFatigue !== 'none') {
-    neg += `well-rested vibrant bright eyes, pure bleached white cartoon sclera, wide awake energized alert gaze, airbrushed smooth under-eye skin, fake porcelain flushed cheeks, cosmetic concealer, awake doll eyes. `;
-  }
-
-  if (state.lightingIntensity > 80) {
-    neg += `underexposed crushed dark ambiance, murky flat gloom. `;
-  }
-  if (state.shadowDepth > 75) {
-    neg += `flat shadowless 3D render lighting, video game ambient light, erased neck shadow, floating head without cast shadows. `;
-  } else if (state.shadowDepth < 30) {
-    neg += `pitch black harsh drop shadows, unnatural camera flash shadows. `;
-  }
-
-  return neg;
-};
 
 const calculatePhysicalConsistencyScore = (
   validation: ValidationResult,
@@ -1517,7 +1442,11 @@ export default function PhysFrameApp() {
         'gemini',
         auditManifest.referencePlan
       );
-      const validatedPrompt = validatePrompt(rawPrompt, resolved, buildNegativeConstraints(resolved.state as SceneState, derived));
+      const validatedPrompt = validatePrompt(
+        rawPrompt,
+        resolved,
+        compileNegativeConstraints(resolved.state as SceneState, semantic, rawPrompt).text
+      );
       const prompt = validatedPrompt.cleanPrompt;
       const physicalConsistencyScore = calculatePhysicalConsistencyScore(
         initialValidation,
@@ -1631,7 +1560,11 @@ export default function PhysFrameApp() {
         'gemini',
         finalManifest.referencePlan
       );
-      const validatedPrompt = validatePrompt(rawPrompt, finalResolved, buildNegativeConstraints(finalState, derived));
+      const validatedPrompt = validatePrompt(
+        rawPrompt,
+        finalResolved,
+        compileNegativeConstraints(finalState, semantic, rawPrompt).text
+      );
       const cleanPromptText = validatedPrompt.cleanPrompt;
 
       // Update enhanced prompt cache if active
@@ -1646,7 +1579,7 @@ export default function PhysFrameApp() {
               finalManifest.referencePlan
             ),
             finalResolved,
-            buildNegativeConstraints(finalState, derived)
+            compileNegativeConstraints(finalState, semantic).text
           ).cleanPrompt
         }));
       }
@@ -1737,7 +1670,11 @@ export default function PhysFrameApp() {
         targetEngine,
         enhanceManifest.referencePlan
       );
-      const validated = validatePrompt(rawBase, resolved, buildNegativeConstraints(resolved.state as SceneState, derived));
+      const validated = validatePrompt(
+        rawBase,
+        resolved,
+        compileNegativeConstraints(resolved.state as SceneState, semantic, rawBase).text
+      );
       const base = validated.cleanPrompt;
 
       const res = await fetch('/api/ai/enhance-prompt', {
@@ -1751,10 +1688,15 @@ export default function PhysFrameApp() {
 
       if (!res.ok) throw new Error('فشل تعزيز البرومبت');
       const data = await res.json();
+      const enhancedCandidate = data.enhancedPrompt || base;
       const enhancedValidated = validatePrompt(
-        data.enhancedPrompt || base,
+        enhancedCandidate,
         resolved,
-        buildNegativeConstraints(resolved.state as SceneState, derived)
+        compileNegativeConstraints(
+          resolved.state as SceneState,
+          semantic,
+          enhancedCandidate
+        ).text
       );
       setEnhancedPrompts(prev => ({ ...prev, [targetEngine]: enhancedValidated.cleanPrompt }));
       setUseEnhancedPrompt(true);
@@ -1812,7 +1754,10 @@ export default function PhysFrameApp() {
       'gemini',
       manifest.referencePlan
     );
-    const rawNegative = buildNegativeConstraints(resolved.state as SceneState, derived);
+    const rawNegative = compileNegativeConstraints(
+      resolved.state as SceneState,
+      semantic
+    ).text;
 
     const validatedChatGPT = validatePrompt(rawChatGPT, resolved, rawNegative);
     const validatedGemini = validatePrompt(rawGemini, resolved, rawNegative);
