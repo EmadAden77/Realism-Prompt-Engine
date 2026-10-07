@@ -837,9 +837,9 @@ function calculateDetailedPhysicalState(
       cameraDistance = 'approx 50-54cm (comfortable arm reach)';
       armReach = 'dominant arm extended at ~40° elbow flexion with subtle natural shoulder elevation, smartphone held off-camera';
     } else {
-      distanceCm = 68;
-      cameraDistance = 'approx 65-70cm (maximum functional arm reach)';
-      armReach = 'dominant arm extended near full reach (~70cm) with subtle upper torso tilt compensating for wide framing, smartphone held off-camera';
+      distanceCm = 60;
+      cameraDistance = 'approx 58-60cm (maximum realistic one-arm selfie reach)';
+      armReach = 'dominant arm extended near full reach (~60cm) with subtle upper torso tilt compensating for wide framing, smartphone held off-camera';
     }
 
     if (groupSelfie) {
