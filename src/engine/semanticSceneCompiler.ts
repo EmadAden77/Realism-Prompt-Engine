@@ -1,6 +1,10 @@
 import { getMicroLocation } from '../data/microLocations';
 import { OUTFITS } from '../data/clothingOutfits';
 import type { DerivedPhysicalState, SceneState } from './physicsEngine';
+
+export type SemanticSceneState = Omit<SceneState, 'realismStyle'> & {
+  realismStyle: SceneState['realismStyle'] | 'cinematic-realism';
+};
 import type { SemanticPromptScene } from './promptCompiler';
 import {
   describeAttireControls,
@@ -253,7 +257,7 @@ export const EXPRESSIONS = [
  * sections. React/UI code must not reimplement these decisions.
  */
 export const buildSemanticScene = (
-  state: SceneState,
+  state: SemanticSceneState,
   derived: DerivedSceneState,
   physicalState?: DerivedPhysicalState
 ): SemanticPromptScene => {
