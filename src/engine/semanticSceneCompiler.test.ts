@@ -110,6 +110,15 @@ assert.match(semantic.captureMechanics, /Smartphone front-camera capture/i);
 assert.match(semantic.captureMechanics, /Capturing phone is NOT visible in frame/i);
 assert.match(semantic.cameraRealism, /Absolute raw hyper-realism/i);
 
+const hairPhysicsSemantic = buildSemanticScene(
+  { ...resolved.state, hairPhysicsPreset: 'hp03' },
+  derived,
+  resolved.physicalState
+);
+assert.match(hairPhysicsSemantic.hair, /2-3cm halo/i);
+assert.match(hairPhysicsSemantic.hair, /baby hairs/i);
+assert.match(hairPhysicsSemantic.hair, /natural everyday hair/i);
+
 assert.match(semantic.outfit, /burgundy/i);
 assert.match(semantic.poseAndContact, /walking at a relaxed everyday pace/i);
 assert.match(semantic.visibleEnvironment, /Authentic everyday Saudi life/i);
