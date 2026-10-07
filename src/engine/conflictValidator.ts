@@ -57,6 +57,21 @@ const FIELD_ALIASES: Record<string, keyof SceneState | undefined> = {
   groupSelfieProfiles: undefined,
 };
 
+const PATCH_FIELDS_BY_ISSUE_FIELD: Record<string, (keyof SceneState)[]> = {
+  groupSelfieEnabled: ['captureType'],
+  glassesMode: ['glassesMode', 'customIdentityPrompt'],
+  lightingMode: ['lightingMode', 'lightingIntensity', 'shadowDepth'],
+  captureType: ['captureType'],
+  framing: ['framing'],
+  groupSelfieSize: ['groupSelfieSize'],
+  lensCondition: ['lensCondition'],
+  foregroundObstruction: ['foregroundObstruction'],
+  pose: ['pose'],
+  atmosphericCondition: ['atmosphericCondition'],
+  lightingIntensity: ['lightingIntensity'],
+  shadowDepth: ['shadowDepth'],
+};
+
 const issueCode = (
   scope: 'INPUT' | 'RESOLVED',
   issue: ValidationIssue
@@ -83,8 +98,18 @@ const suggestedPatchForFields = (
   const patch: Partial<SceneState> = {};
   let changed = false;
 
+  const candidateKeys = new Set<keyof SceneState>();
+
   for (const field of fields) {
-    const key = (FIELD_ALIASES[field] ?? field) as keyof SceneState;
+    for (const mapped of PATCH_FIELDS_BY_ISSUE_FIELD[field] || []) {
+      candidateKeys.add(mapped);
+    }
+
+    const direct = FIELD_ALIASES[field] ?? (field as keyof SceneState);
+    if (direct) candidateKeys.add(direct);
+  }
+
+  for (const key of candidateKeys) {
     if (!(key in resolvedState) || !(key in rawState)) continue;
 
     if (rawState[key] !== resolvedState[key]) {
