@@ -38,6 +38,12 @@ export interface HomeContinuityContext {
 
   mutableProperties: string[];
   transientAnchors: string[];
+
+  // Prompt architecture:
+  // visibleEnvironmentDescription owns visible home facts.
+  // continuityGuard owns the invariant and intentionally does not duplicate furniture.
+  visibleEnvironmentDescription: string;
+  continuityGuard: string;
   promptConstraint: string;
 }
 
@@ -316,6 +322,33 @@ const selectLivingRoomVisibleAnchors = (
 
 const dedupe = (values: string[]): string[] => [...new Set(values)];
 
+export function compileFixedHomeVisibleEnvironment(
+  context: Pick<
+    HomeContinuityContext,
+    'roomId' | 'visibilityProfile' | 'visiblePermanentAnchors' | 'visibleWearAnchors'
+  >,
+  spatialHint?: string
+): string {
+  const roomLabel = context.roomId === 'bedroom'
+    ? 'same fixed master bedroom'
+    : 'same fixed family living room';
+
+  const parts = [
+    `${roomLabel}; visibility profile: ${context.visibilityProfile}`,
+    `visible fixed anchors: ${context.visiblePermanentAnchors.join('; ')}`,
+  ];
+
+  if (context.visibleWearAnchors.length > 0) {
+    parts.push(`visible persistent wear: ${context.visibleWearAnchors.join('; ')}`);
+  }
+
+  if (spatialHint?.trim()) {
+    parts.push(`spatial relation for this shot: ${spatialHint.trim()}`);
+  }
+
+  return parts.join('. ');
+}
+
 export function isFixedHomeFamily(
   sceneFamily: SceneState['sceneFamily']
 ): sceneFamily is FixedHomeRoomId {
@@ -344,6 +377,23 @@ export function resolveHomeContinuity(
   const visiblePermanentAnchors = dedupe(selected.permanent);
   const visibleWearAnchors = dedupe(selected.wear);
 
+  const visibleEnvironmentDescription = compileFixedHomeVisibleEnvironment({
+    roomId: room.roomId,
+    visibilityProfile: selected.profile,
+    visiblePermanentAnchors,
+    visibleWearAnchors,
+  });
+
+  const continuityGuard = [
+    `Fixed-home continuity key: ${FIXED_HOME_V20.id} / ${room.roomId}.`,
+    `Current visibility profile: ${selected.profile}.`,
+    'Visible home facts are already compiled in the environment description; do not duplicate them as extra furniture.',
+    'All hidden fixed-home anchors remain internally locked and must not be pulled into frame merely to prove continuity.',
+    'If a generic micro-location description conflicts with visible fixed-home anchors, the fixed-home anchors win.',
+    `Allowed to vary: ${room.mutableProperties.join('; ')}.`,
+    'Do not lock transient details across separate images unless an explicit same-moment series context exists.',
+  ].join(' ');
+
   return {
     homeId: FIXED_HOME_V20.id,
     blueprintVersion: FIXED_HOME_V20.version,
@@ -365,17 +415,8 @@ export function resolveHomeContinuity(
     visibilityProfile: selected.profile,
     mutableProperties: [...room.mutableProperties],
     transientAnchors: [],
-    promptConstraint: [
-      `Fixed-home continuity key: ${FIXED_HOME_V20.id} / ${room.roomId}.`,
-      `Current visibility profile: ${selected.profile}.`,
-      `Visible immutable anchors only: ${visiblePermanentAnchors.join('; ')}.`,
-      visibleWearAnchors.length
-        ? `Visible persistent wear only: ${visibleWearAnchors.join('; ')}.`
-        : 'No persistent wear anchor needs explicit prompt emission in this framing.',
-      `Allowed to vary: ${room.mutableProperties.join('; ')}.`,
-      'All other fixed-home anchors remain internally locked but must not be pulled into frame merely to prove continuity.',
-      'If a generic micro-location description conflicts with visible fixed-home anchors, the fixed-home anchors win.',
-      'Do not lock transient details across separate images unless an explicit same-moment series context exists.',
-    ].join(' '),
+    visibleEnvironmentDescription,
+    continuityGuard,
+    promptConstraint: continuityGuard,
   };
 }
