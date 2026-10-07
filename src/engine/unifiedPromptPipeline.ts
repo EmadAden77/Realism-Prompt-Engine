@@ -12,7 +12,10 @@ import {
   type SemanticPromptScene,
 } from './promptCompiler';
 import { buildSemanticScene } from './semanticSceneCompiler';
-import { adaptPromptToPlatform } from './platformAdapter';
+import {
+  buildPlatformAdapterPlan,
+  type PlatformAdapterPlan,
+} from './platformAdapter';
 import {
   compileNegativeConstraints,
   type CompiledNegativeConstraints,
@@ -24,7 +27,7 @@ import {
 } from './conflictValidator';
 import { compressNegativePromptText } from './promptCompression';
 
-export type UnifiedPromptTarget = 'chatgpt' | 'gemini';
+export type UnifiedPromptTarget = 'chatgpt' | 'gemini' | 'midjourney';
 
 export interface PlatformPromptResult {
   target: UnifiedPromptTarget;
@@ -32,6 +35,7 @@ export interface PlatformPromptResult {
   prompt: string;
   negativePrompt: string;
   validation: PromptValidationResult;
+  adapter: PlatformAdapterPlan;
 }
 
 export interface UnifiedPromptDiagnostics {
@@ -70,14 +74,14 @@ const dedupeBy = <T,>(items: T[], key: (item: T) => string): T[] => {
 
 const reconcileSharedNegative = (
   base: CompiledNegativeConstraints,
-  chatgpt: CompiledNegativeConstraints,
-  gemini: CompiledNegativeConstraints
+  platformNegatives: CompiledNegativeConstraints[]
 ): CompiledNegativeConstraints => {
-  const chatIds = new Set(chatgpt.fragments.map(item => item.id));
-  const geminiIds = new Set(gemini.fragments.map(item => item.id));
+  const platformIdSets = platformNegatives.map(
+    item => new Set(item.fragments.map(fragment => fragment.id))
+  );
 
-  const fragments = base.fragments.filter(
-    item => chatIds.has(item.id) && geminiIds.has(item.id)
+  const fragments = base.fragments.filter(fragment =>
+    platformIdSets.every(ids => ids.has(fragment.id))
   );
 
   const keptIds = new Set(fragments.map(item => item.id));
@@ -85,14 +89,16 @@ const reconcileSharedNegative = (
     [
       ...base.fragments.filter(item => !keptIds.has(item.id)),
       ...base.omittedConflictingFragments,
-      ...chatgpt.omittedConflictingFragments,
-      ...gemini.omittedConflictingFragments,
+      ...platformNegatives.flatMap(item => item.omittedConflictingFragments),
     ],
     item => item.id
   );
 
   const conflicts = dedupeBy(
-    [...base.conflicts, ...chatgpt.conflicts, ...gemini.conflicts],
+    [
+      ...base.conflicts,
+      ...platformNegatives.flatMap(item => item.conflicts),
+    ],
     item => `${item.code}:${item.fragmentId}`
   );
 
@@ -109,12 +115,12 @@ const reconcileSharedNegative = (
   };
 };
 
-const compilePlatformRawPrompt = (
+const compilePlatformAdapter = (
   target: UnifiedPromptTarget,
   neutralPrompt: string,
   manifest: SceneManifest
-): string =>
-  adaptPromptToPlatform(
+): PlatformAdapterPlan =>
+  buildPlatformAdapterPlan(
     neutralPrompt,
     target,
     manifest.referencePlan
@@ -135,23 +141,23 @@ const compilePlatformNegative = (
 };
 
 const validatePlatformPrompt = (
-  target: UnifiedPromptTarget,
-  rawPrompt: string,
+  adapter: PlatformAdapterPlan,
   sharedNegative: CompiledNegativeConstraints,
   manifest: SceneManifest
 ): PlatformPromptResult => {
   const validation = validatePrompt(
-    rawPrompt,
+    adapter.prompt,
     manifest.resolved,
     sharedNegative.text
   );
 
   return {
-    target,
-    rawPrompt,
+    target: adapter.target,
+    rawPrompt: adapter.prompt,
     prompt: validation.cleanPrompt,
     negativePrompt: validation.cleanNegativePrompt || sharedNegative.text,
     validation,
+    adapter,
   };
 };
 
@@ -188,13 +194,18 @@ export function compileUnifiedPromptPipeline(
     manifest.knowledgeDecisions
   );
 
-  const rawChatGPT = compilePlatformRawPrompt(
+  const chatgptAdapter = compilePlatformAdapter(
     'chatgpt',
     neutral.text,
     manifest
   );
-  const rawGemini = compilePlatformRawPrompt(
+  const geminiAdapter = compilePlatformAdapter(
     'gemini',
+    neutral.text,
+    manifest
+  );
+  const midjourneyAdapter = compilePlatformAdapter(
+    'midjourney',
     neutral.text,
     manifest
   );
@@ -206,32 +217,40 @@ export function compileUnifiedPromptPipeline(
   );
   const chatNegative = compilePlatformNegative(
     'chatgpt',
-    rawChatGPT,
+    chatgptAdapter.prompt,
     manifest,
     semantic
   );
   const geminiNegative = compilePlatformNegative(
     'gemini',
-    rawGemini,
+    geminiAdapter.prompt,
+    manifest,
+    semantic
+  );
+  const midjourneyNegative = compilePlatformNegative(
+    'midjourney',
+    midjourneyAdapter.prompt,
     manifest,
     semantic
   );
 
   const negative = reconcileSharedNegative(
     baseNegative,
-    chatNegative,
-    geminiNegative
+    [chatNegative, geminiNegative, midjourneyNegative]
   );
 
   const chatgpt = validatePlatformPrompt(
-    'chatgpt',
-    rawChatGPT,
+    chatgptAdapter,
     negative,
     manifest
   );
   const gemini = validatePlatformPrompt(
-    'gemini',
-    rawGemini,
+    geminiAdapter,
+    negative,
+    manifest
+  );
+  const midjourney = validatePlatformPrompt(
+    midjourneyAdapter,
     negative,
     manifest
   );
@@ -239,11 +258,13 @@ export function compileUnifiedPromptPipeline(
   const contradictionsByPlatform = {
     chatgpt: chatgpt.validation.contradictionsFound,
     gemini: gemini.validation.contradictionsFound,
+    midjourney: midjourney.validation.contradictionsFound,
   };
 
   const warningsByPlatform = {
     chatgpt: chatgpt.validation.warnings,
     gemini: gemini.validation.warnings,
+    midjourney: midjourney.validation.warnings,
   };
 
   const conflictReport = validateUnifiedConflicts({
@@ -255,10 +276,13 @@ export function compileUnifiedPromptPipeline(
     resolvedValidation,
     chatgpt: chatgpt.validation,
     gemini: gemini.validation,
+    midjourney: midjourney.validation,
     chatgptNegativePrompt: chatgpt.negativePrompt,
     geminiNegativePrompt: gemini.negativePrompt,
+    midjourneyNegativePrompt: midjourney.negativePrompt,
     chatgptPrompt: chatgpt.prompt,
     geminiPrompt: gemini.prompt,
+    midjourneyPrompt: midjourney.prompt,
   });
 
   return {
@@ -269,6 +293,7 @@ export function compileUnifiedPromptPipeline(
     platforms: {
       chatgpt,
       gemini,
+      midjourney,
     },
     diagnostics: {
       inputValidation,
@@ -309,11 +334,18 @@ export function validateExternalPromptCandidate(
     negative.text
   );
 
+  const adapter = buildPlatformAdapterPlan(
+    pipeline.neutral.text,
+    target,
+    pipeline.manifest.referencePlan
+  );
+
   return {
     target,
     rawPrompt: candidatePrompt,
     prompt: validation.cleanPrompt,
     negativePrompt: validation.cleanNegativePrompt || negative.text,
     validation,
+    adapter,
   };
 }
