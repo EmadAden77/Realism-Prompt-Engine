@@ -41,6 +41,7 @@ export interface PromptProvenance {
 
 export interface PromptFragment {
   id: string;
+  section?: string;
   text: string;
   provenance: PromptProvenance;
 }
