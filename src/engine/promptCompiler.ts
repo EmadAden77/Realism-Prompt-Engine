@@ -1,5 +1,9 @@
 import type { KnowledgeRuleDecision } from './v20KnowledgeBase';
 import type { PromptFragment } from './causalPipeline';
+import {
+  compressPromptFragments,
+  type CompressionStats,
+} from './promptCompression';
 
 export interface SemanticPromptScene {
   identity: string;
@@ -24,6 +28,7 @@ export interface CompiledNeutralPrompt {
   text: string;
   fragments: PromptFragment[];
   knowledgeFragments: PromptFragment[];
+  compression: CompressionStats;
 }
 
 export interface PromptFragmentDiff {
@@ -119,8 +124,10 @@ export function compileBasePromptFragments(
       'prompt:environment',
       'ENVIRONMENT & ATMOSPHERE',
       [
-        `Location: ${semantic.visibleEnvironment}`,
-        `Atmospheric Condition: ${semantic.atmosphere}`,
+        semantic.visibleEnvironment.trim().startsWith('Location:')
+          ? semantic.visibleEnvironment
+          : `Location: ${semantic.visibleEnvironment}`,
+        `Atmosphere: ${semantic.atmosphere}`,
         `Lighting: ${semantic.lighting}`,
       ].join('\n'),
       [
@@ -223,28 +230,40 @@ export function compileNeutralPrompt(
 ): CompiledNeutralPrompt {
   const baseFragments = compileBasePromptFragments(semantic);
   const knowledgeFragments = compileKnowledgeFragments(decisions);
-  const fragments = [...baseFragments, ...knowledgeFragments];
+  const rawFragments = [...baseFragments, ...knowledgeFragments];
 
-  const renderedBaseSections = baseFragments.map(
+  const compressed = compressPromptFragments(rawFragments);
+  const baseIds = new Set(baseFragments.map(item => item.id));
+  const knowledgeIds = new Set(knowledgeFragments.map(item => item.id));
+
+  const compressedBaseFragments = compressed.fragments.filter(item =>
+    baseIds.has(item.id)
+  );
+  const compressedKnowledgeFragments = compressed.fragments.filter(item =>
+    knowledgeIds.has(item.id)
+  );
+
+  const renderedBaseSections = compressedBaseFragments.map(
     item => `[${item.section}]\n${item.text}`
   );
 
-  if (knowledgeFragments.length > 0) {
+  if (compressedKnowledgeFragments.length > 0) {
     renderedBaseSections.push(
-      `[CAUSAL REALISM CONSTRAINTS]\n${knowledgeFragments
+      `[CAUSAL REALISM CONSTRAINTS]\n${compressedKnowledgeFragments
         .map(item => item.text)
         .join('\n')}`
     );
   }
 
   const text = [
-    'Generate a realistic photograph with the following strict constraints:',
+    'Generate a realistic photograph. Follow these constraints:',
     ...renderedBaseSections,
   ].join('\n\n');
 
   return {
     text,
-    fragments,
-    knowledgeFragments,
+    fragments: compressed.fragments,
+    knowledgeFragments: compressedKnowledgeFragments,
+    compression: compressed.stats,
   };
 }
