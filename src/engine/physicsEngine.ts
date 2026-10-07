@@ -1290,14 +1290,15 @@ export function validatePrompt(
 
   // 1. Glasses Positive vs Negative Contradiction
   if (state.glassesMode === 'wear_glasses') {
-    if (/eyeglasses|spectacles|glasses|frames on face/i.test(cleanNeg)) {
+    // Only treat standalone eyewear items as prohibitions. Phrases such as
+    // "missing glasses" or "no eyeglasses" are valid negative constraints
+    // when the positive scene explicitly requires glasses.
+    const forbidsGlasses = /(?:^|[.;,]\s*)(?:eyeglasses|spectacles|sunglasses|reading glasses|frames on face|tinted lenses)(?=\s*[,.;]|$)/i.test(cleanNeg);
+    if (forbidsGlasses) {
       contradictions.push('Negative prompt prohibited glasses while scene explicitly requires wearing glasses.');
       cleanNeg = cleanNeg
-        .replace(/eyeglasses,?\s*/gi, '')
-        .replace(/spectacles,?\s*/gi, '')
-        .replace(/sunglasses,?\s*/gi, '')
-        .replace(/reading glasses,?\s*/gi, '')
-        .replace(/frames on face,?\s*/gi, '')
+        .replace(/(?:^|[.;,]\s*)(?:eyeglasses|spectacles|sunglasses|reading glasses|frames on face|tinted lenses)(?=\s*[,.;]|$)/gi, '')
+        .replace(/\s{2,}/g, ' ')
         .trim();
     }
   } else if (state.glassesMode === 'no_glasses') {
