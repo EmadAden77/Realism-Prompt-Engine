@@ -22,7 +22,131 @@ export interface SemanticPromptScene {
 
 export interface CompiledNeutralPrompt {
   text: string;
+  fragments: PromptFragment[];
   knowledgeFragments: PromptFragment[];
+}
+
+export interface PromptFragmentDiff {
+  changedIds: string[];
+  addedIds: string[];
+  removedIds: string[];
+  unchangedIds: string[];
+}
+
+const fragment = (
+  id: string,
+  section: string,
+  text: string,
+  sceneFacts: string[],
+  ruleIds: string[]
+): PromptFragment => ({
+  id,
+  section,
+  text,
+  provenance: {
+    sceneFacts,
+    ruleIds,
+  },
+});
+
+/**
+ * Stable semantic prompt sections with explicit provenance.
+ *
+ * These fragments are platform-neutral. They describe what the scene means,
+ * not how any specific image model expects reference syntax.
+ */
+export function compileBasePromptFragments(
+  semantic: SemanticPromptScene
+): PromptFragment[] {
+  const fragments: PromptFragment[] = [
+    fragment(
+      'prompt:subject',
+      'SUBJECT & IDENTITY LOCK',
+      [
+        semantic.identity,
+        `Body: ${semantic.body}`,
+        `Eyeglasses: ${semantic.glasses}`,
+        `Expression: ${semantic.expression}`,
+        `Hair: ${semantic.hair}`,
+      ].join('\n'),
+      [
+        'semantic.identity',
+        'semantic.body',
+        'semantic.glasses',
+        'semantic.expression',
+        'semantic.hair',
+      ],
+      ['PROMPT_SUBJECT_IDENTITY']
+    ),
+    fragment(
+      'prompt:attire',
+      'ATTIRE & PHYSICS',
+      [
+        `Outfit: ${semantic.outfit}`,
+        `Fabric Behavior: ${semantic.outfitPhysics}`,
+        `Skin State: ${semantic.skinResponse}`,
+      ].join('\n'),
+      [
+        'semantic.outfit',
+        'semantic.outfitPhysics',
+        'semantic.skinResponse',
+      ],
+      ['PROMPT_ATTIRE_PHYSICS']
+    ),
+  ];
+
+  if (semantic.groupSelfie) {
+    fragments.push(
+      fragment(
+        'prompt:group-selfie',
+        'GROUP SELFIE CAST & ANTI-CLONING',
+        semantic.groupSelfie,
+        ['semantic.groupSelfie'],
+        ['PROMPT_GROUP_SELFIE']
+      )
+    );
+  }
+
+  fragments.push(
+    fragment(
+      'prompt:camera',
+      'CAMERA & FRAMING',
+      [semantic.captureMechanics, semantic.cameraRealism].join('\n'),
+      ['semantic.captureMechanics', 'semantic.cameraRealism'],
+      ['PROMPT_CAMERA_FRAMING']
+    ),
+    fragment(
+      'prompt:environment',
+      'ENVIRONMENT & ATMOSPHERE',
+      [
+        `Location: ${semantic.visibleEnvironment}`,
+        `Atmospheric Condition: ${semantic.atmosphere}`,
+        `Lighting: ${semantic.lighting}`,
+      ].join('\n'),
+      [
+        'semantic.visibleEnvironment',
+        'semantic.atmosphere',
+        'semantic.lighting',
+      ],
+      ['PROMPT_ENVIRONMENT_ATMOSPHERE']
+    ),
+    fragment(
+      'prompt:pose-contact',
+      'POSE & CONTACT',
+      semantic.poseAndContact,
+      ['semantic.poseAndContact'],
+      ['PROMPT_POSE_CONTACT']
+    ),
+    fragment(
+      'prompt:physics',
+      'PHYSICS CONSTRAINTS',
+      semantic.styleConstraints,
+      ['semantic.styleConstraints'],
+      ['PROMPT_PHYSICS_CONSTRAINTS']
+    )
+  );
+
+  return fragments;
 }
 
 /**
@@ -40,12 +164,53 @@ export function compileKnowledgeFragments(
     .sort((a, b) => b.priority - a.priority)
     .map(decision => ({
       id: `knowledge:${decision.id}`,
+      section: 'CAUSAL REALISM CONSTRAINTS',
       text: decision.visibleConsequence,
       provenance: {
         sceneFacts: [decision.reason],
         ruleIds: [decision.id],
       },
     }));
+}
+
+export function diffPromptFragments(
+  before: PromptFragment[],
+  after: PromptFragment[]
+): PromptFragmentDiff {
+  const beforeById = new Map(before.map(item => [item.id, item]));
+  const afterById = new Map(after.map(item => [item.id, item]));
+
+  const changedIds: string[] = [];
+  const addedIds: string[] = [];
+  const removedIds: string[] = [];
+  const unchangedIds: string[] = [];
+
+  for (const [id, afterFragment] of afterById) {
+    const beforeFragment = beforeById.get(id);
+    if (!beforeFragment) {
+      addedIds.push(id);
+    } else if (
+      beforeFragment.text !== afterFragment.text ||
+      beforeFragment.section !== afterFragment.section
+    ) {
+      changedIds.push(id);
+    } else {
+      unchangedIds.push(id);
+    }
+  }
+
+  for (const id of beforeById.keys()) {
+    if (!afterById.has(id)) {
+      removedIds.push(id);
+    }
+  }
+
+  return {
+    changedIds,
+    addedIds,
+    removedIds,
+    unchangedIds,
+  };
 }
 
 /**
@@ -56,28 +221,30 @@ export function compileNeutralPrompt(
   semantic: SemanticPromptScene,
   decisions: KnowledgeRuleDecision[] = []
 ): CompiledNeutralPrompt {
+  const baseFragments = compileBasePromptFragments(semantic);
   const knowledgeFragments = compileKnowledgeFragments(decisions);
+  const fragments = [...baseFragments, ...knowledgeFragments];
 
-  let prompt = `Generate a realistic photograph with the following strict constraints:\n\n`;
-  prompt += `[SUBJECT & IDENTITY LOCK]\n${semantic.identity}\nBody: ${semantic.body}\nEyeglasses: ${semantic.glasses}\nExpression: ${semantic.expression}\nHair: ${semantic.hair}\n\n`;
-  prompt += `[ATTIRE & PHYSICS]\nOutfit: ${semantic.outfit}\nFabric Behavior: ${semantic.outfitPhysics}\nSkin State: ${semantic.skinResponse}\n\n`;
-
-  if (semantic.groupSelfie) {
-    prompt += `[GROUP SELFIE CAST & ANTI-CLONING]\n${semantic.groupSelfie}\n\n`;
-  }
-
-  prompt += `[CAMERA & FRAMING]\n${semantic.captureMechanics}\n${semantic.cameraRealism}\n\n`;
-  prompt += `[ENVIRONMENT & ATMOSPHERE]\nLocation: ${semantic.visibleEnvironment}\nAtmospheric Condition: ${semantic.atmosphere}\nLighting: ${semantic.lighting}\n\n`;
-  prompt += `[POSE & CONTACT]\n${semantic.poseAndContact}\n\n`;
-  prompt += `[PHYSICS CONSTRAINTS]\n${semantic.styleConstraints}`;
+  const renderedBaseSections = baseFragments.map(
+    item => `[${item.section}]\n${item.text}`
+  );
 
   if (knowledgeFragments.length > 0) {
-    prompt += `\n\n[CAUSAL REALISM CONSTRAINTS]\n`;
-    prompt += knowledgeFragments.map(fragment => fragment.text).join('\n');
+    renderedBaseSections.push(
+      `[CAUSAL REALISM CONSTRAINTS]\n${knowledgeFragments
+        .map(item => item.text)
+        .join('\n')}`
+    );
   }
 
+  const text = [
+    'Generate a realistic photograph with the following strict constraints:',
+    ...renderedBaseSections,
+  ].join('\n\n');
+
   return {
-    text: prompt,
+    text,
+    fragments,
     knowledgeFragments,
   };
 }
