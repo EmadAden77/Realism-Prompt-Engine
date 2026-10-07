@@ -124,10 +124,13 @@ const continuityReport = validateUnifiedConflicts({
   resolvedValidation: home.diagnostics.resolvedValidation,
   chatgpt: home.platforms.chatgpt.validation,
   gemini: home.platforms.gemini.validation,
+  midjourney: home.platforms.midjourney.validation,
   chatgptNegativePrompt: home.platforms.chatgpt.negativePrompt,
   geminiNegativePrompt: home.platforms.gemini.negativePrompt,
+  midjourneyNegativePrompt: home.platforms.midjourney.negativePrompt,
   chatgptPrompt: home.platforms.chatgpt.prompt,
   geminiPrompt: home.platforms.gemini.prompt,
+  midjourneyPrompt: home.platforms.midjourney.prompt,
 });
 assert(
   continuityReport.errors.some(
@@ -145,11 +148,14 @@ const divergenceReport = validateUnifiedConflicts({
   resolvedValidation: clean.diagnostics.resolvedValidation,
   chatgpt: clean.platforms.chatgpt.validation,
   gemini: clean.platforms.gemini.validation,
+  midjourney: clean.platforms.midjourney.validation,
   chatgptNegativePrompt: clean.platforms.chatgpt.negativePrompt,
   geminiNegativePrompt:
     clean.platforms.gemini.negativePrompt + ' synthetic divergence',
+  midjourneyNegativePrompt: clean.platforms.midjourney.negativePrompt,
   chatgptPrompt: clean.platforms.chatgpt.prompt,
   geminiPrompt: clean.platforms.gemini.prompt,
+  midjourneyPrompt: clean.platforms.midjourney.prompt,
 });
 assert(
   divergenceReport.errors.some(
@@ -170,12 +176,15 @@ const falseReferenceReport = validateUnifiedConflicts({
   resolvedValidation: noRef.diagnostics.resolvedValidation,
   chatgpt: noRef.platforms.chatgpt.validation,
   gemini: noRef.platforms.gemini.validation,
+  midjourney: noRef.platforms.midjourney.validation,
   chatgptNegativePrompt: noRef.platforms.chatgpt.negativePrompt,
   geminiNegativePrompt: noRef.platforms.gemini.negativePrompt,
+  midjourneyNegativePrompt: noRef.platforms.midjourney.negativePrompt,
   chatgptPrompt:
     'Use the attached reference image to preserve identity. ' +
     noRef.platforms.chatgpt.prompt,
   geminiPrompt: noRef.platforms.gemini.prompt,
+  midjourneyPrompt: noRef.platforms.midjourney.prompt,
 });
 assert(
   falseReferenceReport.errors.some(
@@ -198,10 +207,13 @@ const promptCorrectionReport = validateUnifiedConflicts({
     ],
   },
   gemini: clean.platforms.gemini.validation,
+  midjourney: clean.platforms.midjourney.validation,
   chatgptNegativePrompt: clean.platforms.chatgpt.negativePrompt,
   geminiNegativePrompt: clean.platforms.gemini.negativePrompt,
+  midjourneyNegativePrompt: clean.platforms.midjourney.negativePrompt,
   chatgptPrompt: clean.platforms.chatgpt.prompt,
   geminiPrompt: clean.platforms.gemini.prompt,
+  midjourneyPrompt: clean.platforms.midjourney.prompt,
 });
 assert(
   promptCorrectionReport.corrections.some(
