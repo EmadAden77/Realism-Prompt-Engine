@@ -2050,7 +2050,8 @@ export default function PhysFrameApp() {
       const semantic = buildSemanticScene(resolved.state as SceneState, derived, resolved.physicalState);
       const rawPrompt = adaptPromptToPlatform(
         buildNeutralPromptText(semantic, auditManifest.knowledgeDecisions),
-        'gemini'
+        'gemini',
+        auditManifest.referencePlan
       );
       const validatedPrompt = validatePrompt(rawPrompt, resolved, buildNegativeConstraints(resolved.state as SceneState, derived));
       const prompt = validatedPrompt.cleanPrompt;
@@ -2163,7 +2164,8 @@ export default function PhysFrameApp() {
       const finalManifest = createSceneManifest(finalState as any, 'neutral');
       const rawPrompt = adaptPromptToPlatform(
         buildNeutralPromptText(semantic, finalManifest.knowledgeDecisions),
-        'gemini'
+        'gemini',
+        finalManifest.referencePlan
       );
       const validatedPrompt = validatePrompt(rawPrompt, finalResolved, buildNegativeConstraints(finalState, derived));
       const cleanPromptText = validatedPrompt.cleanPrompt;
@@ -2176,7 +2178,8 @@ export default function PhysFrameApp() {
           chatgpt: validatePrompt(
             adaptPromptToPlatform(
               buildNeutralPromptText(semantic, finalManifest.knowledgeDecisions),
-              'chatgpt'
+              'chatgpt',
+              finalManifest.referencePlan
             ),
             finalResolved,
             buildNegativeConstraints(finalState, derived)
@@ -2267,7 +2270,8 @@ export default function PhysFrameApp() {
       const semantic = buildSemanticScene(resolved.state as SceneState, derived, resolved.physicalState);
       const rawBase = adaptPromptToPlatform(
         buildNeutralPromptText(semantic, enhanceManifest.knowledgeDecisions),
-        targetEngine
+        targetEngine,
+        enhanceManifest.referencePlan
       );
       const validated = validatePrompt(rawBase, resolved, buildNegativeConstraints(resolved.state as SceneState, derived));
       const base = validated.cleanPrompt;
@@ -2336,11 +2340,13 @@ export default function PhysFrameApp() {
     const semantic = buildSemanticScene(resolved.state as SceneState, derived, resolved.physicalState);
     const rawChatGPT = adaptPromptToPlatform(
       buildNeutralPromptText(semantic, manifest.knowledgeDecisions),
-      'chatgpt'
+      'chatgpt',
+      manifest.referencePlan
     );
     const rawGemini = adaptPromptToPlatform(
       buildNeutralPromptText(semantic, manifest.knowledgeDecisions),
-      'gemini'
+      'gemini',
+      manifest.referencePlan
     );
     const rawNegative = buildNegativeConstraints(resolved.state as SceneState, derived);
 
