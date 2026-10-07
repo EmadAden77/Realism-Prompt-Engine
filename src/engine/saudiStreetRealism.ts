@@ -24,17 +24,17 @@ const ruleText = (id: string): string | undefined =>
 const containsAny = (value: string, terms: string[]): boolean =>
   terms.some(term => value.includes(term));
 
-const chooseSurface = (subScene: string): string | undefined => {
+const chooseSurface = (subScene: string): string => {
   if (containsAny(subScene, ['موقف', 'مواقف'])) {
-    return ruleText('ss_asphalt_interlock_parking');
+    return 'interlock parking surface with subtle uneven settlement, occasional tile lifted about 5mm where plausible, groove dust and sand accumulation, realistic tire-load compression and restrained wear';
   }
   if (containsAny(subScene, ['رصيف', 'ممشى', 'حديقة', 'ساحة'])) {
-    return ruleText('ss_sidewalk_walkway');
+    return 'interlock or paved walkway with ground micro-topography, slight uneven settlement, fine dust in joints, occasional small weed between grooves, realistic curb transitions and foot-contact wear';
   }
   if (containsAny(subScene, ['شارع سكني شعبي', 'زاوية شارع'])) {
-    return ruleText('ss_asphalt_internal_street');
+    return 'ordinary neighborhood asphalt with restrained cracking, faded speed-bump or curb paint where present, tire wear marks and fine accumulated road dust';
   }
-  return ruleText('ss_asphalt_general');
+  return 'ordinary Saudi asphalt with fine aggregate texture, restrained cracks and patching, faded lane or parking paint where present, realistic tire marks and thin sand-dust accumulation';
 };
 
 const chooseArchitecture = (subScene: string): string | undefined => {
@@ -130,13 +130,6 @@ export function deriveSaudiStreetRealism(
     ruleText('ss_gold_clothing'),
     ruleText('ss_gold_car'),
     allowsHumans ? ruleText('ss_gold_crowd') : undefined,
-    allowsVehicles && wideEnoughForPlate ? ruleText('ss_gold_plate') : undefined,
-    allowsDisorder ? ruleText('ss_gold_chaos') : undefined,
-    state.timeOfDay === 'night' ? ruleText('ss_gold_sky') : undefined,
-    multipleLights ? ruleText('ss_gold_secondary_light') : undefined,
-    state.captureType === 'front-selfie' && frameAllowsContext
-      ? ruleText('ss_gold_depth')
-      : undefined,
   ].filter((item): item is string => Boolean(item));
 
   const facts = [
@@ -151,7 +144,9 @@ export function deriveSaudiStreetRealism(
     surface: frameAllowsContext ? chooseSurface(state.subScene) : undefined,
     architecture: frameAllowsContext ? chooseArchitecture(state.subScene) : undefined,
     disorder: frameAllowsContext && allowsDisorder
-      ? chooseDisorder(state.subScene)
+      ? [ruleText('ss_gold_chaos'), chooseDisorder(state.subScene)]
+          .filter((item): item is string => Boolean(item))
+          .join(' ')
       : undefined,
     vehicle: frameAllowsContext && allowsVehicles
       ? chooseVehicle(state.subScene, physical)
