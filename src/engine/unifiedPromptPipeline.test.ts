@@ -53,6 +53,11 @@ assert.equal(pipeline.platforms.chatgpt.validation.isValid, true);
 assert.equal(pipeline.platforms.gemini.validation.isValid, true);
 assert.equal(pipeline.diagnostics.negativeConflicts.length, 0);
 assert.equal(pipeline.diagnostics.isValid, true);
+assert(pipeline.neutral.compression.savedChars > 0);
+assert(
+  pipeline.diagnostics.compression.totalSavedChars >=
+    pipeline.neutral.compression.savedChars
+);
 
 assert.match(pipeline.negative.text, /identity drift/);
 assert.match(pipeline.negative.text, /floating camera/);
@@ -135,6 +140,8 @@ assert.deepEqual(
   'Unified pipeline must remain deterministic'
 );
 assert.deepEqual(repeated.negative.fragments, pipeline.negative.fragments);
+assert.deepEqual(repeated.neutral.compression, pipeline.neutral.compression);
+assert.deepEqual(repeated.negative.compression, pipeline.negative.compression);
 assert.equal(
   repeated.platforms.chatgpt.prompt,
   pipeline.platforms.chatgpt.prompt
