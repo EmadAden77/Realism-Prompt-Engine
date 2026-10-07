@@ -12,7 +12,7 @@ import {
 export { decideEffectActivation };
 export type { EffectPolicy, EffectActivationInput, EffectActivationDecision };
 
-export type PlatformTarget = 'neutral' | 'chatgpt' | 'gemini';
+export type PlatformTarget = 'neutral' | 'chatgpt' | 'gemini' | 'midjourney';
 
 export interface SceneManifest {
   schemaVersion: '1.0';
