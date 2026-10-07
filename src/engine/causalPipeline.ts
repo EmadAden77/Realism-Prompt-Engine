@@ -1,5 +1,6 @@
 import { resolveScene, type ResolvedScene, type SceneState } from './physicsEngine';
 import { evaluateV20Knowledge, type KnowledgeRuleDecision } from './v20KnowledgeBase';
+import { resolveHomeContinuity, type HomeContinuityContext } from './fixedHomeContinuity';
 import {
   decideEffectActivation,
   type EffectPolicy,
@@ -17,6 +18,7 @@ export interface SceneManifest {
   sceneId: string;
   platformTarget: PlatformTarget;
   resolved: ResolvedScene;
+  continuityContext: HomeContinuityContext | null;
   knowledgeDecisions: KnowledgeRuleDecision[];
 }
 
@@ -57,13 +59,19 @@ export function createSceneManifest(
   sceneId?: string
 ): SceneManifest {
   const resolved = resolveScene(rawState);
+  const continuityContext = resolveHomeContinuity(resolved.state);
 
   return {
     schemaVersion: '1.0',
     sceneId: sceneId || buildSceneId(resolved.state),
     platformTarget,
     resolved,
-    knowledgeDecisions: evaluateV20Knowledge(resolved.state, resolved.physicalState),
+    continuityContext,
+    knowledgeDecisions: evaluateV20Knowledge(
+      resolved.state,
+      resolved.physicalState,
+      continuityContext
+    ),
   };
 }
 
