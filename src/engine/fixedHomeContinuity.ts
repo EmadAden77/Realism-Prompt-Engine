@@ -374,7 +374,7 @@ export function resolveHomeContinuity(
         : 'No persistent wear anchor needs explicit prompt emission in this framing.',
       `Allowed to vary: ${room.mutableProperties.join('; ')}.`,
       'All other fixed-home anchors remain internally locked but must not be pulled into frame merely to prove continuity.',
-      'If a generic micro-location description conflicts with a visible fixed-home anchor, the fixed-home anchor wins.',
+      'If a generic micro-location description conflicts with visible fixed-home anchors, the fixed-home anchors win.',
       'Do not lock transient details across separate images unless an explicit same-moment series context exists.',
     ].join(' '),
   };
