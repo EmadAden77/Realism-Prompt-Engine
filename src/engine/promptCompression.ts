@@ -14,8 +14,6 @@ export interface PromptCompressionResult {
 }
 
 const KNOWLEDGE_COMPACT_TEXT: Record<string, string> = {
-  V20_FIXED_HOME_CONTINUITY:
-    'Keep the same fixed-home identity and current visibility profile. Visible fixed anchors win over generic location prose; hidden anchors stay locked off-frame. Only listed mutable properties may vary; do not lock transient details without an explicit same-moment series.',
   V20_LIGHT_SOURCE_CAUSALITY:
     'Tie every visible highlight, shadow, reflection, color spill, and falloff to an actual scene light; no invisible fill.',
   V20_MIXED_LIGHT_GUARD:
