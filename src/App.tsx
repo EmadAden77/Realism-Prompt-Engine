@@ -76,6 +76,7 @@ import {
   GroupSelfieSize,
   GroupSelfieRelationship
 } from './engine/groupSelfie';
+import { HAIR_PHYSICS_PRESETS } from './data/hairPhysicsLibrary';
 
 // --- TYPES ---
 type CaptureType = 'front-selfie' | 'mirror-selfie' | 'third-person-candid';
@@ -115,6 +116,7 @@ interface SceneState {
   hoodPosition: HoodPosition;
   thobeCollar: ThobeCollar;
   hairStyle: string;
+  hairPhysicsPreset: string;
   expression: string;
   timeOfDay: TimeOfDay;
   lightingMode: string;
@@ -514,6 +516,7 @@ const DEFAULT_STATE: SceneState = {
   hoodPosition: 'auto',
   thobeCollar: 'auto',
   hairStyle: 'h2',
+  hairPhysicsPreset: 'hp_auto',
   expression: 'e1',
   timeOfDay: 'midday',
   lightingMode: '',
