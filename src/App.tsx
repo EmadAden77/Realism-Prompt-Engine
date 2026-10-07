@@ -2834,6 +2834,27 @@ export default function PhysFrameApp() {
                        </select>
                      </div>
                    </div>
+
+                   <div className="mt-2.5">
+                     <label className="text-[10px] text-[var(--text-muted)] block mb-1 font-semibold">فيزياء الشعر:</label>
+                     <select
+                       value={state.hairPhysicsPreset}
+                       onChange={e => setState({ ...state, hairPhysicsPreset: e.target.value })}
+                       className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-[var(--accent)]"
+                     >
+                       {Array.from(new Set(HAIR_PHYSICS_PRESETS.map(item => item.categoryAR))).map(category => (
+                         <optgroup key={category} label={category}>
+                           {HAIR_PHYSICS_PRESETS
+                             .filter(item => item.categoryAR === category)
+                             .map(item => (
+                               <option key={item.id} value={item.id}>
+                                 {item.labelAR}
+                               </option>
+                             ))}
+                         </optgroup>
+                       ))}
+                     </select>
+                   </div>
                 </section>
 
                 {/* Lighting and Time */}
