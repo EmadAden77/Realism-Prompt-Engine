@@ -46,7 +46,7 @@ const openGroup = resolveGroupSelfie({
 });
 assert(openGroup.resolvedSize === 5, 'parking should preserve requested five-person group');
 assert(openGroup.arrangement.includes('semicircle'), 'five-person parking group should use open-space semicircle geometry');
-assert(openGroup.recommendedDistanceCm === 69, 'five-person selfie must use near-max one-arm reach');
+assert(openGroup.recommendedDistanceCm === 60, 'five-person selfie must stay at the maximum 60cm one-arm reach');
 
 console.log('▶ Group Selfie 4: anti-cloning profiles are actually distinct');
 const profiles = openGroup.profiles;
