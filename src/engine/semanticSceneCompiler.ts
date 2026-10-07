@@ -9,6 +9,7 @@ export type SemanticSceneState = Omit<SceneState, 'realismStyle'> & {
 };
 import type { SemanticPromptScene } from './promptCompiler';
 import type { DerivedSceneState } from './realismDeriver';
+export type { DerivedSceneState } from './realismDeriver';
 import {
   describeAttireControls,
   getAttireAwareBasePhysics,
