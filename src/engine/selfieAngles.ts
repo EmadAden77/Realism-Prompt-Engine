@@ -154,12 +154,12 @@ export const SELFIE_ANGLE_LIBRARY: SelfieAnglePreset[] = [
   A('high_soft_left', 'أعلى قليلًا من اليسار', 'high', 'slightly-high', -9, -9, -1, 11, 49, ['head-shoulders','chest-up'], 'low', 'soft elevated diagonal selfie from left'),
   A('high_soft_right', 'أعلى قليلًا من اليمين', 'high', 'slightly-high', -9, 9, 1, 11, 49, ['head-shoulders','chest-up'], 'low', 'soft elevated diagonal selfie from right'),
   A('high_seated_relaxed', 'علوي مريح أثناء الجلوس', 'seated', 'slightly-high', -11, 7, 1, 14, 48, ['head-shoulders','chest-up'], 'low', 'comfortable seated selfie that reveals a little more lap/background', { poseKeywords:['جالس','مسترخ'] }),
-  A('high_environment_soft', 'علوي خفيف مع خلفية', 'environmental', 'slightly-high', -7, 5, 1, 9, 62, ['half-body'], 'medium', 'wider environmental selfie with restrained elevated phone', { variation:{pitchDeg:2,yawDeg:3,rollDeg:1,distanceCm:3} }),
+  A('high_environment_soft', 'علوي خفيف مع خلفية', 'environmental', 'slightly-high', -7, 5, 1, 9, 60, ['half-body'], 'medium', 'wider environmental selfie with restrained elevated phone', { variation:{pitchDeg:2,yawDeg:3,rollDeg:1,distanceCm:3} }),
 
   A('low_soft_center', 'أسفل قليلًا طبيعي', 'low', 'slightly-low', 7, 0, 0, -9, 52, ['head-shoulders','chest-up'], 'low', 'mild low-angle selfie without heroic exaggeration'),
   A('low_soft_left', 'أسفل قليلًا من اليسار', 'low', 'slightly-low', 8, -8, -1, -10, 53, ['chest-up'], 'low', 'mild low diagonal selfie from left'),
   A('low_soft_right', 'أسفل قليلًا من اليمين', 'low', 'slightly-low', 8, 8, 1, -10, 53, ['chest-up'], 'low', 'mild low diagonal selfie from right'),
-  A('low_standing_environment', 'أسفل خفيف مع نصف الجسم', 'environmental', 'slightly-low', 6, 7, 1, -8, 67, ['half-body'], 'medium', 'wide standing selfie with subtle upward camera direction'),
+  A('low_standing_environment', 'أسفل خفيف مع نصف الجسم', 'environmental', 'slightly-low', 6, 7, 1, -8, 60, ['half-body'], 'medium', 'wide standing selfie with subtle upward camera direction'),
 
   A('offaxis_left_12', 'خارج المنتصف يسار 12°', 'off-axis', 'slightly-off-center', -3, -12, -1, 3, 52, ['head-shoulders','chest-up'], 'low', 'natural one-handed left-biased phone placement'),
   A('offaxis_right_12', 'خارج المنتصف يمين 12°', 'off-axis', 'slightly-off-center', -3, 12, 1, 3, 52, ['head-shoulders','chest-up'], 'low', 'natural one-handed right-biased phone placement'),
@@ -223,7 +223,7 @@ export const SELFIE_ANGLE_LIBRARY: SelfieAnglePreset[] = [
     phonePlacement:'toward the center-console side at comfortable arm reach',
     cabinGuards:['steering wheel may enter lower frame only','keep camera forward of face but behind windshield plane','avoid gear-selector and rearview-mirror collision']
   }),
-  A('car_driver_cabin_wide', 'مقعد السائق بزاوية مقصورة أوسع', 'vehicle', 'slightly-off-center', -3, 9, 1, 3, 62, ['half-body'], 'high', 'widest physically defensible driver selfie for cabin context with strong occlusion constraints', {
+  A('car_driver_cabin_wide', 'مقعد السائق بزاوية مقصورة أوسع', 'vehicle', 'slightly-off-center', -3, 9, 1, 3, 60, ['half-body'], 'high', 'widest physically defensible driver selfie for cabin context with strong occlusion constraints', {
     sceneFamilies:['car'],
     carFocus:'cabin-context',
     carSeat:'driver',
@@ -282,10 +282,10 @@ export const SELFIE_ANGLE_LIBRARY: SelfieAnglePreset[] = [
   }),
 
   A('corridor_offaxis', 'ممر داخلي خارج المنتصف', 'environmental', 'slightly-off-center', -3, 12, 1, 3, 54, ['chest-up'], 'low', 'corridor selfie preserving depth lines without architectural distortion', { sceneFamilies:['military-base'], subSceneKeywords:['ممر'] }),
-  A('corridor_wide', 'ممر واسع مع عمق', 'environmental', 'slightly-off-center', -2, 9, 1, 2, 66, ['half-body'], 'medium', 'wider corridor selfie with strong but plausible depth visibility', { sceneFamilies:['military-base'], subSceneKeywords:['ممر'] }),
+  A('corridor_wide', 'ممر واسع مع عمق', 'environmental', 'slightly-off-center', -2, 9, 1, 2, 60, ['half-body'], 'medium', 'wider corridor selfie with strong but plausible depth visibility', { sceneFamilies:['military-base'], subSceneKeywords:['ممر'] }),
   A('gym_postworkout_high', 'بعد التمرين أعلى قليلًا', 'high', 'slightly-high', -9, 8, 2, 11, 50, ['head-shoulders','chest-up'], 'low', 'post-workout front selfie with natural fatigue-friendly elevated grip', { sceneFamilies:['gym'] }),
-  A('standing_environment_left', 'وقوف بخلفية أوسع يسار', 'environmental', 'slightly-off-center', -3, -10, -1, 2, 67, ['half-body'], 'medium', 'wide environmental selfie preserving ordinary background context'),
-  A('standing_environment_right', 'وقوف بخلفية أوسع يمين', 'environmental', 'slightly-off-center', -3, 10, 1, 2, 67, ['half-body'], 'medium', 'wide environmental selfie preserving ordinary background context')
+  A('standing_environment_left', 'وقوف بخلفية أوسع يسار', 'environmental', 'slightly-off-center', -3, -10, -1, 2, 60, ['half-body'], 'medium', 'wide environmental selfie preserving ordinary background context'),
+  A('standing_environment_right', 'وقوف بخلفية أوسع يمين', 'environmental', 'slightly-off-center', -3, 10, 1, 2, 60, ['half-body'], 'medium', 'wide environmental selfie preserving ordinary background context')
 ];
 
 const clamp = (value: number, min: number, max: number) =>
@@ -317,7 +317,7 @@ export function inferCarSeatRole(context: Pick<SelfieAngleContext, 'sceneFamily'
 const framingDistanceLimits: Record<SelfieFraming, [number, number]> = {
   'head-shoulders': [39, 47],
   'chest-up': [47, 58],
-  'half-body': [62, 70]
+  'half-body': [56, 60]
 };
 
 export function getEligibleSelfieAngles(context: SelfieAngleContext): SelfieAnglePreset[] {
@@ -380,7 +380,7 @@ function compatibilityScore(preset: SelfieAnglePreset, context: SelfieAngleConte
       if (preset.id.includes('close')) score -= 45;
     } else {
       if (preset.family === 'environmental') score += 55;
-      if (preset.distanceCm >= 64) score += 45;
+      if (preset.distanceCm >= 59) score += 45;
       if (preset.legacyAngle === 'slightly-off-center') score += 20;
       if (preset.family === 'high' || preset.id.includes('close')) score -= 55;
     }
@@ -476,7 +476,7 @@ export function resolveSelfieAngleGeometry(context: SelfieAngleContext): Resolve
     heightOffsetCm = clamp(heightOffsetCm, -8, 12);
 
     if (context.framing === 'half-body') {
-      distanceCm = clamp(distanceCm, 62, 64);
+      distanceCm = clamp(distanceCm, 56, 60);
     } else {
       distanceCm = clamp(distanceCm, minDistance, Math.min(maxDistance, 58));
     }

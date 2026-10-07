@@ -104,7 +104,7 @@ const streetWideState: SceneState = {
 const resolvedStreetWide = resolveScene(streetWideState);
 assert(resolvedStreetWide.validation.isValid, 'Street wide scene must be physically valid');
 assert(resolvedStreetWide.physicalState.framingClass === 'wide', 'half-body must classify as wide');
-assert(resolvedStreetWide.physicalState.cameraDistance.includes('65-70cm'), 'Wide selfie must reflect extended arm reach');
+assert(resolvedStreetWide.physicalState.cameraDistance.includes('58-60cm'), 'Wide selfie must reflect extended but physically realistic arm reach');
 assert(resolvedStreetWide.physicalState.armReach.includes('dominant arm extended'), 'Arm reach must be modeled physically');
 assert(resolvedStreetWide.physicalState.opticalPerspective.includes('21mm'), 'Xiaomi 15 Ultra profile applies');
 assert(!resolvedStreetWide.state.customIdentityPrompt?.includes('MUST wear dark rectangular eyeglasses'), 'Glasses contradiction resolved honoring user choice');
@@ -619,6 +619,10 @@ assert(
   'Every selfie angle preset ID must be unique'
 );
 assert(
+  SELFIE_ANGLE_LIBRARY.every(angle => angle.distanceCm >= 40 && angle.distanceCm <= 60),
+  'Every front-camera selfie preset must stay inside the 40-60cm physical arm-reach envelope'
+);
+assert(
   SELFIE_ANGLE_LIBRARY.every(angle => Math.abs(angle.rollDeg) <= 3),
   'Base selfie roll must stay within natural handheld micro-tilt and never become a dramatic Dutch angle'
 );
@@ -728,9 +732,9 @@ const smartWideState: SceneState = {
 };
 const resolvedSmartWide = resolveScene(smartWideState);
 assert(
-  (resolvedSmartWide.physicalState.selfieAngle?.distanceCm ?? 0) >= 62 &&
-  (resolvedSmartWide.physicalState.selfieAngle?.distanceCm ?? 0) <= 70,
-  'Half-body smart selfie must remain within maximum functional Xiaomi selfie reach'
+  (resolvedSmartWide.physicalState.selfieAngle?.distanceCm ?? 0) >= 56 &&
+  (resolvedSmartWide.physicalState.selfieAngle?.distanceCm ?? 0) <= 60,
+  'Half-body smart selfie must remain within the 40-60cm Xiaomi front-camera arm-reach envelope'
 );
 assert(
   resolvedSmartWide.physicalState.armReach.includes('functional maximum selfie reach'),
