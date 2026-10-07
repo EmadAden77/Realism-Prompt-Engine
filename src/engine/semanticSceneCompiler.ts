@@ -3,7 +3,9 @@ import { OUTFITS } from '../data/clothingOutfits';
 import type { DerivedPhysicalState, SceneState } from './physicsEngine';
 
 export type SemanticSceneState = Omit<SceneState, 'realismStyle'> & {
-  realismStyle: SceneState['realismStyle'] | 'cinematic-realism';
+  // UI migration still exposes legacy display styles. The semantic compiler
+  // only interprets this as descriptive wording and must not narrow UI state.
+  realismStyle: string;
 };
 import type { SemanticPromptScene } from './promptCompiler';
 import {
