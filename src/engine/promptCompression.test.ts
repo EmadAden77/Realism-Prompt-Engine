@@ -142,6 +142,26 @@ assert.doesNotMatch(
 );
 assert.match(compiled.text, /Background controls obey physical FOV limits/i);
 
+
+const dynamicHomeRule = rule(
+  'V20_FIXED_HOME_CONTINUITY',
+  90,
+  'Fixed-home continuity key: home/bedroom. Current visibility profile: bed-zone. Visible home facts are already compiled in the environment description; do not duplicate them as extra furniture. All hidden fixed-home anchors remain internally locked and must not be pulled into frame merely to prove continuity. Allowed to vary: lighting state; subject pose and activity; camera angle and framing; bed-linen compression caused by current body contact.'
+);
+const homeCompressed = compressPromptFragments(
+  compileKnowledgeFragments([dynamicHomeRule])
+);
+assert.match(
+  homeCompressed.fragments[0].text,
+  /Allowed to vary: lighting state; subject pose and activity; camera angle and framing/i,
+  'Dynamic fixed-home mutable properties must survive compression'
+);
+assert.match(
+  homeCompressed.fragments[0].text,
+  /bed-zone/i,
+  'Dynamic fixed-home visibility profile must survive compression'
+);
+
 const repeated = compileNeutralPrompt(semantic, decisions);
 assert.deepEqual(repeated, compiled, 'Compression must be deterministic');
 
