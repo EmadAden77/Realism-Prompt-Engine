@@ -1,4 +1,5 @@
 import { resolveScene, type ResolvedScene, type SceneState } from './physicsEngine';
+import { evaluateV20Knowledge, type KnowledgeRuleDecision } from './v20KnowledgeBase';
 
 export type PlatformTarget = 'neutral' | 'chatgpt' | 'gemini';
 
@@ -14,6 +15,7 @@ export interface SceneManifest {
   sceneId: string;
   platformTarget: PlatformTarget;
   resolved: ResolvedScene;
+  knowledgeDecisions: KnowledgeRuleDecision[];
 }
 
 export interface EffectActivationInput {
@@ -77,6 +79,7 @@ export function createSceneManifest(
     sceneId: sceneId || buildSceneId(resolved.state),
     platformTarget,
     resolved,
+    knowledgeDecisions: evaluateV20Knowledge(resolved.state),
   };
 }
 
