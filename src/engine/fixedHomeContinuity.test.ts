@@ -88,15 +88,24 @@ const fixedHomeRule = bedroom.knowledgeDecisions.find(
   rule => rule.id === 'V20_FIXED_HOME_CONTINUITY'
 );
 assert.equal(fixedHomeRule?.active, true);
-assert.match(fixedHomeRule?.visibleConsequence || '', /180 cm master bed/);
+assert.match(fixedHomeRule?.visibleConsequence || '', /Fixed-home continuity key/i);
 assert.match(fixedHomeRule?.visibleConsequence || '', /fixed-home anchors win/i);
+assert.doesNotMatch(
+  fixedHomeRule?.visibleConsequence || '',
+  /180 cm master bed/,
+  'Continuity guard must not duplicate furniture already compiled into the visible environment'
+);
+assert.match(bedroom.resolved.physicalState.visibleEnvironment, /180 cm master bed/);
+assert.match(bedroom.resolved.physicalState.visibleEnvironment, /white ceramic-base bedside lamp/);
+assert.doesNotMatch(bedroom.resolved.physicalState.visibleEnvironment, /sliding-door wardrobe/);
 
 const fragments = compileKnowledgeFragments(bedroom.knowledgeDecisions);
 const fixedHomeFragment = fragments.find(
   fragment => fragment.provenance.ruleIds.includes('V20_FIXED_HOME_CONTINUITY')
 );
-assert(fixedHomeFragment, 'Compiled prompt must include the active fixed-home continuity rule');
-assert.match(fixedHomeFragment?.text || '', /white ceramic-base bedside lamp/);
+assert(fixedHomeFragment, 'Compiled prompt must include the active fixed-home continuity guard');
+assert.match(fixedHomeFragment?.text || '', /already compiled in the environment description/i);
+assert.doesNotMatch(fixedHomeFragment?.text || '', /white ceramic-base bedside lamp/);
 assert.match(fixedHomeFragment?.text || '', /Allowed to vary: lighting state/);
 
 const livingRoom = createSceneManifest(

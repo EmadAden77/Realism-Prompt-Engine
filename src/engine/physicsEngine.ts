@@ -20,6 +20,7 @@ import {
 import { deriveLightingCausality, LightingCausalityState } from './lightingCausality';
 import { evaluateScenePlausibility, ScenePlausibilityState } from './scenePlausibility';
 import { deriveSurfaceRealism, SurfaceRealismState } from './surfaceRealism';
+import { compileFixedHomeVisibleEnvironment, resolveHomeContinuity } from './fixedHomeContinuity';
 import {
   resolveSelfieAngleGeometry,
   ResolvedSelfieAngle,
@@ -980,6 +981,17 @@ function calculateDetailedPhysicalState(
       || (isOutdoor
         ? 'ordinary Saudi exterior surface physically visible within the selfie field of view'
         : 'ordinary interior surface physically visible immediately behind the subject');
+  }
+
+  // Fixed-home environments own their visible furniture/surface facts.
+  // Generic micro-location prose may still supply spatial relation, but it cannot
+  // introduce alternate furniture identities that conflict with continuity.
+  const homeContinuity = resolveHomeContinuity(state);
+  if (homeContinuity) {
+    visibleEnvironment = compileFixedHomeVisibleEnvironment(
+      homeContinuity,
+      microLoc?.spatialBehavior
+    );
   }
 
   const visiblePeople = backgroundRealism.allowsHumans
