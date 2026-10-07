@@ -1,0 +1,217 @@
+import assert from 'node:assert/strict';
+import { validateUnifiedConflicts } from './conflictValidator';
+import { compileUnifiedPromptPipeline } from './unifiedPromptPipeline';
+import type { SceneState } from './physicsEngine';
+
+const base: SceneState = {
+  referenceImageId: 'face-reference.jpg',
+  sceneFamily: 'saudi-outdoor',
+  subScene: 'شارع فلل سكني',
+  activity: 'واقف بشكل طبيعي',
+  captureType: 'front-selfie',
+  framing: 'chest-up',
+  cameraAngle: 'eye-level',
+  pose: 'واقف بثبات',
+  outfitId: 'burgundy_shirt_grey_trousers',
+  hairStyle: 'h1',
+  expression: 'e1',
+  timeOfDay: 'night',
+  lightingMode: 'إنارة شارع دافئة',
+  environmentRealism: 'طبيعي',
+  realismStyle: 'anti-ai-raw',
+  glassesMode: 'match_reference',
+  lightingIntensity: 55,
+  shadowDepth: 60,
+  lensCondition: 'xiaomi-clean',
+  clothingCondition: 'crisp',
+  atmosphericCondition: 'neutral',
+  foregroundObstruction: 'clean',
+  muscleFatigue: 'none',
+};
+
+const clean = compileUnifiedPromptPipeline(base);
+assert.equal(clean.diagnostics.conflictReport.errors.length, 0);
+assert.equal(clean.diagnostics.conflictReport.isValid, true);
+assert.equal(clean.diagnostics.isValid, true);
+
+const mirrorOutdoor = compileUnifiedPromptPipeline({
+  ...base,
+  captureType: 'mirror-selfie',
+  subScene: 'شارع فلل سكني',
+});
+const mirrorCorrection = mirrorOutdoor.diagnostics.conflictReport.corrections.find(
+  item => item.affectedFields.includes('captureType')
+);
+assert(mirrorCorrection, 'Outdoor mirror selfie must be reported as an auto-correction');
+assert.equal(mirrorCorrection?.severity, 'correction');
+assert.equal(mirrorCorrection?.suggestedPatch?.captureType, 'front-selfie');
+assert.equal(
+  mirrorOutdoor.diagnostics.conflictReport.errors.length,
+  0,
+  'Safely auto-resolved input conflict must not remain an error'
+);
+assert.equal(mirrorOutdoor.diagnostics.isValid, true);
+
+const phoneDay = compileUnifiedPromptPipeline({
+  ...base,
+  timeOfDay: 'morning',
+  lightingMode: 'إضاءة شاشة الهاتف فقط',
+  sceneFamily: 'bedroom',
+  subScene: 'بجانب السرير',
+});
+const phoneCorrection = phoneDay.diagnostics.conflictReport.corrections.find(
+  item => item.affectedFields.includes('lightingMode')
+);
+assert(phoneCorrection);
+assert.match(
+  String(phoneCorrection?.suggestedPatch?.lightingMode),
+  /ضوء نهاري/,
+  'Phone-only daytime correction must expose the resolved daylight patch'
+);
+
+const identityConflict = compileUnifiedPromptPipeline({
+  ...base,
+  glassesMode: 'no_glasses',
+  customIdentityPrompt:
+    'Preserve exact facial identity. Must wear dark rectangular eyeglasses.',
+});
+const glassesCorrection =
+  identityConflict.diagnostics.conflictReport.corrections.find(
+    item => item.affectedFields.includes('glassesMode')
+  );
+assert(glassesCorrection);
+assert.equal(glassesCorrection?.suggestedPatch?.glassesMode, undefined);
+assert.doesNotMatch(
+  String(glassesCorrection?.suggestedPatch?.customIdentityPrompt || ''),
+  /must wear dark rectangular eyeglasses/i
+);
+assert.equal(identityConflict.diagnostics.isValid, true);
+
+const home = compileUnifiedPromptPipeline({
+  ...base,
+  sceneFamily: 'bedroom',
+  subScene: 'بجانب السرير',
+  activity: 'جالس بهدوء',
+  pose: 'جالس على حافة السرير',
+  lightingMode: 'إضاءة أباجورة دافئة',
+});
+assert(home.manifest.continuityContext);
+const hiddenAnchor = home.manifest.continuityContext!.permanentAnchors.find(
+  anchor => !home.manifest.continuityContext!.visiblePermanentAnchors.includes(anchor)
+);
+assert(hiddenAnchor);
+
+const badManifest = {
+  ...home.manifest,
+  resolved: {
+    ...home.manifest.resolved,
+    physicalState: {
+      ...home.manifest.resolved.physicalState,
+      visibleEnvironment:
+        home.manifest.resolved.physicalState.visibleEnvironment +
+        '; ' +
+        hiddenAnchor,
+    },
+  },
+};
+
+const continuityReport = validateUnifiedConflicts({
+  rawState: home.manifest.resolved.state,
+  manifest: badManifest,
+  semantic: home.semantic,
+  negative: home.negative,
+  inputValidation: home.diagnostics.inputValidation,
+  resolvedValidation: home.diagnostics.resolvedValidation,
+  chatgpt: home.platforms.chatgpt.validation,
+  gemini: home.platforms.gemini.validation,
+  chatgptNegativePrompt: home.platforms.chatgpt.negativePrompt,
+  geminiNegativePrompt: home.platforms.gemini.negativePrompt,
+  chatgptPrompt: home.platforms.chatgpt.prompt,
+  geminiPrompt: home.platforms.gemini.prompt,
+});
+assert(
+  continuityReport.errors.some(
+    item => item.code === 'FIXED_HOME_HIDDEN_ANCHOR_LEAK'
+  )
+);
+assert.equal(continuityReport.isValid, false);
+
+const divergenceReport = validateUnifiedConflicts({
+  rawState: clean.manifest.resolved.state,
+  manifest: clean.manifest,
+  semantic: clean.semantic,
+  negative: clean.negative,
+  inputValidation: clean.diagnostics.inputValidation,
+  resolvedValidation: clean.diagnostics.resolvedValidation,
+  chatgpt: clean.platforms.chatgpt.validation,
+  gemini: clean.platforms.gemini.validation,
+  chatgptNegativePrompt: clean.platforms.chatgpt.negativePrompt,
+  geminiNegativePrompt:
+    clean.platforms.gemini.negativePrompt + ' synthetic divergence',
+  chatgptPrompt: clean.platforms.chatgpt.prompt,
+  geminiPrompt: clean.platforms.gemini.prompt,
+});
+assert(
+  divergenceReport.errors.some(
+    item => item.code === 'PLATFORM_NEGATIVE_DIVERGENCE'
+  )
+);
+
+const noRef = compileUnifiedPromptPipeline({
+  ...base,
+  referenceImageId: null,
+});
+const falseReferenceReport = validateUnifiedConflicts({
+  rawState: noRef.manifest.resolved.state,
+  manifest: noRef.manifest,
+  semantic: noRef.semantic,
+  negative: noRef.negative,
+  inputValidation: noRef.diagnostics.inputValidation,
+  resolvedValidation: noRef.diagnostics.resolvedValidation,
+  chatgpt: noRef.platforms.chatgpt.validation,
+  gemini: noRef.platforms.gemini.validation,
+  chatgptNegativePrompt: noRef.platforms.chatgpt.negativePrompt,
+  geminiNegativePrompt: noRef.platforms.gemini.negativePrompt,
+  chatgptPrompt:
+    'Use the attached reference image to preserve identity. ' +
+    noRef.platforms.chatgpt.prompt,
+  geminiPrompt: noRef.platforms.gemini.prompt,
+});
+assert(
+  falseReferenceReport.errors.some(
+    item => item.code === 'CHATGPT_FALSE_REFERENCE_CLAIM'
+  )
+);
+
+const promptCorrectionReport = validateUnifiedConflicts({
+  rawState: clean.manifest.resolved.state,
+  manifest: clean.manifest,
+  semantic: clean.semantic,
+  negative: clean.negative,
+  inputValidation: clean.diagnostics.inputValidation,
+  resolvedValidation: clean.diagnostics.resolvedValidation,
+  chatgpt: {
+    ...clean.platforms.chatgpt.validation,
+    isValid: false,
+    contradictionsFound: [
+      'Non-Xiaomi front-camera focal length detected in a Xiaomi 15 Ultra front-selfie prompt.',
+    ],
+  },
+  gemini: clean.platforms.gemini.validation,
+  chatgptNegativePrompt: clean.platforms.chatgpt.negativePrompt,
+  geminiNegativePrompt: clean.platforms.gemini.negativePrompt,
+  chatgptPrompt: clean.platforms.chatgpt.prompt,
+  geminiPrompt: clean.platforms.gemini.prompt,
+});
+assert(
+  promptCorrectionReport.corrections.some(
+    item => item.code === 'CHATGPT_PROMPT_AUTO_CORRECTION'
+  )
+);
+assert.equal(
+  promptCorrectionReport.isValid,
+  true,
+  'Already repaired prompt contradictions are corrections, not unresolved errors'
+);
+
+console.log('conflictValidator tests passed');
