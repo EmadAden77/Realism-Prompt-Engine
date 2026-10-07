@@ -9,6 +9,17 @@ const withRef = resolveReferencePlan({ referenceImageId: 'face.jpg' });
 const noRef = resolveReferencePlan({ referenceImageId: null });
 const neutral = 'Generate a realistic photograph.';
 
+assert.equal(
+  buildPlatformAdapterPlan(neutral, 'chatgpt').prompt,
+  neutral,
+  'Missing ReferencePlan must never invent an attachment'
+);
+assert.equal(
+  buildPlatformAdapterPlan(neutral, 'gemini').prompt,
+  neutral,
+  'Missing ReferencePlan must never invent a provided image'
+);
+
 const chatRef = buildPlatformAdapterPlan(neutral, 'chatgpt', withRef);
 assert.equal(chatRef.recommendedModel, 'gpt-image-2.5-sunburst');
 assert.equal(chatRef.referenceWorkflow, 'openai_image_input');
