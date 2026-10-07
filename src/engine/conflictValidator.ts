@@ -24,6 +24,7 @@ export interface UnifiedConflictResult {
     | 'negative'
     | 'chatgpt-prompt'
     | 'gemini-prompt'
+    | 'midjourney-prompt'
     | 'cross-platform';
   suggestedPatch?: Partial<SceneState>;
 }
@@ -46,10 +47,13 @@ export interface ConflictValidatorInput {
   resolvedValidation: ValidationResult;
   chatgpt: PromptValidationResult;
   gemini: PromptValidationResult;
+  midjourney: PromptValidationResult;
   chatgptNegativePrompt: string;
   geminiNegativePrompt: string;
+  midjourneyNegativePrompt: string;
   chatgptPrompt: string;
   geminiPrompt: string;
+  midjourneyPrompt: string;
 }
 
 const FIELD_ALIASES: Record<string, keyof SceneState | undefined> = {
@@ -175,8 +179,8 @@ const promptContradictionFields = (message: string): string[] => {
 };
 
 const promptValidationToConflicts = (
-  source: 'chatgpt-prompt' | 'gemini-prompt',
-  platform: 'CHATGPT' | 'GEMINI',
+  source: 'chatgpt-prompt' | 'gemini-prompt' | 'midjourney-prompt',
+  platform: 'CHATGPT' | 'GEMINI' | 'MIDJOURNEY',
   validation: PromptValidationResult
 ): UnifiedConflictResult[] => {
   const results: UnifiedConflictResult[] = [];
@@ -294,6 +298,18 @@ const referenceConflicts = (
         source: 'reference',
       });
     }
+
+    if (/Midjourney Edit Model reference/i.test(input.midjourneyPrompt)) {
+      results.push({
+        ruleId: 'REFERENCE_MIDJOURNEY_EDIT_MODEL',
+        severity: 'error',
+        code: 'MIDJOURNEY_FALSE_REFERENCE_CLAIM',
+        message:
+          'Midjourney prompt claims an Edit Model reference while ReferencePlan has no reference.',
+        affectedFields: ['referenceImageId'],
+        source: 'reference',
+      });
+    }
   }
 
   return results;
@@ -316,13 +332,18 @@ const crossPlatformConflicts = (
 ): UnifiedConflictResult[] => {
   const results: UnifiedConflictResult[] = [];
 
-  if (input.chatgptNegativePrompt !== input.geminiNegativePrompt) {
+  const platformNegatives = [
+    input.chatgptNegativePrompt,
+    input.geminiNegativePrompt,
+    input.midjourneyNegativePrompt,
+  ];
+  if (new Set(platformNegatives).size !== 1) {
     results.push({
       ruleId: 'CROSS_PLATFORM_NEGATIVE',
       severity: 'error',
       code: 'PLATFORM_NEGATIVE_DIVERGENCE',
       message:
-        'ChatGPT and Gemini ended with different negative constraints for the same canonical scene.',
+        'Platform adapters ended with different negative constraints for the same canonical scene.',
       affectedFields: ['negativePrompt'],
       source: 'cross-platform',
     });
@@ -429,6 +450,11 @@ export function validateUnifiedConflicts(
       'gemini-prompt',
       'GEMINI',
       input.gemini
+    ),
+    ...promptValidationToConflicts(
+      'midjourney-prompt',
+      'MIDJOURNEY',
+      input.midjourney
     ),
     ...crossPlatformConflicts(input),
   ]);
