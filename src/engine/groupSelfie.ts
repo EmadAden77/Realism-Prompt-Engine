@@ -390,7 +390,7 @@ export function resolveGroupSelfie(input: GroupSelfieInput): ResolvedGroupSelfie
   const recommendedDistanceCm =
     resolvedSize === 2 ? 46 :
     resolvedSize === 3 ? 56 :
-    resolvedSize === 4 ? 65 : 69;
+    resolvedSize === 4 ? 59 : 60;
 
   const validationNotes: string[] = [];
   if (requestedSize > maxByLocation) {
