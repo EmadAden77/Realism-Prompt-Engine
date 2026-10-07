@@ -8,30 +8,13 @@ export type SemanticSceneState = Omit<SceneState, 'realismStyle'> & {
   realismStyle: string;
 };
 import type { SemanticPromptScene } from './promptCompiler';
+import type { DerivedSceneState } from './realismDeriver';
 import {
   describeAttireControls,
   getAttireAwareBasePhysics,
   getAttireAwareOutfitPrompt,
   getActivityDefinition,
 } from './activityAttire';
-
-export interface DerivedSceneState {
-  skinResponse: string;
-  hairCondition: string;
-  fabricBehavior: string[];
-  shadowBehavior: string;
-  environmentalLightBehavior: string;
-  cameraDistance: string;
-  visibleBackgroundElements: string[];
-  contactPhysics: string[];
-  reflectionRules: string[];
-  realismConstraints: string[];
-  lensEffects: string;
-  atmosphericEffects: string;
-  muscleFatigueEffects: string;
-  lightingIntensityDescription: string;
-  shadowDepthDescription: string;
-}
 
 const SCENE_FAMILY_LABELS: Record<string, string> = {
   'military-base': 'مبنى عمل عسكري',
