@@ -37,6 +37,9 @@ assert.equal(get(base, 'V20_OUTDOOR_AEROSOL_SCATTERING').active, false);
 assert.equal(get(base, 'V20_WET_SURFACE_REFLECTIONS').active, false);
 assert.equal(get(base, 'V20_SAME_MOMENT_CONTINUITY').active, false);
 assert.equal(get(base, 'V20_GENERIC_MICRO_IMPERFECTIONS').active, false);
+assert.equal(get(base, 'V20_COMPRESSION_ARTIFACTS').active, false);
+assert.equal(get(base, 'V20_SEASONAL_WEATHER').active, false);
+assert.equal(get(base, 'V20_INDOOR_MIE_GUARD').activationReason, 'guard-emitted');
 
 const dustyOutdoor: SceneState = {
   ...base,
@@ -55,5 +58,11 @@ assert.equal(get(throughGlass, 'V20_GLASS_LAYERING').active, true);
 
 const smudged: SceneState = { ...base, lensCondition: 'smudged-lens' };
 assert.equal(get(smudged, 'V20_LENS_CONTAMINATION').active, true);
+
+const worn: SceneState = { ...base, clothingCondition: 'worn-all-day' };
+assert.equal(get(worn, 'V20_MATERIAL_WEAR_RESPONSE').active, true);
+
+const mirror: SceneState = { ...base, captureType: 'mirror-selfie' };
+assert.equal(get(mirror, 'V20_MIRROR_GEOMETRY').active, true);
 
 console.log('v20KnowledgeBase tests passed');
