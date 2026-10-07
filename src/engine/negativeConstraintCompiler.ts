@@ -1,4 +1,8 @@
 import type { SemanticPromptScene } from './promptCompiler';
+import {
+  compressNegativePromptText,
+  type CompressionStats,
+} from './promptCompression';
 
 export interface NegativeConstraintState {
   glassesMode: string;
@@ -44,6 +48,7 @@ export interface CompiledNegativeConstraints {
   fragments: NegativeConstraintFragment[];
   omittedConflictingFragments: NegativeConstraintFragment[];
   conflicts: NegativeConstraintConflict[];
+  compression: CompressionStats;
 }
 
 const fragment = (
@@ -490,10 +495,14 @@ export function compileNegativeConstraints(
     conflictIds.has(item.id)
   );
 
+  const rawText = fragments.map(item => item.text).join(' ');
+  const compressed = compressNegativePromptText(rawText);
+
   return {
-    text: fragments.map(item => item.text).join(' '),
+    text: compressed.text,
     fragments,
     omittedConflictingFragments,
     conflicts,
+    compression: compressed.stats,
   };
 }
