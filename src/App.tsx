@@ -35,7 +35,7 @@ import {
 } from 'lucide-react';
 import { MICRO_LOCATIONS, getMicroLocation, MicroLocation } from './data/microLocations';
 import { OUTFITS, OutfitItem } from './data/clothingOutfits';
-import { resolveScene, ResolvedScene, ValidationResult } from './engine/physicsEngine';
+import { resolveScene } from './engine/physicsEngine';
 import {
   HAIRSTYLES,
   EXPRESSIONS,
@@ -44,6 +44,7 @@ import {
   compileUnifiedPromptPipeline,
   validateExternalPromptCandidate,
 } from './engine/unifiedPromptPipeline';
+import type { UnifiedConflictReport } from './engine/conflictValidator';
 import { analyzeAndRepairScene } from './engine/realismIntelligence';
 import {
   BackgroundMode,
@@ -334,21 +335,16 @@ const resolveConflicts = (state: SceneState): SceneState => {
 };
 
 const calculatePhysicalConsistencyScore = (
-  validation: ValidationResult,
-  promptContradictions: string[] = [],
+  conflicts: UnifiedConflictReport,
   scenePlausibilityScore?: number
 ): number => {
   // This is a pre-generation consistency score, not proof that a rendered image is "100% real".
   // Start below 100 to preserve uncertainty that can only be assessed after rendering.
   let score = 96;
 
-  for (const issue of validation.issues) {
-    if (issue.type === 'physical_impossibility') score -= 28;
-    else if (issue.type === 'contradiction') score -= 18;
-    else score -= 4;
-  }
-
-  score -= promptContradictions.length * 12;
+  score -= conflicts.errors.length * 28;
+  score -= conflicts.corrections.length * 8;
+  score -= conflicts.warnings.length * 4;
 
   // Conservative rule: local consistency can never score higher than the
   // deterministic Scene Plausibility Engine for the same resolved scene.
@@ -1424,13 +1420,12 @@ export default function PhysFrameApp() {
       // Pure deterministic physical pipeline:
       // SceneState -> Physical Scene Resolver -> Physics Validator -> Consistency Validator -> Prompt Builder -> Final Validation
       const auditPipeline = compileUnifiedPromptPipeline(state as any);
-      const initialValidation = auditPipeline.diagnostics.inputValidation;
       const resolved = auditPipeline.manifest.resolved;
-      const validatedPrompt = auditPipeline.platforms.gemini.validation;
+      const conflictReport = auditPipeline.diagnostics.conflictReport;
       const prompt = auditPipeline.platforms.gemini.prompt;
+      const conflictMessages = conflictReport.results.map(item => item.message);
       const physicalConsistencyScore = calculatePhysicalConsistencyScore(
-        initialValidation,
-        validatedPrompt.contradictionsFound,
+        conflictReport,
         resolved.physicalState.plausibility.overallScore
       );
 
@@ -1449,12 +1444,12 @@ export default function PhysFrameApp() {
           'تم فحص توافق الإضاءة والظلال والخلفية مع المشهد.',
           'تم فحص ظهور البشر والسيارات والعناصر الثانوية حسب زاوية السيلفي.'
         ],
-        risksAR: validatedPrompt.contradictionsFound.length > 0
-          ? validatedPrompt.contradictionsFound
-          : [],
-        recommendationsAR: validatedPrompt.contradictionsFound.length > 0
-          ? ['استخدم التصحيح التلقائي لمعالجة التناقضات المكتشفة قبل التوليد.']
-          : ['الأساس الفيزيائي للمشهد متناسق؛ تدقيق Gemini سيضيف مراجعة نوعية عند توفر الاتصال.']
+        risksAR: conflictMessages,
+        recommendationsAR: conflictReport.errors.length > 0
+          ? ['استخدم التصحيح التلقائي لمعالجة الأخطاء غير المحلولة قبل التوليد.']
+          : conflictReport.corrections.length > 0
+            ? ['تم رصد وتصحيح تعارضات تلقائيًا؛ راجع الملخص قبل التوليد.']
+            : ['الأساس الفيزيائي للمشهد متناسق؛ تدقيق Gemini سيضيف مراجعة نوعية عند توفر الاتصال.']
       };
       setAuditResult(localAudit);
 
@@ -1525,7 +1520,6 @@ export default function PhysFrameApp() {
         state as unknown as Record<string, unknown>
       );
       const finalResolved = intelligence.finalResolved;
-      const postValidation = intelligence.validation;
       const finalState = finalResolved.state as SceneState;
 
       setState(finalState);
@@ -1533,7 +1527,7 @@ export default function PhysFrameApp() {
 
       // 3. Re-compile only from the final canonical state through one engine entry point.
       const finalPipeline = compileUnifiedPromptPipeline(finalState as any);
-      const validatedPrompt = finalPipeline.platforms.gemini.validation;
+      const conflictReport = finalPipeline.diagnostics.conflictReport;
       const cleanPromptText = finalPipeline.platforms.gemini.prompt;
 
       // Update enhanced prompt cache if active
@@ -1547,8 +1541,7 @@ export default function PhysFrameApp() {
 
       // 4. Auto-Fix succeeds locally and immediately. Gemini must never block correction.
       const physicalConsistencyScore = calculatePhysicalConsistencyScore(
-        postValidation,
-        validatedPrompt.contradictionsFound,
+        conflictReport,
         finalResolved.physicalState.plausibility.overallScore
       );
       const localFixedAudit: RealismAuditResult = {
@@ -1565,10 +1558,12 @@ export default function PhysFrameApp() {
           'تمت إعادة بناء هندسة الكاميرا والإضاءة والخلفية من الحالة النهائية نفسها.',
           'تم تنظيف تناقضات البرومبت بعد التصحيح.'
         ],
-        risksAR: validatedPrompt.contradictionsFound,
-        recommendationsAR: validatedPrompt.contradictionsFound.length > 0
-          ? ['راجع الملاحظات المتبقية قبل التوليد.']
-          : ['المشهد جاهز للتوليد من ناحية الاتساق الفيزيائي المحلي.']
+        risksAR: conflictReport.results.map(item => item.message),
+        recommendationsAR: conflictReport.errors.length > 0
+          ? ['راجع الأخطاء غير المحلولة قبل التوليد.']
+          : conflictReport.corrections.length > 0
+            ? ['تم تطبيق التصحيحات المتاحة؛ راجع التغييرات إن أردت التأكد من النتيجة.']
+            : ['المشهد جاهز للتوليد من ناحية الاتساق الفيزيائي المحلي.']
       };
 
       setAutoFixMessage(intelligence.summaryAR);
