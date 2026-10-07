@@ -36,6 +36,8 @@ import {
 import { MICRO_LOCATIONS, getMicroLocation, MicroLocation } from './data/microLocations';
 import { OUTFITS, OutfitItem } from './data/clothingOutfits';
 import { resolveScene, validateScene, validatePrompt, ResolvedScene, ValidationResult, DerivedPhysicalState } from './engine/physicsEngine';
+import { createSceneManifest } from './engine/causalPipeline';
+import { adaptPromptToPlatform } from './engine/platformAdapter';
 import { analyzeAndRepairScene } from './engine/realismIntelligence';
 import {
   BackgroundMode,
@@ -869,7 +871,7 @@ const buildSemanticScene = (
   };
 };
 
-const buildPromptText = (semantic: SemanticScene, aiType: 'chatgpt' | 'gemini'): string => {
+const buildNeutralPromptText = (semantic: SemanticScene): string => {
   let prompt = `Generate a realistic photograph with the following strict constraints:\n\n`;
   prompt += `[SUBJECT & IDENTITY LOCK]\n${semantic.identity}\nBody: ${semantic.body}\nEyeglasses: ${semantic.glasses}\nExpression: ${semantic.expression}\nHair: ${semantic.hair}\n\n`;
   prompt += `[ATTIRE & PHYSICS]\nOutfit: ${semantic.outfit}\nFabric Behavior: ${semantic.outfitPhysics}\nSkin State: ${semantic.skinResponse}\n\n`;
@@ -881,11 +883,7 @@ const buildPromptText = (semantic: SemanticScene, aiType: 'chatgpt' | 'gemini'):
   prompt += `[POSE & CONTACT]\n${semantic.poseAndContact}\n\n`;
   prompt += `[PHYSICS CONSTRAINTS]\n${semantic.styleConstraints}`;
 
-  if (aiType === 'chatgpt') {
-    return `You are generating an image based on an attached reference photo. \n\n${prompt}`;
-  } else {
-    return `Using the provided image as the sole identity reference, generate an image following these physical constraints:\n\n${prompt}`;
-  }
+  return prompt;
 };
 
 const buildNegativeConstraints = (state: SceneState, derived: DerivedSceneState): string => {
@@ -2057,7 +2055,7 @@ export default function PhysFrameApp() {
       const resolved = resolveScene(state as any);
       const derived = resolved.derived;
       const semantic = buildSemanticScene(resolved.state as SceneState, derived, resolved.physicalState);
-      const rawPrompt = buildPromptText(semantic, 'gemini');
+      const rawPrompt = adaptPromptToPlatform(buildNeutralPromptText(semantic), 'gemini');
       const validatedPrompt = validatePrompt(rawPrompt, resolved, buildNegativeConstraints(resolved.state as SceneState, derived));
       const prompt = validatedPrompt.cleanPrompt;
       const physicalConsistencyScore = calculatePhysicalConsistencyScore(
@@ -2166,7 +2164,7 @@ export default function PhysFrameApp() {
       // 3. Re-compile only from the final canonical state.
       const derived = finalResolved.derived;
       const semantic = buildSemanticScene(finalState, derived, finalResolved.physicalState);
-      const rawPrompt = buildPromptText(semantic, 'gemini');
+      const rawPrompt = adaptPromptToPlatform(buildNeutralPromptText(semantic), 'gemini');
       const validatedPrompt = validatePrompt(rawPrompt, finalResolved, buildNegativeConstraints(finalState, derived));
       const cleanPromptText = validatedPrompt.cleanPrompt;
 
@@ -2175,7 +2173,7 @@ export default function PhysFrameApp() {
         setEnhancedPrompts(prev => ({
           ...prev,
           gemini: cleanPromptText,
-          chatgpt: validatePrompt(buildPromptText(semantic, 'chatgpt'), finalResolved, buildNegativeConstraints(finalState, derived)).cleanPrompt
+          chatgpt: validatePrompt(adaptPromptToPlatform(buildNeutralPromptText(semantic), 'chatgpt'), finalResolved, buildNegativeConstraints(finalState, derived)).cleanPrompt
         }));
       }
 
@@ -2318,14 +2316,15 @@ export default function PhysFrameApp() {
 
   let chatGPTPrompt = "", geminiPrompt = "", negativePrompt = "";
   if (state.sceneFamily) {
-    // Pure deterministic physical pipeline:
-    // SceneState -> Physical Scene Resolver -> Physics Validator -> Consistency Validator -> Prompt Builder -> Final Validation
-    const resolved = resolveScene(state as any);
+    // Deterministic causal prompt pipeline:
+    // UI state -> SceneManifest -> Physical Resolver -> Validators -> Neutral Compiler -> Platform Adapter
+    const manifest = createSceneManifest(state as any, 'neutral');
+    const resolved = manifest.resolved;
     const postValidation = validateScene(resolved);
     const derived = resolved.derived;
     const semantic = buildSemanticScene(resolved.state as SceneState, derived, resolved.physicalState);
-    const rawChatGPT = buildPromptText(semantic, 'chatgpt');
-    const rawGemini = buildPromptText(semantic, 'gemini');
+    const rawChatGPT = adaptPromptToPlatform(buildNeutralPromptText(semantic), 'chatgpt');
+    const rawGemini = adaptPromptToPlatform(buildNeutralPromptText(semantic), 'gemini');
     const rawNegative = buildNegativeConstraints(resolved.state as SceneState, derived);
 
     const validatedChatGPT = validatePrompt(rawChatGPT, resolved, rawNegative);
