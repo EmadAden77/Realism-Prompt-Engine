@@ -167,11 +167,9 @@ export function buildPlatformAdapterPlan(
 
   if (target === 'chatgpt') {
     const capability = PLATFORM_CAPABILITY_REGISTRY.chatgpt;
-    const prompt = !plan
-      ? `You are generating an image based on an attached reference photo.\n\n${clean}`
-      : hasReference
-        ? `${referenceDirective}\n\n${clean}`
-        : clean;
+    const prompt = hasReference
+      ? `${referenceDirective}\n\n${clean}`
+      : clean;
 
     return {
       target,
@@ -193,11 +191,9 @@ export function buildPlatformAdapterPlan(
 
   if (target === 'gemini') {
     const capability = PLATFORM_CAPABILITY_REGISTRY.gemini;
-    const prompt = !plan
-      ? `Using the provided image as the sole identity reference, generate an image following these physical constraints:\n\n${clean}`
-      : hasReference
-        ? `${referenceDirective}\n\n${clean}`
-        : clean;
+    const prompt = hasReference
+      ? `${referenceDirective}\n\n${clean}`
+      : clean;
 
     return {
       target,
@@ -234,10 +230,11 @@ export function buildPlatformAdapterPlan(
 }
 
 /**
- * Backward-compatible string adapter.
+ * String-only convenience adapter.
  *
- * New engine code should prefer buildPlatformAdapterPlan() when it needs
- * capability metadata or reference-workflow instructions.
+ * Missing ReferencePlan never implies a reference attachment. New engine code
+ * should prefer buildPlatformAdapterPlan() when it needs capability metadata
+ * or reference-workflow instructions.
  */
 export function adaptPromptToPlatform(
   neutralPrompt: string,
