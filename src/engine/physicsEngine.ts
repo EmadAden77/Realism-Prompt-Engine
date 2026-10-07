@@ -19,6 +19,7 @@ import {
 } from './backgroundRealism';
 import { deriveLightingCausality, LightingCausalityState } from './lightingCausality';
 import { evaluateScenePlausibility, ScenePlausibilityState } from './scenePlausibility';
+import { deriveSurfaceRealism, SurfaceRealismState } from './surfaceRealism';
 import {
   resolveSelfieAngleGeometry,
   ResolvedSelfieAngle,
@@ -156,6 +157,7 @@ export interface DerivedPhysicalState {
   disorderBehavior: string;
   backgroundRealism: BackgroundRealismState;
   lightingCausality: LightingCausalityState;
+  surfaceRealism: SurfaceRealismState;
   plausibility: ScenePlausibilityState;
   selfieAngle: ResolvedSelfieAngle | null;
   groupSelfie: ResolvedGroupSelfie | null;
@@ -1023,6 +1025,20 @@ function calculateDetailedPhysicalState(
   const shadowBehavior = lightingCausality.shadowBehavior;
   const exposureBehavior = lightingCausality.exposureBehavior;
 
+  // --- 8.5 Material & Surface Response ---
+  // Realism is not only geometry and light placement. Surfaces must react to
+  // those lights according to material roughness, reflectance, contact, and depth.
+  const surfaceRealism = deriveSurfaceRealism({
+    familyId,
+    isOutdoor,
+    timeOfDay: state.timeOfDay,
+    captureType: state.captureType,
+    glassesMode: state.glassesMode,
+    clothingCondition: state.clothingCondition,
+    atmosphericCondition: state.atmosphericCondition,
+    lighting: lightingCausality
+  });
+
   // --- 9. Physical Reflections (Section 17) ---
   const reflectionState: string[] = [];
   if (state.glassesMode === 'wear_glasses') {
@@ -1079,6 +1095,7 @@ function calculateDetailedPhysicalState(
     disorderBehavior,
     backgroundRealism,
     lightingCausality,
+    surfaceRealism,
     plausibility,
     selfieAngle,
     groupSelfie
@@ -1107,9 +1124,9 @@ function calculateDerivedState(
   else if (depth >= 75) shadowDepthDescription = `deep high-contrast shadow hardness (${depth}%), crisp contact occlusion`;
 
   const derived: DerivedSceneState = {
-    skinResponse: 'natural human skin texture with microscopic visible pores, authentic subtle imperfections, natural melanin variance, no plastic airbrushing',
+    skinResponse: physics.surfaceRealism.skinResponse,
     hairCondition: 'natural human hair density, preserving authentic hairline without synthetic thickening',
-    fabricBehavior: [],
+    fabricBehavior: [physics.surfaceRealism.fabricResponse],
     shadowBehavior: `${physics.shadowBehavior}; ${physics.lightingCausality.contrastBehavior}; calibrated to ${depth}% shadow hardness (${shadowDepthDescription})`,
     environmentalLightBehavior: `primary light: ${physics.lightingCausality.primarySource.name}; secondary/bounce: ${physics.lightingCausality.secondarySources.map(source => source.name).join('; ') || 'none'}; bounce surfaces: ${physics.lightingCausality.bounceSurfaces.join('; ')}; falloff: ${physics.lightingCausality.falloffBehavior}; calibrated to ${intensity}% ambient intensity`,
     cameraDistance: physics.cameraDistance,
@@ -1131,6 +1148,9 @@ function calculateDerivedState(
       `Sensor exposure: ${physics.exposureBehavior}`,
       `Lighting causality: ${physics.lightingCausality.inverseSquareBehavior}`,
       `Lighting guards: ${physics.lightingCausality.consistencyGuards.join('; ')}`,
+      `Surface realism: score=${physics.surfaceRealism.score}/100; ${physics.surfaceRealism.consistencyGuards.join('; ')}`,
+      `Surface response: ${physics.surfaceRealism.environmentalSurfaceResponse.join('; ')}`,
+      `Surface reflections: ${physics.surfaceRealism.reflectionRules.join('; ') || 'no additional reflection constraints'}`,
       `Scene plausibility: status=${physics.plausibility.overallStatus}, score=${physics.plausibility.overallScore}/100; ${physics.plausibility.constraints.join('; ') || 'no additional constraints'}`,
       `Physical lived-in disorder: ${physics.disorderBehavior}`,
       physics.groupSelfie
