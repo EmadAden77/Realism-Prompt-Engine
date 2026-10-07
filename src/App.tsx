@@ -2257,7 +2257,7 @@ export default function PhysFrameApp() {
       const resolved = resolveScene(state as any);
       const derived = resolved.derived;
       const semantic = buildSemanticScene(resolved.state as SceneState, derived, resolved.physicalState);
-      const rawBase = buildPromptText(semantic, targetEngine);
+      const rawBase = adaptPromptToPlatform(buildNeutralPromptText(semantic), targetEngine);
       const validated = validatePrompt(rawBase, resolved, buildNegativeConstraints(resolved.state as SceneState, derived));
       const base = validated.cleanPrompt;
 
