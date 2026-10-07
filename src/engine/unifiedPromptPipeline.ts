@@ -17,8 +17,11 @@ import {
   compileNegativeConstraints,
   type CompiledNegativeConstraints,
   type NegativeConstraintConflict,
-  type NegativeConstraintFragment,
 } from './negativeConstraintCompiler';
+import {
+  validateUnifiedConflicts,
+  type UnifiedConflictReport,
+} from './conflictValidator';
 
 export type UnifiedPromptTarget = 'chatgpt' | 'gemini';
 
@@ -36,6 +39,7 @@ export interface UnifiedPromptDiagnostics {
   negativeConflicts: NegativeConstraintConflict[];
   contradictionsByPlatform: Record<UnifiedPromptTarget, string[]>;
   warningsByPlatform: Record<UnifiedPromptTarget, string[]>;
+  conflictReport: UnifiedConflictReport;
   isValid: boolean;
 }
 
@@ -231,6 +235,21 @@ export function compileUnifiedPromptPipeline(
     gemini: gemini.validation.warnings,
   };
 
+  const conflictReport = validateUnifiedConflicts({
+    rawState,
+    manifest,
+    semantic,
+    negative,
+    inputValidation,
+    resolvedValidation,
+    chatgpt: chatgpt.validation,
+    gemini: gemini.validation,
+    chatgptNegativePrompt: chatgpt.negativePrompt,
+    geminiNegativePrompt: gemini.negativePrompt,
+    chatgptPrompt: chatgpt.prompt,
+    geminiPrompt: gemini.prompt,
+  });
+
   return {
     manifest,
     semantic,
@@ -246,11 +265,8 @@ export function compileUnifiedPromptPipeline(
       negativeConflicts: negative.conflicts,
       contradictionsByPlatform,
       warningsByPlatform,
-      isValid:
-        resolvedValidation.isValid &&
-        negative.conflicts.length === 0 &&
-        chatgpt.validation.isValid &&
-        gemini.validation.isValid,
+      conflictReport,
+      isValid: conflictReport.isValid,
     },
   };
 }
