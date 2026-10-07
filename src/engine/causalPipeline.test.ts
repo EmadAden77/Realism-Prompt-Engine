@@ -39,6 +39,8 @@ assert.equal(manifest.schemaVersion, '1.0');
 assert.equal(manifest.platformTarget, 'neutral');
 assert.equal(manifest.resolved.state.sceneFamily, 'saudi-outdoor');
 assert.ok(manifest.sceneId.includes('saudi-outdoor'));
+assert.equal(manifest.referencePlan.hasReference, true);
+assert.equal(manifest.referencePlan.routes[0]?.intent, 'identity_or_object_preservation');
 
 assert.deepEqual(
   decideEffectActivation({
