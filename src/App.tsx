@@ -38,6 +38,8 @@ import { OUTFITS, OutfitItem } from './data/clothingOutfits';
 import { resolveScene, validateScene, validatePrompt, ResolvedScene, ValidationResult, DerivedPhysicalState } from './engine/physicsEngine';
 import { createSceneManifest } from './engine/causalPipeline';
 import { adaptPromptToPlatform } from './engine/platformAdapter';
+import { compileNeutralPrompt } from './engine/promptCompiler';
+import type { KnowledgeRuleDecision } from './engine/v20KnowledgeBase';
 import { analyzeAndRepairScene } from './engine/realismIntelligence';
 import {
   BackgroundMode,
@@ -871,20 +873,10 @@ const buildSemanticScene = (
   };
 };
 
-const buildNeutralPromptText = (semantic: SemanticScene): string => {
-  let prompt = `Generate a realistic photograph with the following strict constraints:\n\n`;
-  prompt += `[SUBJECT & IDENTITY LOCK]\n${semantic.identity}\nBody: ${semantic.body}\nEyeglasses: ${semantic.glasses}\nExpression: ${semantic.expression}\nHair: ${semantic.hair}\n\n`;
-  prompt += `[ATTIRE & PHYSICS]\nOutfit: ${semantic.outfit}\nFabric Behavior: ${semantic.outfitPhysics}\nSkin State: ${semantic.skinResponse}\n\n`;
-  if (semantic.groupSelfie) {
-    prompt += `[GROUP SELFIE CAST & ANTI-CLONING]\n${semantic.groupSelfie}\n\n`;
-  }
-  prompt += `[CAMERA & FRAMING]\n${semantic.captureMechanics}\n${semantic.cameraRealism}\n\n`;
-  prompt += `[ENVIRONMENT & ATMOSPHERE]\nLocation: ${semantic.visibleEnvironment}\nAtmospheric Condition: ${semantic.atmosphere}\nLighting: ${semantic.lighting}\n\n`;
-  prompt += `[POSE & CONTACT]\n${semantic.poseAndContact}\n\n`;
-  prompt += `[PHYSICS CONSTRAINTS]\n${semantic.styleConstraints}`;
-
-  return prompt;
-};
+const buildNeutralPromptText = (
+  semantic: SemanticScene,
+  knowledgeDecisions: KnowledgeRuleDecision[] = []
+): string => compileNeutralPrompt(semantic, knowledgeDecisions).text;
 
 const buildNegativeConstraints = (state: SceneState, derived: DerivedSceneState): string => {
   let neg = `identity drift, altered facial proportions, changed hairline, increased hair density, filled sparse hair, beautification filters, airbrushing, waxy skin, CGI appearance, synthetic face, perfect symmetry, cartoon, illustration, extra fingers, malformed hands, missing limbs, floating objects. `;
@@ -2052,10 +2044,14 @@ export default function PhysFrameApp() {
       // Pure deterministic physical pipeline:
       // SceneState -> Physical Scene Resolver -> Physics Validator -> Consistency Validator -> Prompt Builder -> Final Validation
       const initialValidation = validateScene(state as any);
-      const resolved = resolveScene(state as any);
+      const auditManifest = createSceneManifest(state as any, 'neutral');
+      const resolved = auditManifest.resolved;
       const derived = resolved.derived;
       const semantic = buildSemanticScene(resolved.state as SceneState, derived, resolved.physicalState);
-      const rawPrompt = adaptPromptToPlatform(buildNeutralPromptText(semantic), 'gemini');
+      const rawPrompt = adaptPromptToPlatform(
+        buildNeutralPromptText(semantic, auditManifest.knowledgeDecisions),
+        'gemini'
+      );
       const validatedPrompt = validatePrompt(rawPrompt, resolved, buildNegativeConstraints(resolved.state as SceneState, derived));
       const prompt = validatedPrompt.cleanPrompt;
       const physicalConsistencyScore = calculatePhysicalConsistencyScore(
@@ -2164,7 +2160,11 @@ export default function PhysFrameApp() {
       // 3. Re-compile only from the final canonical state.
       const derived = finalResolved.derived;
       const semantic = buildSemanticScene(finalState, derived, finalResolved.physicalState);
-      const rawPrompt = adaptPromptToPlatform(buildNeutralPromptText(semantic), 'gemini');
+      const finalManifest = createSceneManifest(finalState as any, 'neutral');
+      const rawPrompt = adaptPromptToPlatform(
+        buildNeutralPromptText(semantic, finalManifest.knowledgeDecisions),
+        'gemini'
+      );
       const validatedPrompt = validatePrompt(rawPrompt, finalResolved, buildNegativeConstraints(finalState, derived));
       const cleanPromptText = validatedPrompt.cleanPrompt;
 
@@ -2173,7 +2173,14 @@ export default function PhysFrameApp() {
         setEnhancedPrompts(prev => ({
           ...prev,
           gemini: cleanPromptText,
-          chatgpt: validatePrompt(adaptPromptToPlatform(buildNeutralPromptText(semantic), 'chatgpt'), finalResolved, buildNegativeConstraints(finalState, derived)).cleanPrompt
+          chatgpt: validatePrompt(
+            adaptPromptToPlatform(
+              buildNeutralPromptText(semantic, finalManifest.knowledgeDecisions),
+              'chatgpt'
+            ),
+            finalResolved,
+            buildNegativeConstraints(finalState, derived)
+          ).cleanPrompt
         }));
       }
 
@@ -2254,10 +2261,14 @@ export default function PhysFrameApp() {
   const handleEnhancePrompt = async (targetEngine: 'chatgpt' | 'gemini') => {
     try {
       setIsEnhancingPrompt(true);
-      const resolved = resolveScene(state as any);
+      const enhanceManifest = createSceneManifest(state as any, 'neutral');
+      const resolved = enhanceManifest.resolved;
       const derived = resolved.derived;
       const semantic = buildSemanticScene(resolved.state as SceneState, derived, resolved.physicalState);
-      const rawBase = adaptPromptToPlatform(buildNeutralPromptText(semantic), targetEngine);
+      const rawBase = adaptPromptToPlatform(
+        buildNeutralPromptText(semantic, enhanceManifest.knowledgeDecisions),
+        targetEngine
+      );
       const validated = validatePrompt(rawBase, resolved, buildNegativeConstraints(resolved.state as SceneState, derived));
       const base = validated.cleanPrompt;
 
@@ -2323,8 +2334,14 @@ export default function PhysFrameApp() {
     const postValidation = validateScene(resolved);
     const derived = resolved.derived;
     const semantic = buildSemanticScene(resolved.state as SceneState, derived, resolved.physicalState);
-    const rawChatGPT = adaptPromptToPlatform(buildNeutralPromptText(semantic), 'chatgpt');
-    const rawGemini = adaptPromptToPlatform(buildNeutralPromptText(semantic), 'gemini');
+    const rawChatGPT = adaptPromptToPlatform(
+      buildNeutralPromptText(semantic, manifest.knowledgeDecisions),
+      'chatgpt'
+    );
+    const rawGemini = adaptPromptToPlatform(
+      buildNeutralPromptText(semantic, manifest.knowledgeDecisions),
+      'gemini'
+    );
     const rawNegative = buildNegativeConstraints(resolved.state as SceneState, derived);
 
     const validatedChatGPT = validatePrompt(rawChatGPT, resolved, rawNegative);
