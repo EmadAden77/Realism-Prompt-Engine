@@ -106,11 +106,9 @@ const validationIssueToConflict = (
 ): UnifiedConflictResult => {
   const severity: ConflictSeverity = wasAutoResolved
     ? 'correction'
-    : issue.type === 'physical_impossibility'
-      ? 'error'
-      : issue.type === 'warning'
-        ? 'warning'
-        : 'correction';
+    : issue.type === 'warning'
+      ? 'warning'
+      : 'error';
 
   const affectedFields = [issue.field];
   const suggestedPatch =
@@ -229,7 +227,7 @@ const continuityConflicts = (
     if (visibleEnvironment.includes(hiddenAnchor.toLowerCase())) {
       results.push({
         ruleId: 'CONTINUITY_HIDDEN_ANCHOR',
-        severity: 'correction',
+        severity: 'error',
         code: 'FIXED_HOME_HIDDEN_ANCHOR_LEAK',
         message: `Off-frame fixed-home anchor leaked into the visible environment: ${hiddenAnchor}`,
         affectedFields: ['subScene', 'visibleEnvironment'],
