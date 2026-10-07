@@ -1,5 +1,6 @@
 import { decideEffectActivation, type EffectPolicy } from './effectActivation';
 import type { DerivedPhysicalState, SceneState } from './physicsEngine';
+import type { HomeContinuityContext } from './fixedHomeContinuity';
 
 export interface KnowledgeRuleDecision {
   id: string;
@@ -70,7 +71,8 @@ const finalize = (rule: RuleInput): KnowledgeRuleDecision => {
  */
 export function evaluateV20Knowledge(
   state: SceneState,
-  physical?: DerivedPhysicalState
+  physical?: DerivedPhysicalState,
+  continuityContext?: HomeContinuityContext | null
 ): KnowledgeRuleDecision[] {
   const family = state.sceneFamily || 'saudi-outdoor';
   const isOutdoor = family === 'saudi-outdoor';
@@ -118,11 +120,14 @@ export function evaluateV20Knowledge(
       effectPolicy: 'required',
       causalTrigger: isHomeInterior,
       visible: isHomeInterior && visibleEnvironment,
-      reason: isHomeInterior
-        ? 'Selected scene uses the persistent home interior.'
-        : 'Scene is not a persistent home interior.',
-      visibleConsequence:
-        'Preserve fixed room architecture, furniture identity, permanent decor, window and door positions, and previously established wear patterns; lighting may change without silently replacing the room.',
+      reason: continuityContext
+        ? `Persistent home context active: ${continuityContext.continuityKey}.`
+        : isHomeInterior
+          ? 'Selected scene uses the persistent home interior.'
+          : 'Scene is not a persistent home interior.',
+      visibleConsequence: continuityContext
+        ? continuityContext.promptConstraint
+        : 'Preserve fixed room architecture, furniture identity, permanent decor, window and door positions, and previously established wear patterns; lighting may change without silently replacing the room.',
     }),
     finalize({
       id: 'V20_LIGHT_SOURCE_CAUSALITY',
