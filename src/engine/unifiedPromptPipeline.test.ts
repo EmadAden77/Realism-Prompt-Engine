@@ -40,11 +40,11 @@ assert.match(pipeline.neutral.text, /Generate a realistic photograph/);
 
 assert.match(
   pipeline.platforms.chatgpt.rawPrompt,
-  /attached reference image only to preserve/i
+  /attached image input only to preserve/i
 );
 assert.match(
   pipeline.platforms.gemini.rawPrompt,
-  /provided reference image only to preserve/i
+  /provided image input only to preserve/i
 );
 assert.match(pipeline.platforms.chatgpt.prompt, /SUBJECT & IDENTITY LOCK/);
 assert.match(pipeline.platforms.gemini.prompt, /SUBJECT & IDENTITY LOCK/);
