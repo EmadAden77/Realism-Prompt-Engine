@@ -22,6 +22,7 @@ import {
   validateUnifiedConflicts,
   type UnifiedConflictReport,
 } from './conflictValidator';
+import { compressNegativePromptText } from './promptCompression';
 
 export type UnifiedPromptTarget = 'chatgpt' | 'gemini';
 
@@ -40,6 +41,11 @@ export interface UnifiedPromptDiagnostics {
   contradictionsByPlatform: Record<UnifiedPromptTarget, string[]>;
   warningsByPlatform: Record<UnifiedPromptTarget, string[]>;
   conflictReport: UnifiedConflictReport;
+  compression: {
+    neutralSavedChars: number;
+    negativeSavedChars: number;
+    totalSavedChars: number;
+  };
   isValid: boolean;
 }
 
@@ -90,11 +96,16 @@ const reconcileSharedNegative = (
     item => `${item.code}:${item.fragmentId}`
   );
 
+  const compressed = compressNegativePromptText(
+    fragments.map(item => item.text).join(' ')
+  );
+
   return {
-    text: fragments.map(item => item.text).join(' '),
+    text: compressed.text,
     fragments,
     omittedConflictingFragments: omitted,
     conflicts,
+    compression: compressed.stats,
   };
 };
 
@@ -266,6 +277,12 @@ export function compileUnifiedPromptPipeline(
       contradictionsByPlatform,
       warningsByPlatform,
       conflictReport,
+      compression: {
+        neutralSavedChars: neutral.compression.savedChars,
+        negativeSavedChars: negative.compression.savedChars,
+        totalSavedChars:
+          neutral.compression.savedChars + negative.compression.savedChars,
+      },
       isValid: conflictReport.isValid,
     },
   };
