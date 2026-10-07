@@ -4,6 +4,7 @@ import {
   ADVANCED_FACIAL_EXPRESSIONS,
   type FacialExpressionDefinition,
 } from '../data/facialExpressionLibrary';
+import { getHairPhysicsPreset } from '../data/hairPhysicsLibrary';
 import type { DerivedPhysicalState, SceneState } from './physicsEngine';
 
 export type SemanticSceneState = Omit<SceneState, 'realismStyle'> & {
@@ -262,6 +263,7 @@ export const buildSemanticScene = (
   const attireBasePhysics = getAttireAwareBasePhysics(outfit, state);
   const activityDefinition = getActivityDefinition(state.activity);
   const hair = HAIRSTYLES.find(h => h.id === state.hairStyle);
+  const hairPhysics = getHairPhysicsPreset(state.hairPhysicsPreset);
   const expression = EXPRESSIONS.find(e => e.id === state.expression);
 
   let captureMechanics = '';
@@ -356,7 +358,7 @@ export const buildSemanticScene = (
     body: '193cm, 83kg, tall lean-athletic male build.',
     glasses: glassesText,
     captureMechanics,
-    hair: `${hair?.prompt}. Physics: ${hair?.physics}. ${derived.hairCondition}.`,
+    hair: `${hair?.prompt}. Base hair physics: ${hair?.physics}. Scene hair condition: ${derived.hairCondition}. Hair physics preset: ${hairPhysics.prompt}.`,
     expression: expressionDetails,
     outfit: `${attireBasePrompt}. Wear configuration: ${attire.prompt}`,
     outfitPhysics: [...attireBasePhysics, ...derived.fabricBehavior, ...attire.physics].join(', '),

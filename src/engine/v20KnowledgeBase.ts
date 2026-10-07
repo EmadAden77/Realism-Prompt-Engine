@@ -1,10 +1,11 @@
 import { decideEffectActivation, type EffectPolicy } from './effectActivation';
 import type { DerivedPhysicalState, SceneState } from './physicsEngine';
 import type { HomeContinuityContext } from './fixedHomeContinuity';
+import { deriveSaudiStreetRealism } from './saudiStreetRealism';
 
 export interface KnowledgeRuleDecision {
   id: string;
-  source: 'V20_DISTILLED';
+  source: 'V20_DISTILLED' | 'SAUDI_STREET_REALISM';
   scope: string[];
   priority: number;
   effectPolicy: EffectPolicy;
@@ -18,6 +19,7 @@ export interface KnowledgeRuleDecision {
 }
 
 interface RuleInput {
+  source?: KnowledgeRuleDecision['source'];
   id: string;
   scope: string[];
   priority: number;
@@ -47,7 +49,7 @@ const finalize = (rule: RuleInput): KnowledgeRuleDecision => {
 
   return {
     id: rule.id,
-    source: 'V20_DISTILLED',
+    source: rule.source ?? 'V20_DISTILLED',
     scope: rule.scope,
     priority: rule.priority,
     effectPolicy: rule.effectPolicy,
@@ -112,7 +114,7 @@ export function evaluateV20Knowledge(
     state.clothingCondition === 'worn-all-day' ||
     state.clothingCondition === 'vintage-washed';
 
-  return [
+  const baseRules = [
     finalize({
       id: 'V20_FIXED_HOME_CONTINUITY',
       scope: ['home', 'continuity'],
@@ -347,4 +349,168 @@ export function evaluateV20Knowledge(
         'Preserve naturally supported asymmetry and texture without inventing dirt, injuries, bloodshot eyes, earwax, nose hair, scars, or other defects.',
     }),
   ];
+
+  const street = deriveSaudiStreetRealism(state, physical);
+  const streetVisible = street.active && visibleEnvironment;
+
+  const streetRules: KnowledgeRuleDecision[] = [
+    finalize({
+      source: 'SAUDI_STREET_REALISM',
+      id: 'SAUDI_STREET_GOLDEN_GUARDS',
+      scope: ['saudi-outdoor', 'place', 'lighting', 'clothing', 'vehicles', 'crowd'],
+      priority: 92,
+      effectPolicy: 'required',
+      causalTrigger: street.active,
+      visible: streetVisible,
+      reason: street.active
+        ? 'Saudi street scene activates the user-supplied one-place, causal-light, one-outfit, one-background-vehicle and natural-crowd guards.'
+        : 'Scene is not a Saudi outdoor street context.',
+      visibleConsequence: street.guards.join(' '),
+    }),
+    finalize({
+      source: 'SAUDI_STREET_REALISM',
+      id: 'SAUDI_STREET_GROUND_SURFACE',
+      scope: ['saudi-outdoor', 'ground', 'asphalt', 'interlock'],
+      priority: 68,
+      effectPolicy: 'conditional',
+      causalTrigger: Boolean(street.surface),
+      visible: streetVisible,
+      reason: street.surface
+        ? street.facts[0]
+        : 'No visible Saudi street ground surface is resolved.',
+      visibleConsequence: street.surface || '',
+    }),
+    finalize({
+      source: 'SAUDI_STREET_REALISM',
+      id: 'SAUDI_STREET_ARCHITECTURE_WEAR',
+      scope: ['saudi-outdoor', 'architecture', 'wall', 'building'],
+      priority: 62,
+      effectPolicy: 'conditional',
+      causalTrigger: Boolean(street.architecture),
+      visible: streetVisible,
+      reason: street.architecture
+        ? 'Selected Saudi micro-location exposes ordinary building or boundary-wall surfaces.'
+        : 'No relevant architectural surface is visible.',
+      visibleConsequence: street.architecture || '',
+    }),
+    finalize({
+      source: 'SAUDI_STREET_REALISM',
+      id: 'SAUDI_STREET_LIVED_IN_DISORDER',
+      scope: ['saudi-outdoor', 'disorder', 'wear'],
+      priority: 55,
+      effectPolicy: 'conditional',
+      causalTrigger: Boolean(street.disorder),
+      visible: streetVisible,
+      reason: street.disorder
+        ? 'Background disorder controls and FOV allow mild place-appropriate lived-in detail.'
+        : 'Disorder is disabled, outside FOV, or physically capped.',
+      visibleConsequence: street.disorder || '',
+    }),
+    finalize({
+      source: 'SAUDI_STREET_REALISM',
+      id: 'SAUDI_STREET_SINGLE_VEHICLE',
+      scope: ['saudi-outdoor', 'vehicle', 'background'],
+      priority: 70,
+      effectPolicy: 'conditional',
+      causalTrigger: Boolean(street.vehicle),
+      visible: streetVisible,
+      reason: street.vehicle
+        ? 'Resolved background permits a vehicle and the one-background-vehicle rule selects one coherent type.'
+        : 'No background vehicle is physically allowed or visible.',
+      visibleConsequence: street.vehicle || '',
+    }),
+    finalize({
+      source: 'SAUDI_STREET_REALISM',
+      id: 'SAUDI_STREET_VEHICLE_MOTION',
+      scope: ['saudi-outdoor', 'vehicle', 'motion', 'lighting'],
+      priority: 57,
+      effectPolicy: 'conditional',
+      causalTrigger: Boolean(street.vehicleMotion),
+      visible: streetVisible,
+      reason: street.vehicleMotion
+        ? 'Background vehicle motion is active and remains secondary to the subject.'
+        : 'No moving background vehicle is resolved.',
+      visibleConsequence: street.vehicleMotion || '',
+    }),
+    finalize({
+      source: 'SAUDI_STREET_REALISM',
+      id: 'SAUDI_STREET_LICENSE_PLATE',
+      scope: ['saudi-outdoor', 'vehicle', 'license-plate'],
+      priority: 46,
+      effectPolicy: 'conditional',
+      causalTrigger: Boolean(street.licensePlate),
+      visible: streetVisible,
+      reason: street.licensePlate
+        ? 'A background vehicle is visible at a framing scale where a plate may plausibly appear.'
+        : 'No plate-scale vehicle detail is visible.',
+      visibleConsequence: street.licensePlate || '',
+    }),
+    finalize({
+      source: 'SAUDI_STREET_REALISM',
+      id: 'SAUDI_STREET_BACKGROUND_PEOPLE',
+      scope: ['saudi-outdoor', 'people', 'behavior'],
+      priority: 60,
+      effectPolicy: 'conditional',
+      causalTrigger: Boolean(street.people),
+      visible: streetVisible,
+      reason: street.people
+        ? 'Background controls permit sparse ordinary human activity inside the current FOV.'
+        : 'Background people are disabled or outside the visible framing.',
+      visibleConsequence: street.people || '',
+    }),
+    finalize({
+      source: 'SAUDI_STREET_REALISM',
+      id: 'SAUDI_STREET_PEOPLE_CLOTHING',
+      scope: ['saudi-outdoor', 'people', 'clothing'],
+      priority: 44,
+      effectPolicy: 'conditional',
+      causalTrigger: Boolean(street.peopleClothing),
+      visible: streetVisible,
+      reason: street.peopleClothing
+        ? 'Visible background people receive one context-appropriate clothing description.'
+        : 'No background person is visible.',
+      visibleConsequence: street.peopleClothing || '',
+    }),
+    finalize({
+      source: 'SAUDI_STREET_REALISM',
+      id: 'SAUDI_STREET_NIGHT_SKY',
+      scope: ['saudi-outdoor', 'night', 'sky'],
+      priority: 42,
+      effectPolicy: 'conditional',
+      causalTrigger: Boolean(street.sky),
+      visible: streetVisible,
+      reason: street.sky
+        ? 'Night Saudi outdoor scene may expose an urban light-pollution sky when the sky enters frame.'
+        : 'Night sky is not relevant to the current scene.',
+      visibleConsequence: street.sky || '',
+    }),
+    finalize({
+      source: 'SAUDI_STREET_REALISM',
+      id: 'SAUDI_STREET_SECONDARY_LIGHT',
+      scope: ['saudi-outdoor', 'lighting', 'secondary-light'],
+      priority: 73,
+      effectPolicy: 'conditional',
+      causalTrigger: Boolean(street.secondaryLight),
+      visible: streetVisible,
+      reason: street.secondaryLight
+        ? 'Multiple resolved practical light sources justify localized secondary spill.'
+        : 'No second physically resolved light source exists.',
+      visibleConsequence: street.secondaryLight || '',
+    }),
+    finalize({
+      source: 'SAUDI_STREET_REALISM',
+      id: 'SAUDI_STREET_DEPTH_LAYERS',
+      scope: ['saudi-outdoor', 'camera', 'depth', 'parallax'],
+      priority: 71,
+      effectPolicy: 'conditional',
+      causalTrigger: Boolean(street.depth),
+      visible: streetVisible,
+      reason: street.depth
+        ? 'Front-selfie geometry exposes near, mid, and far Saudi street planes.'
+        : 'Depth-layer rule is not visible in the current framing.',
+      visibleConsequence: street.depth || '',
+    }),
+  ];
+
+  return [...baseRules, ...streetRules];
 }
