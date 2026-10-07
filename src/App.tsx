@@ -35,7 +35,7 @@ import {
 } from 'lucide-react';
 import { MICRO_LOCATIONS, getMicroLocation, MicroLocation } from './data/microLocations';
 import { OUTFITS, OutfitItem } from './data/clothingOutfits';
-import { resolveScene, validateScene, validatePrompt, ResolvedScene, ValidationResult, DerivedPhysicalState } from './engine/physicsEngine';
+import { resolveScene, validateScene, validatePrompt, ResolvedScene, ValidationResult } from './engine/physicsEngine';
 import { createSceneManifest } from './engine/causalPipeline';
 import { adaptPromptToPlatform } from './engine/platformAdapter';
 import { compileNeutralPrompt, type SemanticPromptScene } from './engine/promptCompiler';
@@ -161,7 +161,7 @@ interface SceneState {
 
 type SemanticScene = SemanticPromptScene;
 
-interface SavedPreset {interface SavedPreset {
+interface SavedPreset {
   id: string;
   name: string;
   state: SceneState;
@@ -327,8 +327,6 @@ const SCENE_FAMILIES: Record<SceneFamilyId, {
     environmentRealism: ['هادئ', 'طبيعي', 'نشط']
   }
 };
-
-// --- RULES ENGINE & RESOLVERS ---
 
 // --- RULES ENGINE & RESOLVERS ---
 
