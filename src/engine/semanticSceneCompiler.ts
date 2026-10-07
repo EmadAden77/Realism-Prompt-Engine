@@ -1,5 +1,9 @@
 import { getMicroLocation } from '../data/microLocations';
 import { OUTFITS } from '../data/clothingOutfits';
+import {
+  ADVANCED_FACIAL_EXPRESSIONS,
+  type FacialExpressionDefinition,
+} from '../data/facialExpressionLibrary';
 import type { DerivedPhysicalState, SceneState } from './physicsEngine';
 
 export type SemanticSceneState = Omit<SceneState, 'realismStyle'> & {
@@ -37,7 +41,7 @@ export const HAIRSTYLES = [
   { id: 'h6', labelAR: 'عسكري (قصير جداً ومحدد)', prompt: 'very short neat military regulation haircut', physics: 'tight fade on sides, minimal volume on top, sharp natural hairline' }
 ];
 
-export const EXPRESSIONS = [
+const BASE_EXPRESSIONS: FacialExpressionDefinition[] = [
   {
     id: 'e1',
     labelAR: 'محايد استرخائي (Resting Neutral)',
@@ -236,6 +240,11 @@ export const EXPRESSIONS = [
   }
 ];
 
+export const EXPRESSIONS: FacialExpressionDefinition[] = [
+  ...BASE_EXPRESSIONS,
+  ...ADVANCED_FACIAL_EXPRESSIONS,
+];
+
 /**
  * Platform-neutral semantic scene compiler.
  *
@@ -302,7 +311,7 @@ export const buildSemanticScene = (
   }
 
   const expressionDetails = expression 
-    ? `${expression.prompt}. Facial muscle anatomy: ${expression.anatomy}${state.muscleFatigue !== 'none' ? `. Muscle fatigue & ocular state: ${derived.muscleFatigueEffects}` : ''}`
+    ? `${expression.prompt}. ${expression.detailLabel || 'Facial muscle anatomy'}: ${expression.anatomy}${state.muscleFatigue !== 'none' ? `. Muscle fatigue & ocular state: ${derived.muscleFatigueEffects}` : ''}`
     : (state.muscleFatigue !== 'none' ? `Neutral resting expression with muscle fatigue: ${derived.muscleFatigueEffects}` : 'neutral resting expression');
 
   const microLoc = getMicroLocation(state.sceneFamily, state.subScene);

@@ -64,7 +64,39 @@ const semantic = buildSemanticScene(
 );
 
 assert.equal(HAIRSTYLES.length, 6);
-assert.equal(EXPRESSIONS.length, 28);
+assert.equal(EXPRESSIONS.length, 60);
+assert(EXPRESSIONS.some(item => item.id === 'fx01'));
+assert(EXPRESSIONS.some(item => item.id === 'fx_core10'));
+assert(EXPRESSIONS.some(item => item.id === 'fx_full'));
+
+const advancedState = {
+  ...resolved.state,
+  expression: 'fx03',
+};
+const advancedSemantic = buildSemanticScene(
+  advancedState,
+  derived,
+  resolved.physicalState
+);
+assert.match(advancedSemantic.expression, /FACS AU7 lid tightener/i);
+assert.match(advancedSemantic.expression, /crow's feet/i);
+
+const skinDetailSemantic = buildSemanticScene(
+  { ...resolved.state, expression: 'fx21' },
+  derived,
+  resolved.physicalState
+);
+assert.match(skinDetailSemantic.expression, /Skin physical detail/i);
+assert.match(skinDetailSemantic.expression, /3mm cheek mole/i);
+
+const fullPresetSemantic = buildSemanticScene(
+  { ...resolved.state, expression: 'fx_full' },
+  derived,
+  resolved.physicalState
+);
+assert.match(fullPresetSemantic.expression, /Combined facial physical details/i);
+assert.match(fullPresetSemantic.expression, /masseter bulging jaw clench/i);
+assert.match(fullPresetSemantic.expression, /one crooked lower incisor/i);
 
 assert.match(semantic.identity, /Preserve exact facial identity/i);
 assert.doesNotMatch(
