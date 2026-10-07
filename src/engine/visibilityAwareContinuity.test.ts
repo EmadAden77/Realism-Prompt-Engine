@@ -48,9 +48,12 @@ assert(
 assert((bed.continuityContext?.hiddenPermanentAnchorCount || 0) > 0);
 
 const bedRule = bed.knowledgeDecisions.find(rule => rule.id === 'V20_FIXED_HOME_CONTINUITY');
-assert.match(bedRule?.visibleConsequence || '', /180 cm master bed/);
+assert.match(bedRule?.visibleConsequence || '', /already compiled in the environment description/i);
+assert.doesNotMatch(bedRule?.visibleConsequence || '', /180 cm master bed/);
 assert.doesNotMatch(bedRule?.visibleConsequence || '', /sliding-door wardrobe/);
 assert.match(bedRule?.visibleConsequence || '', /remain internally locked/i);
+assert.match(bed.resolved.physicalState.visibleEnvironment, /180 cm master bed/);
+assert.doesNotMatch(bed.resolved.physicalState.visibleEnvironment, /sliding-door wardrobe/);
 
 const wardrobe = createSceneManifest(
   {
@@ -146,7 +149,8 @@ const homeFragment = fragments.find(fragment =>
   fragment.provenance.ruleIds.includes('V20_FIXED_HOME_CONTINUITY')
 );
 assert(homeFragment);
-assert.match(homeFragment?.text || '', /Visible immutable anchors only/);
+assert.match(homeFragment?.text || '', /already compiled in the environment description/i);
+assert.doesNotMatch(homeFragment?.text || '', /180 cm master bed/);
 assert.doesNotMatch(homeFragment?.text || '', /sliding-door wardrobe/);
 
 console.log('visibilityAwareContinuity tests passed');
