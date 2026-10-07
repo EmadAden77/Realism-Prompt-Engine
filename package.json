@@ -10,7 +10,7 @@
     "start": "NODE_ENV=production tsx server.ts",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "test": "tsx src/engine/physicsEngine.test.ts && tsx src/engine/activityAttire.test.ts && tsx src/engine/sceneAffordances.test.ts && tsx src/data/microLocations.test.ts && tsx src/engine/groupSelfie.test.ts && tsx src/engine/realismIntelligence.test.ts && tsx src/engine/surfaceRealism.test.ts && tsx src/serverBoundary.test.ts && tsx src/engine/causalPipeline.test.ts && tsx src/engine/v20KnowledgeBase.test.ts && tsx src/engine/promptCompiler.test.ts && tsx src/engine/dependencyIsolation.test.ts"
+    "test": "tsx src/engine/physicsEngine.test.ts && tsx src/engine/activityAttire.test.ts && tsx src/engine/sceneAffordances.test.ts && tsx src/data/microLocations.test.ts && tsx src/engine/groupSelfie.test.ts && tsx src/engine/realismIntelligence.test.ts && tsx src/engine/surfaceRealism.test.ts && tsx src/serverBoundary.test.ts && tsx src/engine/causalPipeline.test.ts && tsx src/engine/v20KnowledgeBase.test.ts && tsx src/engine/promptCompiler.test.ts && tsx src/engine/dependencyIsolation.test.ts && tsx src/engine/v20Phase2.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

@@ -26,7 +26,11 @@ const activeRule: KnowledgeRuleDecision = {
   scope: ['lighting'],
   priority: 80,
   effectPolicy: 'conditional',
+  causalTrigger: true,
+  visible: true,
+  relevant: true,
   active: true,
+  activationReason: 'emit',
   reason: 'A visible practical light causes the effect.',
   visibleConsequence: 'Keep the practical light response localized and physically causal.',
 };
@@ -37,7 +41,11 @@ const inactiveRule: KnowledgeRuleDecision = {
   scope: ['wet-ground'],
   priority: 90,
   effectPolicy: 'omit_by_default',
+  causalTrigger: false,
+  visible: false,
+  relevant: true,
   active: false,
+  activationReason: 'no-causal-trigger',
   reason: 'No wet-surface trigger exists.',
   visibleConsequence: 'Invent wet reflections everywhere.',
 };

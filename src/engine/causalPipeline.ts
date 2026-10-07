@@ -1,14 +1,16 @@
 import { resolveScene, type ResolvedScene, type SceneState } from './physicsEngine';
 import { evaluateV20Knowledge, type KnowledgeRuleDecision } from './v20KnowledgeBase';
+import {
+  decideEffectActivation,
+  type EffectPolicy,
+  type EffectActivationInput,
+  type EffectActivationDecision
+} from './effectActivation';
+
+export { decideEffectActivation };
+export type { EffectPolicy, EffectActivationInput, EffectActivationDecision };
 
 export type PlatformTarget = 'neutral' | 'chatgpt' | 'gemini';
-
-export type EffectPolicy =
-  | 'required'
-  | 'allowed'
-  | 'conditional'
-  | 'prohibited'
-  | 'omit_by_default';
 
 export interface SceneManifest {
   schemaVersion: '1.0';
@@ -16,24 +18,6 @@ export interface SceneManifest {
   platformTarget: PlatformTarget;
   resolved: ResolvedScene;
   knowledgeDecisions: KnowledgeRuleDecision[];
-}
-
-export interface EffectActivationInput {
-  policy: EffectPolicy;
-  causalTrigger: boolean;
-  visible: boolean;
-  relevant: boolean;
-}
-
-export interface EffectActivationDecision {
-  emit: boolean;
-  reason:
-    | 'prohibited'
-    | 'no-causal-trigger'
-    | 'not-visible'
-    | 'not-relevant'
-    | 'omit-by-default'
-    | 'emit';
 }
 
 export interface RuleCandidate {
@@ -79,30 +63,8 @@ export function createSceneManifest(
     sceneId: sceneId || buildSceneId(resolved.state),
     platformTarget,
     resolved,
-    knowledgeDecisions: evaluateV20Knowledge(resolved.state),
+    knowledgeDecisions: evaluateV20Knowledge(resolved.state, resolved.physicalState),
   };
-}
-
-export function decideEffectActivation(
-  input: EffectActivationInput
-): EffectActivationDecision {
-  if (input.policy === 'prohibited') {
-    return { emit: false, reason: 'prohibited' };
-  }
-  if (!input.causalTrigger) {
-    return { emit: false, reason: 'no-causal-trigger' };
-  }
-  if (!input.visible) {
-    return { emit: false, reason: 'not-visible' };
-  }
-  if (!input.relevant) {
-    return { emit: false, reason: 'not-relevant' };
-  }
-  if (input.policy === 'omit_by_default') {
-    return { emit: false, reason: 'omit-by-default' };
-  }
-
-  return { emit: true, reason: 'emit' };
 }
 
 export function resolveRuleConflict(
