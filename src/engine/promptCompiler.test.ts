@@ -56,6 +56,7 @@ assert.match(compiled.text, /\[CAUSAL REALISM CONSTRAINTS\]/);
 assert.match(compiled.text, /Keep the practical light response localized/);
 assert.doesNotMatch(compiled.text, /Invent wet reflections everywhere/);
 assert.equal(compiled.knowledgeFragments.length, 1);
+assert.equal(compiled.fragments.length, 7);
 assert.deepEqual(compiled.knowledgeFragments[0].provenance.ruleIds, ['ACTIVE_RULE']);
 assert.deepEqual(compiled.knowledgeFragments[0].provenance.sceneFacts, [
   'A visible practical light causes the effect.',
@@ -64,5 +65,6 @@ assert.deepEqual(compiled.knowledgeFragments[0].provenance.sceneFacts, [
 const noRules = compileNeutralPrompt(semantic, []);
 assert.doesNotMatch(noRules.text, /CAUSAL REALISM CONSTRAINTS/);
 assert.equal(noRules.knowledgeFragments.length, 0);
+assert.equal(noRules.fragments.length, 6);
 
 console.log('promptCompiler tests passed');
