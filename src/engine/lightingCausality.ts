@@ -58,7 +58,11 @@ export function deriveLightingCausality(input: LightingCausalityInput): Lighting
   const shadowDepth = clamp(input.shadowDepth, 0, 100);
   const isNight = timeOfDay === 'night';
   const isMidday = timeOfDay === 'midday';
-  const phoneOnly = lightingMode === 'إضاءة شاشة الهاتف فقط';
+  const legacyPhoneOnly = lightingMode === 'إضاءة شاشة الهاتف فقط';
+  const displayFlashOnly = lightingMode === 'فلاش الشاشة الأمامية فقط';
+  const displayFillCombined = lightingMode.includes('فلاش الشاشة الأمامية') && !displayFlashOnly;
+  const phoneOnly = legacyPhoneOnly || displayFlashOnly;
+  const isIndoorWhiteCeiling = /إضاءة سقف (دافئة 3000K|محايدة 4000K|أبيض 5000K|باردة 6500K)/.test(lightingMode);
   const isCarInterior = familyId === 'car' && !isOutdoor;
   const isCafeOrShop = includesAny(subScene, ['مقهى', 'محلات', 'بقالة', 'تجاري']);
 
@@ -68,14 +72,41 @@ export function deriveLightingCausality(input: LightingCausalityInput): Lighting
 
   if (phoneOnly) {
     primarySource = {
-      name: 'smartphone display glow',
+      name: displayFlashOnly ? 'front display flash / screen fill' : 'smartphone display glow',
       role: 'primary',
-      direction: 'from the phone plane toward the face, slightly below or near eye level depending on grip',
-      distanceBehavior: 'very short-range source approximately 35-50cm from the face',
-      contribution: 'localized facial illumination with rapid falloff toward ears, neck, torso, and room background',
-      physicalOrigin: 'the active OLED/LCD phone display held by the subject'
+      direction: 'broad near-axis illumination emitted by the phone display around the front camera toward the face',
+      distanceBehavior: 'near-field handheld source constrained by the resolved 40-60cm selfie geometry',
+      contribution: 'frontal facial and hand illumination with rapid falloff toward neck, torso, and room background; no invented point LED flash',
+      physicalOrigin: 'the illuminated smartphone display surrounding the front camera'
     };
     bounceSurfaces.push('small local bounce from shirt fabric and immediately adjacent bedding or wall only');
+  } else if (isIndoorWhiteCeiling && !isOutdoor) {
+    const temperature =
+      lightingMode.includes('3000K') ? '3000K warm white' :
+      lightingMode.includes('4000K') ? '4000K neutral white' :
+      lightingMode.includes('5000K') ? '5000K neutral-cool white' :
+      '6500K cool daylight white';
+
+    primarySource = {
+      name: `diffused indoor ceiling light (${temperature})`,
+      role: 'primary',
+      direction: 'downward from the installed ceiling fixture with broad room-scale spread',
+      distanceBehavior: 'room-scale local source with physically plausible distance falloff, occlusion, and wall/furniture bounce',
+      contribution: 'soft-to-moderate top-down facial modeling with realistic shadowing under brows, nose, chin, furniture, and nearby objects',
+      physicalOrigin: 'installed indoor LED ceiling fixture'
+    };
+    bounceSurfaces.push('off-white wall surfaces', 'ceiling plane', 'floor and nearby furniture');
+
+    if (displayFillCombined) {
+      secondarySources.push({
+        name: 'front display flash / screen fill',
+        role: 'secondary',
+        direction: 'broad near-axis fill from the phone display around the front camera',
+        distanceBehavior: 'short-range 40-60cm handheld source with rapid falloff behind the subject',
+        contribution: 'restrained frontal fill that lifts facial shadows without replacing the ceiling-light direction',
+        physicalOrigin: 'illuminated smartphone display surrounding the front camera'
+      });
+    }
   } else if (isNight && isOutdoor) {
     primarySource = {
       name: 'nearby municipal or building practical light',
@@ -237,7 +268,9 @@ export function deriveLightingCausality(input: LightingCausalityInput): Lighting
   } else if (isCarInterior) {
     shadowBehavior = 'window-shaped directional gradients with cabin occlusion, dashboard fill, and no uniform front-facing studio illumination';
   } else if (includesAny(lightingMode, ['فلورسنت', 'ممرات', 'سقف'])) {
-    shadowBehavior = 'soft downward ceiling-light occlusion in eye sockets, under nose, chin, and collar, with restrained multi-fixture overlap';
+    shadowBehavior = displayFillCombined
+      ? 'soft downward ceiling-light shadows with restrained near-axis display fill lifting the deepest facial shadows; preserve ceiling direction and avoid flat studio lighting'
+      : 'soft downward ceiling-light occlusion in eye sockets, under nose, chin, and collar, with restrained multi-fixture overlap';
   } else {
     shadowBehavior = 'directional but softened natural shadows consistent with the primary opening or practical source';
   }
@@ -250,6 +283,8 @@ export function deriveLightingCausality(input: LightingCausalityInput): Lighting
 
   const inverseSquareBehavior = phoneOnly
     ? 'apply strong near-field inverse-square intuition: small changes in phone-to-face distance materially change facial brightness, while room-scale illumination stays weak'
+    : isIndoorWhiteCeiling
+      ? 'apply physically plausible local-source distance falloff to the ceiling fixture and weaker reflected bounce; do not claim uniform brightness independent of distance'
     : isNight && !isOutdoor
       ? 'apply practical-light distance falloff to nearby surfaces; do not make distant walls as bright as the subject without an additional real source'
       : 'do not misuse inverse-square falloff for the sun; apply it only to local practical fixtures and reflected secondary light';
@@ -275,7 +310,13 @@ export function deriveLightingCausality(input: LightingCausalityInput): Lighting
     intensityGuard,
     phoneOnly
       ? 'background practical lights must remain off or negligible unless explicitly part of the selected lighting mode'
-      : 'secondary practicals may enrich the background but cannot override the primary subject exposure'
+      : 'secondary practicals may enrich the background but cannot override the primary subject exposure',
+    displayFlashOnly
+      ? 'front screen flash is a broad display source, never a separate point LED at the lens; do not force red-eye, starburst, circular catchlight, or blown-white highlights'
+      : 'no extra display-flash behavior unless explicitly selected',
+    isIndoorWhiteCeiling
+      ? 'color temperature and fixture geometry are separate: do not invent fluorescent flicker, buzzing, volumetric Tyndall beams, or Mie scattering unless independently justified'
+      : 'do not add indoor white-light fixture behavior outside the selected mode'
   ];
 
   const sourceSummary = [

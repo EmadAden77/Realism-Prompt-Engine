@@ -495,7 +495,7 @@ export function resolveScene(rawState: SceneState): ResolvedScene {
   }
 
   // Check & Resolve 3: Lighting Source Causality & Day/Night Conflicts
-  if (s.lightingMode === 'إضاءة شاشة الهاتف فقط') {
+  if (s.lightingMode === 'إضاءة شاشة الهاتف فقط' || s.lightingMode === 'فلاش الشاشة الأمامية فقط') {
     if (s.timeOfDay !== 'night') {
       issues.push({
         type: 'physical_impossibility',
@@ -577,7 +577,7 @@ export function resolveScene(rawState: SceneState): ResolvedScene {
   }
 
   // Check & Resolve 7: Couple lighting sliders to physically causal lighting modes.
-  if (s.lightingMode === 'إضاءة شاشة الهاتف فقط') {
+  if (s.lightingMode === 'إضاءة شاشة الهاتف فقط' || s.lightingMode === 'فلاش الشاشة الأمامية فقط') {
     if (s.lightingIntensity > 35) {
       issues.push({
         type: 'warning',
@@ -740,7 +740,7 @@ export function validateScene(inputState: SceneState | ResolvedScene): Validatio
       description: 'Solar daylight source specified during nighttime.'
     });
   }
-  if (state.lightingMode === 'إضاءة شاشة الهاتف فقط' && isDay) {
+  if ((state.lightingMode === 'إضاءة شاشة الهاتف فقط' || state.lightingMode === 'فلاش الشاشة الأمامية فقط') && isDay) {
     issues.push({
       type: 'contradiction',
       field: 'lightingMode',
