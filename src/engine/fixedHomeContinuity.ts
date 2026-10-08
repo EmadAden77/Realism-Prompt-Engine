@@ -1,4 +1,6 @@
 import type { SceneState } from './physicsEngine';
+import { getMicroLocation } from '../data/microLocations';
+import { isHomeYardMicroLocationId } from './homeYard';
 
 export type FixedHomeRoomId = 'bedroom' | 'living-room';
 
@@ -363,6 +365,11 @@ export function resolveHomeContinuity(
   state: SceneState
 ): HomeContinuityContext | null {
   if (!isFixedHomeFamily(state.sceneFamily)) return null;
+
+  if (state.sceneFamily === 'living-room') {
+    const microLocation = getMicroLocation('living-room', state.subScene);
+    if (microLocation && isHomeYardMicroLocationId(microLocation.id)) return null;
+  }
 
   const room = FIXED_HOME_V20.rooms[state.sceneFamily];
   const permanentAnchors = dedupe([

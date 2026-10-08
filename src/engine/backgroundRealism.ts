@@ -266,7 +266,9 @@ export function deriveBackgroundRealism(
   const baseBg = microLoc?.backgroundElements ?? [];
   const activityText = microLoc?.activity ?? '';
 
-  const isPrivateInterior = familyId === 'bedroom' || familyId === 'living-room';
+  const isPrivateInterior = familyId === 'bedroom' || (familyId === 'living-room' && !isOutdoor);
+  const isPrivateHomeYard = familyId === 'living-room' && isOutdoor;
+  const isPrivateHomeSpace = isPrivateInterior || isPrivateHomeYard;
   const isCarInterior = familyId === 'car' && !isOutdoor;
   const isCafe = containsAny(subScene, ['مقهى']);
   const isShop = containsAny(subScene, ['محلات', 'بقالة', 'تجاري']);
@@ -306,7 +308,7 @@ export function deriveBackgroundRealism(
   const environmentalSurfaces = baseBg.slice(0, surfaceLimit);
 
   const publicScene =
-    (!isPrivateInterior && isOutdoor) ||
+    (!isPrivateHomeSpace && isOutdoor) ||
     isMilitaryPublic ||
     isGymPublic;
 
@@ -335,7 +337,7 @@ export function deriveBackgroundRealism(
   }
 
   const explicitPrivateInteriorPeople =
-    isPrivateInterior &&
+    isPrivateHomeSpace &&
     backgroundMode !== 'off' &&
     backgroundHumans !== 'auto' &&
     backgroundHumans !== 'none';
@@ -398,7 +400,7 @@ export function deriveBackgroundRealism(
   }
 
   const defaultDisorder: BackgroundDisorderLevel =
-    familyId === 'saudi-outdoor' || familyId === 'gym' || familyId === 'military-base'
+    familyId === 'saudi-outdoor' || familyId === 'gym' || familyId === 'military-base' || isPrivateHomeYard
       ? 'light'
       : 'very-clean';
 

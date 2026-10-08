@@ -12,6 +12,7 @@ import {
   type HomeBackgroundClothing,
   type HomeBackgroundPeopleMode,
 } from './homeBackgroundPeople';
+import { HOME_SECTION_LABEL_AR } from './homeYard';
 import type { DerivedPhysicalState, SceneState } from './physicsEngine';
 
 export type SemanticSceneState = Omit<SceneState, 'realismStyle'> & {
@@ -33,7 +34,7 @@ const SCENE_FAMILY_LABELS: Record<string, string> = {
   'military-base': 'مبنى عمل عسكري',
   'saudi-outdoor': 'أماكن سعودية',
   car: 'السيارة',
-  'living-room': 'صالة منزلية',
+  'living-room': HOME_SECTION_LABEL_AR,
   bedroom: 'غرفة نوم',
   gym: 'نادي رياضي',
 };

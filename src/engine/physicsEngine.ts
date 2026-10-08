@@ -5,6 +5,7 @@
 // ============================================================================
 
 import { MICRO_LOCATIONS, getMicroLocation, MicroLocation, SceneFamilyId } from '../data/microLocations';
+import { compileHomeYardEnvironment, resolveHomeYardVisibility } from './homeYard';
 import { OUTFITS, OutfitItem } from '../data/clothingOutfits';
 import {
   deriveBackgroundRealism,
@@ -1007,6 +1008,19 @@ function calculateDetailedPhysicalState(
   const visibleVehicles = backgroundRealism.allowsVehicles
     ? [...backgroundRealism.vehicleBehavior]
     : [];
+
+  const yardVisibility = resolveHomeYardVisibility({
+    microLocationId: microLoc?.id,
+    framingClass,
+    cameraAngle: effectiveCameraAngle,
+    captureType: state.captureType,
+  });
+  if (yardVisibility) {
+    visibleEnvironment = compileHomeYardEnvironment(yardVisibility);
+    visibleVehicles.length = 0;
+    visibleVehicles.push(...yardVisibility.vehiclePrompt);
+    occlusions.push(...yardVisibility.geometryGuards);
+  }
 
   const motionBehavior = backgroundRealism.motionRules.join('; ')
     || 'static resting scene, zero abrupt motion blur';
