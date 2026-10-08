@@ -315,6 +315,103 @@ const referenceConflicts = (
   return results;
 };
 
+const sceneIntentConflicts = (
+  input: ConflictValidatorInput
+): UnifiedConflictResult[] => {
+  const state = input.manifest.resolved.state;
+  const visibleEnvironment = input.semantic.visibleEnvironment.toLowerCase();
+  const results: UnifiedConflictResult[] = [];
+
+  const explicitHomePeople =
+    (state.sceneFamily === 'living-room' || state.sceneFamily === 'bedroom') &&
+    state.homeBackgroundPeopleMode !== undefined &&
+    state.homeBackgroundPeopleMode !== 'none' &&
+    (state.homeBackgroundCount ?? 0) > 0;
+
+  if (explicitHomePeople) {
+    const density = input.manifest.resolved.physicalState.backgroundRealism?.humanDensity;
+    if (density === 'none') {
+      results.push({
+        ruleId: 'SCENE_INTENT_HOME_BACKGROUND_PEOPLE',
+        severity: 'error',
+        code: 'EXPLICIT_HOME_PEOPLE_ERASED',
+        message:
+          'User explicitly selected background people for a home scene, but the resolved background density became none.',
+        affectedFields: [
+          'homeBackgroundPeopleMode',
+          'homeBackgroundCount',
+          'backgroundHumans',
+        ],
+        source: 'resolved-scene',
+      });
+    }
+
+    if (!/user-selected home background people:/i.test(input.semantic.visibleEnvironment)) {
+      results.push({
+        ruleId: 'SCENE_INTENT_HOME_BACKGROUND_PROMPT',
+        severity: 'error',
+        code: 'EXPLICIT_HOME_PEOPLE_MISSING_FROM_PROMPT',
+        message:
+          'User-selected home background people were not preserved in the semantic environment prompt.',
+        affectedFields: [
+          'homeBackgroundPeopleMode',
+          'homeBackgroundCount',
+          'visibleEnvironment',
+        ],
+        source: 'resolved-scene',
+      });
+    }
+  }
+
+  if (state.sceneFamily === 'living-room') {
+    const majlisOnlyCue =
+      /majlis carpet|floor seating|traditional majlis sofa|brown beige sofa|dark red carpet|mabkhara|incense burner|misbaha/i;
+
+    if (majlisOnlyCue.test(input.semantic.visibleEnvironment)) {
+      results.push({
+        ruleId: 'SCENE_INTENT_LIVING_ROOM_TOPOLOGY',
+        severity: 'error',
+        code: 'LIVING_ROOM_MAJLIS_FURNITURE_LEAK',
+        message:
+          'Modern living-room scene contains furniture or decor reserved for a traditional majlis.',
+        affectedFields: ['sceneFamily', 'subScene', 'visibleEnvironment'],
+        source: 'resolved-scene',
+      });
+    }
+
+    if (!/modern saudi family living room|l-shaped grey fabric sectional/i.test(visibleEnvironment)) {
+      results.push({
+        ruleId: 'SCENE_INTENT_LIVING_ROOM_IDENTITY',
+        severity: 'error',
+        code: 'MODERN_LIVING_ROOM_IDENTITY_MISSING',
+        message:
+          'Living-room scene lost the canonical modern Saudi living-room identity.',
+        affectedFields: ['sceneFamily', 'subScene', 'visibleEnvironment'],
+        source: 'resolved-scene',
+      });
+    }
+  }
+
+  if (state.sceneFamily === 'bedroom') {
+    const livingRoomCue =
+      /l-shaped grey fabric sectional|55-inch television and low modern media-unit|light-grey rug placement under the seating/i;
+
+    if (livingRoomCue.test(input.semantic.visibleEnvironment)) {
+      results.push({
+        ruleId: 'SCENE_INTENT_BEDROOM_TOPOLOGY',
+        severity: 'error',
+        code: 'BEDROOM_LIVING_ROOM_FURNITURE_LEAK',
+        message:
+          'Bedroom scene contains fixed furniture reserved for the living-room topology.',
+        affectedFields: ['sceneFamily', 'subScene', 'visibleEnvironment'],
+        source: 'resolved-scene',
+      });
+    }
+  }
+
+  return results;
+};
+
 const negativeConflicts = (
   negative: CompiledNegativeConstraints
 ): UnifiedConflictResult[] =>
@@ -439,6 +536,7 @@ export function validateUnifiedConflicts(
   const results = dedupe([
     ...sceneResults,
     ...continuityConflicts(input.manifest),
+    ...sceneIntentConflicts(input),
     ...referenceConflicts(input),
     ...negativeConflicts(input.negative),
     ...promptValidationToConflicts(
