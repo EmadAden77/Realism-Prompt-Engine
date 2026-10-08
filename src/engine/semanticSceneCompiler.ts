@@ -246,6 +246,70 @@ export const EXPRESSIONS: FacialExpressionDefinition[] = [
   ...ADVANCED_FACIAL_EXPRESSIONS,
 ];
 
+const sanitizeExpressionIdentityClaims = (value: string): string =>
+  value
+    .replace(/facial skin microdetails with sebaceous filaments, mole, nasal and ear hair/gi, 'facial skin microdetails limited to reference-supported persistent traits')
+    .replace(/visible pores with asymmetric 3mm cheek mole/gi, 'visible pores with reference-supported skin marks only')
+    .replace(/visible 2mm nasal hair and natural ear hair/gi, 'reference-supported nasal and ear hair only')
+    .replace(/left eyebrow 3mm higher than right/gi, 'temporary mild eyebrow asymmetry without changing baseline eyebrow geometry')
+    .replace(/left eye 20% more squinted than right/gi, 'temporary mild asymmetric squint without changing baseline eye geometry')
+    .replace(/right nostril flared more than left/gi, 'temporary asymmetric alar flare without changing baseline nostril geometry')
+    .replace(/upper lip darker than lower lip/gi, 'reference-consistent natural lip pigmentation')
+    .replace(/natural non-bleached teeth with one crooked lower incisor/gi, 'natural non-bleached teeth with reference-consistent alignment')
+    .replace(/mole asymmetrical irregular border 3mm on cheek/gi, 'reference-supported skin mark only')
+    .replace(/asymmetrical mole irregular border 3mm diameter cheek/gi, 'reference-supported skin mark only')
+    .replace(/mole asymmetrical 3mm cheek/gi, 'reference-supported skin mark only')
+    .replace(/nose hair 2mm visible nostril ear hair/gi, 'nasal and ear hair only if visibly supported by reference')
+    .replace(/nose hair 2mm visible ear hair/gi, 'nasal and ear hair only if visibly supported by reference')
+    .replace(/left eyebrow 3mm higher(?: than right eyebrow)?/gi, 'reference-consistent natural eyebrow asymmetry')
+    .replace(/left eye 20% more squinted(?: than right eye)?/gi, 'temporary mild expression squint without altering reference eye geometry')
+    .replace(/right nostril flared more(?: than left nostril)?/gi, 'temporary alar flare asymmetry without altering baseline nostril geometry')
+    .replace(/upper lip darker pigmentation than lower/gi, 'reference-consistent lip pigmentation')
+    .replace(/upper darker than lower/gi, 'reference-consistent lip pigmentation')
+    .replace(/one crooked lower incisor/gi, 'reference-consistent tooth alignment')
+    .replace(/asymmetrical teeth not white/gi, 'natural reference-consistent teeth')
+    .replace(/\bsodium\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+const resolveExpressionDetails = (
+  expression: FacialExpressionDefinition,
+  muscleFatigue: string,
+  muscleFatigueEffects: string
+): string => {
+  const safePrompt = sanitizeExpressionIdentityClaims(expression.prompt);
+  const safeAnatomy = sanitizeExpressionIdentityClaims(expression.anatomy);
+  const identityGuard =
+    safePrompt !== expression.prompt || safeAnatomy !== expression.anatomy
+      ? ' Reference identity guard: persistent facial traits, skin marks, tooth alignment, baseline asymmetry, pigmentation, and grooming details must match the reference image exactly; never invent them from an expression preset.'
+      : '';
+
+  return `${safePrompt}. ${expression.detailLabel || 'Facial muscle anatomy'}: ${safeAnatomy}${identityGuard}${muscleFatigue !== 'none' ? `. Muscle fatigue & ocular state: ${muscleFatigueEffects}` : ''}`;
+};
+
+const resolveHairPhysicsPrompt = (
+  prompt: string,
+  lightingMode: string
+): string => {
+  if (!/شاشة الهاتف.*فقط|phone[- ]?screen.*only/i.test(lightingMode)) {
+    return prompt;
+  }
+
+  const safePrompt = prompt
+    .replace(/baby hairs sodium backlight orange rim translucent micro-shadows/gi, 'baby hairs with subtle micro-shadows caused only by the phone-screen light')
+    .replace(/sodium backlight orange rim translucent micro-shadows/gi, 'fine-strand micro-shadows caused only by the phone-screen light')
+    .replace(/hair backlit translucent tips orange rim/gi, 'fine hair strand tips')
+    .replace(/translucent orange rim/gi, 'fine-strand edge translucency')
+    .replace(/sodium backlight/gi, '')
+    .replace(/orange rim/gi, '')
+    .replace(/\bbacklit\b/gi, '')
+    .replace(/translucent tips/gi, 'fine strand tips')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  return `${safePrompt}. Phone-screen-only lighting guard: no sodium, rear, rim, or other secondary light may be invented.`;
+};
+
 /**
  * Platform-neutral semantic scene compiler.
  *
@@ -312,9 +376,11 @@ export const buildSemanticScene = (
     glassesText = 'eyewear naturally follows reference image (preserve glasses if worn in reference, do not add if absent)';
   }
 
-  const expressionDetails = expression 
-    ? `${expression.prompt}. ${expression.detailLabel || 'Facial muscle anatomy'}: ${expression.anatomy}${state.muscleFatigue !== 'none' ? `. Muscle fatigue & ocular state: ${derived.muscleFatigueEffects}` : ''}`
+  const expressionDetails = expression
+    ? resolveExpressionDetails(expression, state.muscleFatigue, derived.muscleFatigueEffects)
     : (state.muscleFatigue !== 'none' ? `Neutral resting expression with muscle fatigue: ${derived.muscleFatigueEffects}` : 'neutral resting expression');
+
+  const hairPhysicsPrompt = resolveHairPhysicsPrompt(hairPhysics.prompt, state.lightingMode);
 
   const microLoc = getMicroLocation(state.sceneFamily, state.subScene);
   const locationLabel = state.sceneFamily ? SCENE_FAMILY_LABELS[state.sceneFamily] || '' : '';
@@ -358,7 +424,7 @@ export const buildSemanticScene = (
     body: '193cm, 83kg, tall lean-athletic male build.',
     glasses: glassesText,
     captureMechanics,
-    hair: `${hair?.prompt}. Base hair physics: ${hair?.physics}. Scene hair condition: ${derived.hairCondition}. Hair physics preset: ${hairPhysics.prompt}.`,
+    hair: `${hair?.prompt}. Base hair physics: ${hair?.physics}. Scene hair condition: ${derived.hairCondition}. Hair physics preset: ${hairPhysicsPrompt}.`,
     expression: expressionDetails,
     outfit: `${attireBasePrompt}. Wear configuration: ${attire.prompt}`,
     outfitPhysics: [...attireBasePhysics, ...derived.fabricBehavior, ...attire.physics].join(', '),
