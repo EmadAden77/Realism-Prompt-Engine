@@ -1489,9 +1489,9 @@ export const MICRO_LOCATIONS: Record<SceneFamilyId, MicroLocation[]> = {
     {
       id: 'lr_center_room',
       labelAR: 'منتصف الصالة',
-      environmentPrompt: 'open central area of an authentic lived-in Saudi family living room, large patterned area rug over porcelain floor tiles, comfortable contemporary sofa set framing the room, neutral warm-beige painted walls, ceiling chandelier',
+      environmentPrompt: 'open central area of an authentic modern Saudi family living room with one coherent L-shaped grey fabric sectional, light-grey rug, simple wooden coffee table, off-white walls, beige glossy 60x60 floor tiles, and clean modern ceiling lighting',
       spatialBehavior: 'standing or seated centrally in the living room, panoramic domestic background showing room dimensions',
-      backgroundElements: ['patterned Persian or modern floor carpet', 'porcelain floor tiles around carpet edge', 'beige fabric sectional sofa', 'ceiling central light fixture with warm LED bulbs', 'wooden coffee table'],
+      backgroundElements: ['single coherent L-shaped grey fabric sectional sofa', 'light-grey rug under the seating zone', 'beige glossy 60x60 floor tiles around rug edge', 'clean modern ceiling lights', 'simple wooden coffee table with clear sofa spacing'],
       activity: 'quiet domestic family afternoon, subtle lived-in household objects',
       lightingHints: 'balanced warm overhead ambient room illumination mixed with soft daylight from side window',
       isOutdoor: false
@@ -1509,9 +1509,9 @@ export const MICRO_LOCATIONS: Record<SceneFamilyId, MicroLocation[]> = {
     {
       id: 'lr_front_sofa',
       labelAR: 'أمام الكنبة',
-      environmentPrompt: 'standing in the open space directly in front of the main three-seater sofa, low rectangular wooden coffee table in front, carpet underfoot, living room backdrop',
+      environmentPrompt: 'standing in the open space directly in front of the fixed L-shaped grey sectional sofa, simple low wooden coffee table with believable clearance, light-grey rug underfoot, modern living room backdrop',
       spatialBehavior: 'standing centered before the sofa, full living room layout visible behind',
-      backgroundElements: ['three-seater upholstered sofa', 'rectangular wooden coffee table with tea coaster', 'patterned floor rug', 'wall artwork or Arabic calligraphy plaque', 'corner side table'],
+      backgroundElements: ['fixed L-shaped grey fabric sectional', 'simple rectangular wooden coffee table', 'light-grey rug', 'off-white living-room wall', 'optional side-table edge only if inside FOV'],
       activity: 'casual home snapshot, relaxed domestic pause',
       lightingHints: 'even room illumination, natural soft shadows under coffee table and sofa base',
       isOutdoor: false
@@ -1569,9 +1569,9 @@ export const MICRO_LOCATIONS: Record<SceneFamilyId, MicroLocation[]> = {
     {
       id: 'lr_beside_coffee_table',
       labelAR: 'بجانب طاولة الصالة',
-      environmentPrompt: 'standing or seated near the central low living room coffee table, glass or polished wood table surface with decorative brass tray, ceramic incense burner (Mabkhara), small water bottle',
+      environmentPrompt: 'standing or seated near the simple central wooden living-room coffee table with physically believable clearance from the fixed grey sectional and only a few ordinary movable household objects',
       spatialBehavior: 'coffee table in immediate near-ground or side, authentic domestic scale and reach',
-      backgroundElements: ['low wooden coffee table', 'traditional brass or ceramic Mabkhara burner', 'acrylic tissue box cover', 'intricate carpet weave', 'sofa base'],
+      backgroundElements: ['simple low wooden coffee table', 'ordinary tissue box or water glass if causally present', 'light-grey rug texture', 'fixed grey sectional base'],
       activity: 'tea hospitality or relaxing at home, pleasant domestic fragrance atmosphere',
       lightingHints: 'warm ceiling chandelier light reflecting on polished table surface',
       isOutdoor: false
@@ -1629,9 +1629,9 @@ export const MICRO_LOCATIONS: Record<SceneFamilyId, MicroLocation[]> = {
     {
       id: 'lr_beside_single_armchair',
       labelAR: 'بجانب كرسي منفرد',
-      environmentPrompt: 'standing or resting an arm on a solitary upholstered accent armchair (single sofa), high tufted backrest, plush fabric, small side table with coaster',
+      environmentPrompt: 'standing beside one optional modern upholstered accent chair placed outside the fixed sectional footprint without intersecting the sofa or blocking the normal walking clearance',
       spatialBehavior: 'casual lean on armchair backrest or standing beside it, asymmetric furniture framing',
-      backgroundElements: ['tufted accent armchair with fabric texture', 'small wooden side table', 'living room carpet', 'wall picture frame', 'main sofa in background'],
+      backgroundElements: ['single modern accent chair if visible', 'small side table only if space permits', 'light-grey rug edge', 'fixed L-shaped grey sectional in background'],
       activity: 'relaxed conversation in living room, informal home posture',
       lightingHints: 'soft warm room light highlighting the tufted upholstery buttons and fabric weave',
       isOutdoor: false

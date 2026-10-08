@@ -51,8 +51,9 @@ const sofa = createSceneManifest(
 );
 const sofaEnv = sofa.resolved.physicalState.visibleEnvironment;
 assert.match(sofaEnv, /same fixed family living room/i);
-assert.match(sofaEnv, /L-shaped grey fabric sofa/i);
-assert.match(sofaEnv, /light-grey carpet/i);
+assert.match(sofaEnv, /single coherent L-shaped grey fabric sectional sofa footprint/i);
+assert.match(sofaEnv, /light-grey rug/i);
+assert.match(sofaEnv, /modern Saudi family living room/i);
 assert.doesNotMatch(
   sofaEnv,
   /embroidered decorative throw cushion|acrylic tissue box|Persian/i,

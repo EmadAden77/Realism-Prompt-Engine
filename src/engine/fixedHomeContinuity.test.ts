@@ -120,8 +120,8 @@ const livingRoom = createSceneManifest(
 );
 assert.equal(livingRoom.continuityContext?.roomId, 'living-room');
 assert(
-  livingRoom.continuityContext?.permanentAnchors.some(anchor => anchor.includes('L-shaped grey fabric sofa')),
-  'Living-room continuity must lock the grey L-shaped sofa'
+  livingRoom.continuityContext?.permanentAnchors.some(anchor => anchor.includes('single coherent L-shaped grey fabric sectional sofa footprint')),
+  'Living-room continuity must lock one coherent grey L-shaped sectional footprint'
 );
 assert(
   livingRoom.continuityContext?.permanentAnchors.some(anchor => anchor.includes('55-inch television')),
@@ -131,6 +131,18 @@ assert.notEqual(
   livingRoom.continuityContext?.continuityKey,
   bedroom.continuityContext?.continuityKey,
   'Different home rooms must have distinct continuity keys'
+);
+assert(
+  livingRoom.continuityContext?.permanentAnchors.some(anchor => anchor.includes('low modern media-unit')),
+  'Living-room continuity must keep the TV on one fixed modern media wall'
+);
+assert.match(
+  livingRoom.continuityContext?.visibleEnvironmentDescription || '',
+  /modern Saudi family living room/i
+);
+assert.match(
+  livingRoom.continuityContext?.visibleEnvironmentDescription || '',
+  /never a traditional majlis/i
 );
 
 const outdoor = resolveHomeContinuity({
