@@ -117,6 +117,11 @@ export interface SceneState {
   backgroundGeminiAssist?: boolean;
   backgroundGeminiAdvice?: BackgroundGeminiAdvice;
 
+  // Optional smart home-background people controls.
+  homeBackgroundPeopleMode?: 'none' | 'men' | 'women' | 'children' | 'mixed';
+  homeBackgroundCount?: number;
+  homeBackgroundClothing?: string[];
+
   // Gemini-assisted selfie camera direction. Local physics always validates/caps it.
   cameraAngleMode?: SelfieAngleMode;
   selfieAngleAdvice?: SelfieAngleAdvice;
