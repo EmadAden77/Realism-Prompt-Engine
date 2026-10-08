@@ -98,11 +98,12 @@ export const FIXED_HOME_V20: FixedHomeBlueprint = {
     'living-room': {
       roomId: 'living-room',
       permanentAnchors: [
-        'same L-shaped grey fabric sofa and orientation',
-        'same light-grey carpet placement',
-        'same 55-inch television and media position',
-        'same wooden coffee table',
+        'same single coherent L-shaped grey fabric sectional sofa footprint and orientation',
+        'same light-grey rug placement under the seating and coffee-table zone',
+        'same 55-inch television and low modern media-unit position on one fixed wall',
+        'same simple wooden coffee table with physically clear sofa clearance',
         'same white sheer curtain plus blackout curtain installation',
+        'same off-white walls and beige glossy 60x60 floor-tile family',
       ],
       wearAnchors: [
         'same restrained fabric pilling pattern on the grey sofa',
@@ -237,7 +238,7 @@ const selectLivingRoomVisibleAnchors = (
   );
 
   const sofaAnchors = permanentAnchors.filter(anchor =>
-    includesAny(anchor, ['L-shaped grey fabric sofa', 'light-grey carpet'])
+    includesAny(anchor, ['L-shaped grey fabric sectional sofa', 'light-grey rug'])
   );
   const sofaWear = wearAnchors.filter(anchor =>
     includesAny(anchor, ['fabric pilling', 'carpet edges'])
@@ -335,6 +336,9 @@ export function compileFixedHomeVisibleEnvironment(
 
   const parts = [
     `${roomLabel}; visibility profile: ${context.visibilityProfile}`,
+    ...(context.roomId === 'living-room'
+      ? ['room-style lock: modern Saudi family living room, never a traditional majlis; furniture is structural, not decorative; preserve one coherent sectional footprint and valid seating/support geometry']
+      : []),
     `visible fixed anchors: ${context.visiblePermanentAnchors.join('; ')}`,
   ];
 
