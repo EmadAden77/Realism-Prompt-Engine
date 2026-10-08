@@ -319,7 +319,7 @@ const SCENE_FAMILIES: Record<SceneFamilyId, {
     subScenes: MICRO_LOCATIONS['living-room'].map(m => m.labelAR),
     activities: getActivityOptions('living-room' as SceneFamilyId).map(item => item.labelAR),
     poses: getPoseOptions('living-room' as SceneFamilyId),
-    allowedLighting: ['ضوء نهاري طبيعي', 'إضاءة سقف', 'إنارة ليلية مختلطة', 'إضاءة شاشة الهاتف فقط'],
+    allowedLighting: ['ضوء نهاري طبيعي', 'إضاءة سقف دافئة 3000K', 'إضاءة سقف محايدة 4000K', 'إضاءة سقف أبيض 5000K', 'إضاءة سقف باردة 6500K', 'فلاش الشاشة الأمامية فقط', 'إضاءة سقف أبيض 5000K + فلاش الشاشة الأمامية', 'إنارة ليلية مختلطة'],
     environmentRealism: ['مرتبة', 'طبيعية', 'مستخدمة يوميًا']
   },
   'bedroom': {
@@ -327,7 +327,7 @@ const SCENE_FAMILIES: Record<SceneFamilyId, {
     subScenes: MICRO_LOCATIONS['bedroom'].map(m => m.labelAR),
     activities: getActivityOptions('bedroom' as SceneFamilyId).map(item => item.labelAR),
     poses: getPoseOptions('bedroom' as SceneFamilyId),
-    allowedLighting: ['ضوء نهاري طبيعي', 'إضاءة سقف', 'إضاءة أباجورة دافئة', 'إضاءة شاشة الهاتف فقط'],
+    allowedLighting: ['ضوء نهاري طبيعي', 'إضاءة سقف دافئة 3000K', 'إضاءة سقف محايدة 4000K', 'إضاءة سقف أبيض 5000K', 'إضاءة سقف باردة 6500K', 'فلاش الشاشة الأمامية فقط', 'إضاءة سقف أبيض 5000K + فلاش الشاشة الأمامية', 'إضاءة أباجورة دافئة'],
     environmentRealism: ['مرتبة', 'طبيعية', 'مستخدمة يوميًا']
   },
   'gym': {
