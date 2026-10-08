@@ -126,3 +126,28 @@ assert(parkingDecision.compositionGoal === 'background-priority', 'parking shoul
 assert(parkingDecision.humanBehavior.some(text => text.includes('parked car')), 'parking human behavior must be place-specific');
 
 console.log('✓ Military workplace micro-location regression suite passed.');
+
+
+console.log('▶ Home Living-Room Micro-Locations 1: expanded useful home coverage');
+const livingRoom = MICRO_LOCATIONS['living-room'];
+const requiredHomeLocations = [
+  'lr_home_foyer',
+  'lr_home_stairs',
+  'lr_dining_room',
+  'lr_open_kitchen',
+  'lr_home_office'
+];
+for (const id of requiredHomeLocations) {
+  assert(livingRoom.some(item => item.id === id), 'missing home living-room micro-location: ' + id);
+}
+assert(livingRoom.length >= 25, 'living-room must expose the expanded home location set');
+
+console.log('▶ Home Living-Room Micro-Locations 2: remain modern-home specific');
+const addedHomeText = livingRoom
+  .filter(item => requiredHomeLocations.includes(item.id))
+  .map(item => [item.labelAR, item.environmentPrompt, item.spatialBehavior, ...item.backgroundElements].join(' '))
+  .join(' ')
+  .toLowerCase();
+for (const forbidden of ['majlis carpet', 'floor seating', 'traditional majlis sofa', 'mabkhara', 'misbaha']) {
+  assert(!addedHomeText.includes(forbidden), 'modern home location leaked majlis-only cue: ' + forbidden);
+}

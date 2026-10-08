@@ -1483,7 +1483,7 @@ export const MICRO_LOCATIONS: Record<SceneFamilyId, MicroLocation[]> = {
   ],
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // 4. صالة منزلية (living-room) - EXACTLY 20
+  // 4. صالة منزلية (living-room) - 25 مواقع منزلية
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   'living-room': [
     {
@@ -1684,6 +1684,56 @@ export const MICRO_LOCATIONS: Record<SceneFamilyId, MicroLocation[]> = {
       backgroundElements: ['wall corner dividing living room and corridor', 'decorative framed wall mirror', 'multiple electrical light rocker switches', 'tile and carpet floor boundary', 'foyer arch'],
       activity: 'moving between domestic zones, natural home cadence',
       lightingHints: 'soft multi-directional room lighting with faint mirror reflection',
+      isOutdoor: false
+    },
+    {
+      id: 'lr_home_foyer',
+      labelAR: 'مدخل البيت الداخلي',
+      environmentPrompt: 'modern Saudi home entrance foyer connected naturally to the family living room, clean main-door interior face, slim console table, small wall mirror, shoe cabinet, off-white walls and beige glossy 60x60 floor tiles',
+      spatialBehavior: 'subject stands inside the home near the entrance threshold with a clear sightline toward the living room, preserving realistic doorway clearance and wall depth',
+      backgroundElements: ['interior face of main entrance door', 'slim console table', 'small wall mirror', 'closed shoe cabinet', 'beige glossy 60x60 floor tiles'],
+      activity: 'ordinary arrival or departure at home, keys or phone handled naturally without staged posing',
+      lightingHints: 'interior ceiling light with optional restrained daylight spill from the entrance only when the door geometry allows it',
+      isOutdoor: false
+    },
+    {
+      id: 'lr_home_stairs',
+      labelAR: 'عند درج المنزل',
+      environmentPrompt: 'modern two-storey Saudi home stair zone adjacent to the family living area, straight or L-turn residential staircase, safe handrail, off-white stairwell walls and beige stone or tiled treads',
+      spatialBehavior: 'subject stands beside the bottom landing or on a safe stationary step, with stair depth receding naturally behind and no impossible floating viewpoint',
+      backgroundElements: ['residential staircase', 'continuous handrail', 'visible stair risers and treads', 'landing wall', 'ceiling downlights'],
+      activity: 'pausing while moving between floors, natural hand near railing only when physically reachable',
+      lightingHints: 'ceiling or stairwell practical lights create a realistic vertical brightness gradient along the steps',
+      isOutdoor: false
+    },
+    {
+      id: 'lr_dining_room',
+      labelAR: 'غرفة الطعام',
+      environmentPrompt: 'modern Saudi family dining area connected to the home interior, rectangular six-seat dining table, simple upholstered dining chairs, restrained centerpiece, off-white walls and beige glossy floor tiles',
+      spatialBehavior: 'subject stands beside the dining table edge or sits on one valid chair with clear seat support, believable table clearance and no furniture intersection',
+      backgroundElements: ['rectangular dining table', 'six distinct dining chairs', 'simple centerpiece', 'wall-side serving console', 'ceiling pendant or downlights'],
+      activity: 'ordinary family meal preparation or quiet pause before dining, not a restaurant scene',
+      lightingHints: 'soft ceiling illumination centered over the dining zone with physically plausible falloff toward surrounding walls',
+      isOutdoor: false
+    },
+    {
+      id: 'lr_open_kitchen',
+      labelAR: 'المطبخ المفتوح',
+      environmentPrompt: 'modern open-plan Saudi home kitchen connected visibly to the living room, simple light cabinetry, stone countertop, integrated sink and ordinary household appliances, with no commercial-kitchen cues',
+      spatialBehavior: 'subject stands at the living-room side of the open kitchen boundary with counter depth and walking clearance preserved',
+      backgroundElements: ['light kitchen cabinetry', 'stone countertop', 'integrated sink', 'domestic refrigerator edge', 'open transition toward living room'],
+      activity: 'making coffee, getting water, or casually standing near the kitchen during normal home life',
+      lightingHints: 'ceiling kitchen light and living-room ambient light remain causally separated but naturally blend at the open-plan boundary',
+      isOutdoor: false
+    },
+    {
+      id: 'lr_home_office',
+      labelAR: 'غرفة مكتب منزلي',
+      environmentPrompt: 'compact modern home office inside the residence, single work desk, ergonomic chair, monitor or closed laptop, small shelving unit, off-white walls and restrained everyday cable clutter',
+      spatialBehavior: 'subject stands beside the desk or sits in the real office chair with valid seat support and desk clearance, never floating or intersecting the furniture',
+      backgroundElements: ['single work desk', 'ergonomic office chair', 'monitor or closed laptop', 'small shelving unit', 'restrained charging cables'],
+      activity: 'checking notes, working quietly, or pausing beside the desk in an ordinary home-office routine',
+      lightingHints: 'ceiling light or window light according to selected lighting mode; monitor glow remains weak unless explicitly active',
       isOutdoor: false
     }
   ],
