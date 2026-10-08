@@ -5,6 +5,13 @@ import {
   type FacialExpressionDefinition,
 } from '../data/facialExpressionLibrary';
 import { getHairPhysicsPreset } from '../data/hairPhysicsLibrary';
+import {
+  compileHomeBackgroundPeoplePrompt,
+  isHomeBackgroundScene,
+  resolveHomeBackgroundPeople,
+  type HomeBackgroundClothing,
+  type HomeBackgroundPeopleMode,
+} from './homeBackgroundPeople';
 import type { DerivedPhysicalState, SceneState } from './physicsEngine';
 
 export type SemanticSceneState = Omit<SceneState, 'realismStyle'> & {
@@ -412,6 +419,21 @@ export const buildSemanticScene = (
   if (physicalState?.backgroundRealism) {
     visibleEnvironmentText += ` Background control: humans=${physicalState.backgroundRealism.humanDensity}, vehicles=${physicalState.backgroundRealism.vehicleDensity}, disorder=${physicalState.backgroundRealism.disorderLevel}. User controls remain subject to physical FOV limits.`;
   }
+
+  if (isHomeBackgroundScene(state.sceneFamily)) {
+    const homeProfiles = resolveHomeBackgroundPeople(
+      state.homeBackgroundPeopleMode as HomeBackgroundPeopleMode | undefined,
+      state.homeBackgroundCount,
+      state.homeBackgroundClothing as HomeBackgroundClothing[] | undefined
+    );
+    const homePeoplePrompt = compileHomeBackgroundPeoplePrompt(homeProfiles);
+    if (homePeoplePrompt) {
+      visibleEnvironmentText += ` ${homePeoplePrompt}`;
+    } else if (state.homeBackgroundPeopleMode === 'none') {
+      visibleEnvironmentText += ' USER-SELECTED HOME BACKGROUND PEOPLE: none. Do not add background people.';
+    }
+  }
+
   visibleEnvironmentText += ` Authentic everyday Saudi life, strictly NO iconic landmarks or tourist stereotypes.`;
 
   const styleConstraintsList = [...derived.realismConstraints];

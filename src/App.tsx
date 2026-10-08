@@ -77,6 +77,14 @@ import {
   GroupSelfieRelationship
 } from './engine/groupSelfie';
 import { HAIR_PHYSICS_PRESETS } from './data/hairPhysicsLibrary';
+import {
+  HOME_BACKGROUND_CLOTHING_OPTIONS,
+  HOME_BACKGROUND_MODE_LABELS,
+  isHomeBackgroundScene,
+  resolveHomeBackgroundPersonKinds,
+  type HomeBackgroundClothing,
+  type HomeBackgroundPeopleMode,
+} from './engine/homeBackgroundPeople';
 
 // --- TYPES ---
 type CaptureType = 'front-selfie' | 'mirror-selfie' | 'third-person-candid';
@@ -149,6 +157,11 @@ interface SceneState {
   backgroundAutoAngle: boolean;
   backgroundGeminiAssist: boolean;
   backgroundGeminiAdvice?: BackgroundGeminiAdvice;
+
+  // Smart optional people controls for private home scenes.
+  homeBackgroundPeopleMode: HomeBackgroundPeopleMode;
+  homeBackgroundCount: number;
+  homeBackgroundClothing: HomeBackgroundClothing[];
 
   // Smart Xiaomi selfie camera director
   cameraAngleMode: SelfieAngleMode;
@@ -539,6 +552,9 @@ const DEFAULT_STATE: SceneState = {
   backgroundCompositionGoal: 'auto',
   backgroundAutoAngle: true,
   backgroundGeminiAssist: true,
+  homeBackgroundPeopleMode: 'none',
+  homeBackgroundCount: 0,
+  homeBackgroundClothing: [],
   cameraAngleMode: 'gemini-smart',
   groupSelfieEnabled: false,
   groupSelfieSize: 2,
@@ -2470,6 +2486,126 @@ export default function PhysFrameApp() {
                     ))}
                   </div>
 
+                  {isHomeBackgroundScene(state.sceneFamily) && (
+                    <div className="mb-3 rounded-xl border border-[var(--border)] bg-black/20 p-3">
+                      <div className="mb-2">
+                        <div className="text-[11px] font-bold text-white">ماذا تريد في الخلفية؟</div>
+                        <div className="text-[9px] text-[var(--text-muted)] mt-0.5">
+                          اختيارك للبشر صريح ولا يتحول إلى «بدون» بسبب الكادر؛ الفيزياء تقلل الظهور أو تستخدم الحجب فقط.
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-5 gap-1 mb-3">
+                        {(Object.entries(HOME_BACKGROUND_MODE_LABELS) as Array<[HomeBackgroundPeopleMode, string]>).map(([id, label]) => (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => {
+                              const currentCount = Math.max(1, state.homeBackgroundCount || 1);
+                              const density: BackgroundControlDensity =
+                                id === 'none'
+                                  ? 'none'
+                                  : currentCount >= 4
+                                    ? 'moderate'
+                                    : currentCount >= 2
+                                      ? 'light'
+                                      : 'sparse';
+
+                              setState(prev => ({
+                                ...prev,
+                                homeBackgroundPeopleMode: id,
+                                homeBackgroundCount: id === 'none' ? 0 : Math.max(1, prev.homeBackgroundCount || 1),
+                                homeBackgroundClothing: id === 'none'
+                                  ? []
+                                  : Array.from(
+                                      { length: Math.max(1, prev.homeBackgroundCount || 1) },
+                                      (_, index) => prev.homeBackgroundClothing?.[index] ?? 'auto'
+                                    ),
+                                backgroundMode: id === 'none' ? prev.backgroundMode : 'active',
+                                backgroundHumans: density,
+                                backgroundPresence: id === 'none' ? prev.backgroundPresence : 'visible',
+                                backgroundGeminiAdvice: undefined,
+                                selfieAngleAdvice: undefined,
+                              }));
+                            }}
+                            className={`py-2 rounded-lg text-[9px] font-bold border transition-colors ${(state.homeBackgroundPeopleMode ?? 'none') === id ? 'bg-[var(--accent)]/15 border-[var(--accent)] text-[var(--accent)]' : 'border-[var(--border)] text-[var(--text-muted)]'}`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {(state.homeBackgroundPeopleMode ?? 'none') !== 'none' && (
+                        <>
+                          <div className="mb-3">
+                            <label className="text-[10px] text-[var(--text-muted)] block mb-1">عدد الأشخاص</label>
+                            <select
+                              value={Math.max(1, state.homeBackgroundCount || 1)}
+                              onChange={e => {
+                                const count = Math.max(1, Math.min(5, Number(e.target.value)));
+                                const density: BackgroundControlDensity =
+                                  count >= 4 ? 'moderate' : count >= 2 ? 'light' : 'sparse';
+                                setState(prev => ({
+                                  ...prev,
+                                  homeBackgroundCount: count,
+                                  homeBackgroundClothing: Array.from(
+                                    { length: count },
+                                    (_, index) => prev.homeBackgroundClothing?.[index] ?? 'auto'
+                                  ),
+                                  backgroundMode: 'active',
+                                  backgroundHumans: density,
+                                  backgroundPresence: 'visible',
+                                  backgroundGeminiAdvice: undefined,
+                                  selfieAngleAdvice: undefined,
+                                }));
+                              }}
+                              className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white"
+                            >
+                              {[1, 2, 3, 4, 5].map(count => (
+                                <option key={count} value={count}>{count}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="space-y-2">
+                            {resolveHomeBackgroundPersonKinds(
+                              state.homeBackgroundPeopleMode ?? 'none',
+                              Math.max(1, state.homeBackgroundCount || 1)
+                            ).map((kind, index) => {
+                              const kindLabel = kind === 'man' ? 'رجل' : kind === 'woman' ? 'امرأة' : 'طفل';
+                              const clothing = state.homeBackgroundClothing?.[index] ?? 'auto';
+                              return (
+                                <div key={`${kind}-${index}`} className="grid grid-cols-[72px_1fr] gap-2 items-center">
+                                  <div className="text-[10px] font-bold text-white">{kindLabel} {index + 1}</div>
+                                  <select
+                                    value={clothing}
+                                    onChange={e => {
+                                      const next = [...(state.homeBackgroundClothing ?? [])];
+                                      next[index] = e.target.value as HomeBackgroundClothing;
+                                      setState(prev => ({
+                                        ...prev,
+                                        homeBackgroundClothing: next,
+                                      }));
+                                    }}
+                                    className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white"
+                                  >
+                                    {HOME_BACKGROUND_CLOTHING_OPTIONS[kind].map(option => (
+                                      <option key={option.id} value={option.id}>{option.labelAR}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          <div className="mt-3 text-[9px] leading-relaxed text-[#8FD29B]">
+                            Anti-cloning صارم: لا يُنسخ وجه الصورة المرجعية، ولا يُعاد استخدام وجه شخص خلفي لشخص آخر.
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-3 gap-2">
                     <div>
                       <label className="text-[10px] text-[var(--text-muted)] block mb-1">البشر</label>
@@ -2478,10 +2614,10 @@ export default function PhysFrameApp() {
                         onChange={e => updateBackgroundControls({
                           backgroundHumans: e.target.value as BackgroundControlDensity
                         })}
-                        disabled={state.backgroundMode === 'off'}
+                        disabled={state.backgroundMode === 'off' || isHomeBackgroundScene(state.sceneFamily)}
                         className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white disabled:opacity-40"
                       >
-                        <option value="auto">تلقائي</option>
+                        <option value="auto">{isHomeBackgroundScene(state.sceneFamily) ? 'من اختيار الخلفية المنزلية' : 'تلقائي'}</option>
                         <option value="none">بدون</option>
                         <option value="sparse">قليل</option>
                         <option value="light">خفيف</option>

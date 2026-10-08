@@ -334,12 +334,24 @@ export function deriveBackgroundRealism(
     }
   }
 
+  const explicitPrivateInteriorPeople =
+    isPrivateInterior &&
+    backgroundMode !== 'off' &&
+    backgroundHumans !== 'auto' &&
+    backgroundHumans !== 'none';
+
   let physicalHumanMax: BackgroundEntityDensity =
-    !publicScene || framingClass === 'tight'
-      ? 'none'
-      : framingClass === 'wide'
+    explicitPrivateInteriorPeople
+      ? framingClass === 'wide'
         ? 'moderate'
-        : 'light';
+        : framingClass === 'medium'
+          ? 'light'
+          : 'sparse'
+      : !publicScene || framingClass === 'tight'
+        ? 'none'
+        : framingClass === 'wide'
+          ? 'moderate'
+          : 'light';
 
   if (isPassage && familyId === 'saudi-outdoor') {
     autoHumanDensity = capDensity(autoHumanDensity, 'sparse');
@@ -353,8 +365,9 @@ export function deriveBackgroundRealism(
 
   if (groupSelfieEnabled) {
     const groupBackgroundCap: BackgroundEntityDensity =
-      groupSelfieSize >= 4 ? 'none' :
-      groupSelfieSize === 3 ? 'sparse' : physicalHumanMax;
+      groupSelfieSize >= 4
+        ? (explicitPrivateInteriorPeople ? 'sparse' : 'none')
+        : groupSelfieSize === 3 ? 'sparse' : physicalHumanMax;
     autoHumanDensity = capDensity(autoHumanDensity, groupBackgroundCap);
     physicalHumanMax = capDensity(physicalHumanMax, groupBackgroundCap);
   }

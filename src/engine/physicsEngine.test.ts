@@ -456,7 +456,7 @@ const tightForcedBackground: SceneState = {
   }
 };
 const resolvedTightForced = resolveScene(tightForcedBackground);
-assert(resolvedTightForced.physicalState.backgroundRealism.humanDensity === 'none', 'Tight private selfie must cap forced humans to none');
+assert(resolvedTightForced.physicalState.backgroundRealism.humanDensity === 'sparse', 'Tight private selfie must retain one sparse user-requested person instead of erasing the selection');
 assert(resolvedTightForced.physicalState.backgroundRealism.vehicleDensity === 'none', 'Tight private selfie must cap forced vehicles to none');
 assert(resolvedTightForced.physicalState.backgroundRealism.cappedByFraming, 'FOV cap must be reported when user asks for impossible density');
 
@@ -994,6 +994,34 @@ assert(
 assert(
   resolvedLivedInDisorder.physicalState.backgroundRealism.disorderLevel === 'moderate',
   'Lived-in disorder control should map to moderate irregularity when wide framing permits it'
+);
+
+console.log('▶ Test 44: Explicit home background people are capped, not erased');
+const explicitHomePeopleState: SceneState = {
+  ...streetWideState,
+  sceneFamily: 'living-room',
+  subScene: 'منتصف الصالة',
+  activity: 'جالس بهدوء',
+  framing: 'chest-up',
+  cameraAngle: 'slightly-off-center',
+  pose: 'جالس على الكنبة',
+  timeOfDay: 'night',
+  lightingMode: 'إضاءة سقف',
+  backgroundMode: 'active',
+  backgroundHumans: 'light',
+  backgroundPresence: 'visible',
+  homeBackgroundPeopleMode: 'men',
+  homeBackgroundCount: 2,
+  homeBackgroundClothing: ['thobe-white', 'casual-jeans-tee']
+};
+const resolvedExplicitHomePeople = resolveScene(explicitHomePeopleState);
+assert(
+  resolvedExplicitHomePeople.physicalState.backgroundRealism.humanDensity !== 'none',
+  'Explicit home people selection must never be silently converted to none'
+);
+assert(
+  resolvedExplicitHomePeople.physicalState.backgroundRealism.allowsHumans,
+  'Explicit home people selection must remain physically represented'
 );
 
 console.log('  ✓ Background Realism → Selfie Angle Link V2 regression suite passed!\n');
