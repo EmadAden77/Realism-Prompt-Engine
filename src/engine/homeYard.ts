@@ -130,7 +130,7 @@ export function resolveHomeYardVisibility(
     'parking-bay wear, tire traces and reflections appear only when that exact ground region is inside the frame',
     HOME_YARD_BLUEPRINT.vehicle.lightingState,
     selfie
-      ? 'use the existing Xiaomi 15 Ultra front-camera geometry and resolved 40-60cm handheld reach; never hardcode a 65cm selfie arm'
+      ? 'use the existing Xiaomi 15 Ultra front-camera geometry and resolved 40-60cm handheld reach; never exceed the resolved 60cm maximum'
       : 'do not inject selfie-arm mechanics into non-selfie captures',
   ];
 
