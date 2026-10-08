@@ -87,7 +87,12 @@ const skinDetailSemantic = buildSemanticScene(
   resolved.physicalState
 );
 assert.match(skinDetailSemantic.expression, /Skin physical detail/i);
-assert.match(skinDetailSemantic.expression, /3mm cheek mole/i);
+assert.match(skinDetailSemantic.expression, /reference-supported skin marks/i);
+assert.doesNotMatch(
+  skinDetailSemantic.expression,
+  /3mm cheek mole/i,
+  'Expression presets must not invent persistent skin marks'
+);
 
 const fullPresetSemantic = buildSemanticScene(
   { ...resolved.state, expression: 'fx_full' },
@@ -96,7 +101,12 @@ const fullPresetSemantic = buildSemanticScene(
 );
 assert.match(fullPresetSemantic.expression, /Combined facial physical details/i);
 assert.match(fullPresetSemantic.expression, /masseter bulging jaw clench/i);
-assert.match(fullPresetSemantic.expression, /one crooked lower incisor/i);
+assert.match(fullPresetSemantic.expression, /Reference identity guard/i);
+assert.doesNotMatch(
+  fullPresetSemantic.expression,
+  /one crooked lower incisor/i,
+  'Combined presets must preserve reference tooth alignment'
+);
 
 assert.match(semantic.identity, /Preserve exact facial identity/i);
 assert.doesNotMatch(
@@ -118,6 +128,24 @@ const hairPhysicsSemantic = buildSemanticScene(
 assert.match(hairPhysicsSemantic.hair, /2-3cm halo/i);
 assert.match(hairPhysicsSemantic.hair, /baby hairs/i);
 assert.match(hairPhysicsSemantic.hair, /natural everyday hair/i);
+
+const phoneOnlyHairState: SceneState = {
+  ...resolved.state,
+  lightingMode: 'إضاءة شاشة الهاتف فقط',
+  hairPhysicsPreset: 'hp03',
+};
+const resolvedPhoneOnlyHair = resolveScene(phoneOnlyHairState);
+const phoneOnlyHairSemantic = buildSemanticScene(
+  resolvedPhoneOnlyHair.state,
+  derived,
+  resolvedPhoneOnlyHair.physicalState
+);
+assert.match(phoneOnlyHairSemantic.hair, /phone-screen-only lighting guard/i);
+assert.doesNotMatch(
+  phoneOnlyHairSemantic.hair,
+  /sodium backlight|orange rim|\bbacklit\b/i,
+  'Phone-screen-only scenes must not inherit external hair-lighting effects'
+);
 
 assert.match(semantic.outfit, /burgundy/i);
 assert.match(semantic.poseAndContact, /walking at a relaxed everyday pace/i);
