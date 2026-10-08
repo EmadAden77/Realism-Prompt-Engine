@@ -226,4 +226,94 @@ assert.equal(
   'Already repaired prompt contradictions are corrections, not unresolved errors'
 );
 
+
+const explicitHomePeople = compileUnifiedPromptPipeline({
+  ...base,
+  sceneFamily: 'living-room',
+  subScene: 'منتصف الصالة',
+  activity: 'جالس بهدوء',
+  pose: 'جالس على الكنبة',
+  lightingMode: 'إضاءة سقف',
+  backgroundMode: 'active',
+  backgroundHumans: 'light',
+  backgroundPresence: 'visible',
+  homeBackgroundPeopleMode: 'men',
+  homeBackgroundCount: 2,
+  homeBackgroundClothing: ['thobe-white', 'casual-jeans-tee'],
+});
+assert.equal(
+  explicitHomePeople.diagnostics.conflictReport.errors.some(
+    item =>
+      item.code === 'EXPLICIT_HOME_PEOPLE_ERASED' ||
+      item.code === 'EXPLICIT_HOME_PEOPLE_MISSING_FROM_PROMPT'
+  ),
+  false,
+  'Explicit home background people must survive resolution and semantic compilation'
+);
+
+const erasedPeopleManifest = {
+  ...explicitHomePeople.manifest,
+  resolved: {
+    ...explicitHomePeople.manifest.resolved,
+    physicalState: {
+      ...explicitHomePeople.manifest.resolved.physicalState,
+      backgroundRealism: {
+        ...explicitHomePeople.manifest.resolved.physicalState.backgroundRealism,
+        humanDensity: 'none' as const,
+        allowsHumans: false,
+      },
+    },
+  },
+};
+const erasedPeopleReport = validateUnifiedConflicts({
+  rawState: explicitHomePeople.manifest.resolved.state,
+  manifest: erasedPeopleManifest,
+  semantic: explicitHomePeople.semantic,
+  negative: explicitHomePeople.negative,
+  inputValidation: explicitHomePeople.diagnostics.inputValidation,
+  resolvedValidation: explicitHomePeople.diagnostics.resolvedValidation,
+  chatgpt: explicitHomePeople.platforms.chatgpt.validation,
+  gemini: explicitHomePeople.platforms.gemini.validation,
+  midjourney: explicitHomePeople.platforms.midjourney.validation,
+  chatgptNegativePrompt: explicitHomePeople.platforms.chatgpt.negativePrompt,
+  geminiNegativePrompt: explicitHomePeople.platforms.gemini.negativePrompt,
+  midjourneyNegativePrompt: explicitHomePeople.platforms.midjourney.negativePrompt,
+  chatgptPrompt: explicitHomePeople.platforms.chatgpt.prompt,
+  geminiPrompt: explicitHomePeople.platforms.gemini.prompt,
+  midjourneyPrompt: explicitHomePeople.platforms.midjourney.prompt,
+});
+assert(
+  erasedPeopleReport.errors.some(item => item.code === 'EXPLICIT_HOME_PEOPLE_ERASED'),
+  'Validator must block silent erasure of explicitly selected home people'
+);
+
+const livingRoomLeakReport = validateUnifiedConflicts({
+  rawState: explicitHomePeople.manifest.resolved.state,
+  manifest: explicitHomePeople.manifest,
+  semantic: {
+    ...explicitHomePeople.semantic,
+    visibleEnvironment:
+      explicitHomePeople.semantic.visibleEnvironment +
+      ' traditional majlis sofa arrangement with dark red carpet and floor seating',
+  },
+  negative: explicitHomePeople.negative,
+  inputValidation: explicitHomePeople.diagnostics.inputValidation,
+  resolvedValidation: explicitHomePeople.diagnostics.resolvedValidation,
+  chatgpt: explicitHomePeople.platforms.chatgpt.validation,
+  gemini: explicitHomePeople.platforms.gemini.validation,
+  midjourney: explicitHomePeople.platforms.midjourney.validation,
+  chatgptNegativePrompt: explicitHomePeople.platforms.chatgpt.negativePrompt,
+  geminiNegativePrompt: explicitHomePeople.platforms.gemini.negativePrompt,
+  midjourneyNegativePrompt: explicitHomePeople.platforms.midjourney.negativePrompt,
+  chatgptPrompt: explicitHomePeople.platforms.chatgpt.prompt,
+  geminiPrompt: explicitHomePeople.platforms.gemini.prompt,
+  midjourneyPrompt: explicitHomePeople.platforms.midjourney.prompt,
+});
+assert(
+  livingRoomLeakReport.errors.some(
+    item => item.code === 'LIVING_ROOM_MAJLIS_FURNITURE_LEAK'
+  ),
+  'Validator must block majlis-only furniture from leaking into a modern living room'
+);
+
 console.log('conflictValidator tests passed');
