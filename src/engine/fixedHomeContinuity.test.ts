@@ -136,7 +136,10 @@ assert(
   livingRoom.continuityContext?.permanentAnchors.some(anchor => anchor.includes('low modern media-unit')),
   'Living-room continuity must keep the TV on one fixed modern media wall'
 );
-const livingRoomFragment = livingRoom.fragments.find(fragment => fragment.id === 'fixed-home-continuity');
+const livingRoomFragments = compileKnowledgeFragments(livingRoom.knowledgeDecisions);
+const livingRoomFragment = livingRoomFragments.find(
+  fragment => fragment.provenance.ruleIds.includes('V20_FIXED_HOME_CONTINUITY')
+);
 assert.match(livingRoomFragment?.text || '', /modern Saudi family living room/i);
 assert.match(livingRoomFragment?.text || '', /never a traditional majlis/i);
 
