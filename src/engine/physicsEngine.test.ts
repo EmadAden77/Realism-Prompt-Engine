@@ -456,7 +456,7 @@ const tightForcedBackground: SceneState = {
   }
 };
 const resolvedTightForced = resolveScene(tightForcedBackground);
-assert(resolvedTightForced.physicalState.backgroundRealism.humanDensity === 'none', 'Tight private selfie must cap forced humans to none');
+assert(resolvedTightForced.physicalState.backgroundRealism.humanDensity === 'sparse', 'Tight private selfie must retain one sparse user-requested person instead of erasing the selection');
 assert(resolvedTightForced.physicalState.backgroundRealism.vehicleDensity === 'none', 'Tight private selfie must cap forced vehicles to none');
 assert(resolvedTightForced.physicalState.backgroundRealism.cappedByFraming, 'FOV cap must be reported when user asks for impossible density');
 
