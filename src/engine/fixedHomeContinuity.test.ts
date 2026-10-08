@@ -138,7 +138,7 @@ assert(
 );
 const livingRoomFragment = livingRoom.fragments.find(fragment => fragment.id === 'fixed-home-continuity');
 assert.match(livingRoomFragment?.text || '', /modern Saudi family living room/i);
-assert.doesNotMatch(livingRoomFragment?.text || '', /traditional majlis/i);
+assert.match(livingRoomFragment?.text || '', /never a traditional majlis/i);
 
 const outdoor = resolveHomeContinuity({
   ...bedroomBase,
