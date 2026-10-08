@@ -1,3 +1,5 @@
+import { getMicroLocation } from '../data/microLocations';
+import { isHomeYardMicroLocationId } from './homeYard';
 import type { SceneManifest } from './causalPipeline';
 import type {
   PromptValidationResult,
@@ -363,7 +365,14 @@ const sceneIntentConflicts = (
     }
   }
 
-  if (state.sceneFamily === 'living-room') {
+  const sceneMicroLocation = state.sceneFamily
+    ? getMicroLocation(state.sceneFamily, state.subScene)
+    : undefined;
+  const isHomeYardScene = Boolean(
+    sceneMicroLocation && isHomeYardMicroLocationId(sceneMicroLocation.id)
+  );
+
+  if (state.sceneFamily === 'living-room' && !isHomeYardScene) {
     const majlisOnlyCue =
       /majlis carpet|floor seating|traditional majlis sofa|brown beige sofa|dark red carpet|mabkhara|incense burner|misbaha/i;
 
