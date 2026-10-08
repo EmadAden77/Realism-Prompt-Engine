@@ -85,6 +85,7 @@ import {
   type HomeBackgroundClothing,
   type HomeBackgroundPeopleMode,
 } from './engine/homeBackgroundPeople';
+import { HOME_SECTION_LABEL_AR } from './engine/homeYard';
 
 // --- TYPES ---
 type CaptureType = 'front-selfie' | 'mirror-selfie' | 'third-person-candid';
@@ -315,7 +316,7 @@ const SCENE_FAMILIES: Record<SceneFamilyId, {
     environmentRealism: ['مرتبة', 'طبيعية', 'مستخدمة يوميًا']
   },
   'living-room': {
-    labelAR: 'صالة منزلية',
+    labelAR: HOME_SECTION_LABEL_AR,
     subScenes: MICRO_LOCATIONS['living-room'].map(m => m.labelAR),
     activities: getActivityOptions('living-room' as SceneFamilyId).map(item => item.labelAR),
     poses: getPoseOptions('living-room' as SceneFamilyId),
