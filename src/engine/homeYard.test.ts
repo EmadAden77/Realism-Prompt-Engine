@@ -25,7 +25,7 @@ assert.equal(beside?.vehicleVisibility, 'full');
 assert.equal(beside?.visibleGroundEffects, true);
 assert.match(compileHomeYardEnvironment(beside!), /fixed parking bay/i);
 assert.match(compileHomeYardEnvironment(beside!), /40-60cm/i);
-assert.doesNotMatch(compileHomeYardEnvironment(beside!), /65cm selfie arm/i);
+assert.doesNotMatch(compileHomeYardEnvironment(beside!), /65cm/i);
 
 const tightFrontDoor = resolveHomeYardVisibility({
   microLocationId: 'hy_front_door',
