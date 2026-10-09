@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { validateUnifiedConflicts } from './conflictValidator';
+import { detectCarSelfieOpticalConflicts, validateUnifiedConflicts } from './conflictValidator';
 import { compileUnifiedPromptPipeline } from './unifiedPromptPipeline';
 import type { SceneState } from './physicsEngine';
 
@@ -315,5 +315,13 @@ assert(
   ),
   'Validator must block majlis-only furniture from leaking into a modern living room'
 );
+
+// Optical regression: explicit CGI-style blur is forbidden, but a negative
+// instruction mentioning the same phrase must not create a false alarm.
+const carSelfie = { sceneFamily: 'car' as const, captureType: 'front-selfie' as const };
+assert.equal(detectCarSelfieOpticalConflicts(carSelfie, 'Add fake bokeh to the cabin background.'), true);
+assert.equal(detectCarSelfieOpticalConflicts(carSelfie, 'No fake bokeh; preserve natural depth.'), false);
+assert.equal(detectCarSelfieOpticalConflicts(carSelfie, 'Natural depth and ordinary window light.'), false);
+assert.equal(detectCarSelfieOpticalConflicts({ ...carSelfie, captureType: 'third-person-candid' }, 'Add fake bokeh.'), false);
 
 console.log('conflictValidator tests passed');
