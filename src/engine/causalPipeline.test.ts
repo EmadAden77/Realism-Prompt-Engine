@@ -1,3 +1,4 @@
+import { resolveValidatedSmartAngle } from './selfieAngles';
 import { compileUnifiedPromptPipeline } from './unifiedPromptPipeline';
 import assert from 'node:assert/strict';
 import {
@@ -142,3 +143,39 @@ const noRimFromTemperature = compileUnifiedPromptPipeline({ ...baseState, lighti
 assert.ok(!noRimFromTemperature.neutral.text.includes('Back-facing fine strands'));
 const explicitBacklight = compileUnifiedPromptPipeline({ ...baseState, lightingMode: 'rear light behind head' });
 assert.ok(explicitBacklight.neutral.text.includes('Back-facing fine strands'));
+
+const noEvidenceAngle = resolveValidatedSmartAngle({ mode: 'auto' });
+assert.equal(noEvidenceAngle.captureType, null);
+assert.equal(noEvidenceAngle.status, 'insufficient-evidence');
+const knownMirror = resolveValidatedSmartAngle({
+  mode: 'auto', frontClearanceCm: 15, requiredFrontClearanceCm: 50,
+  mirrorPathConfirmed: true, photographerAvailable: false
+});
+assert.equal(knownMirror.captureType, 'mirror-selfie');
+const noPhotographer = resolveValidatedSmartAngle({
+  mode: 'auto', frontClearanceCm: 12, requiredFrontClearanceCm: 50,
+  mirrorPathConfirmed: false, photographerAvailable: false
+});
+assert.equal(noPhotographer.captureType, null);
+const manualAngle = resolveValidatedSmartAngle({
+  mode: 'manual', manualCapture: 'front-selfie',
+  frontClearanceCm: 70, requiredFrontClearanceCm: 50,
+  mirrorPathConfirmed: true
+});
+assert.equal(manualAngle.captureType, 'front-selfie');
+const rejectedManual = resolveValidatedSmartAngle({
+  mode: 'manual', manualCapture: 'front-selfie',
+  frontClearanceCm: 12, requiredFrontClearanceCm: 50,
+  mirrorPathConfirmed: true
+});
+assert.equal(rejectedManual.captureType, 'mirror-selfie');
+assert.ok(rejectedManual.decisionAuditTrail.some(text => text.includes('Manual selection rejected')));
+const angleManifest = createSceneManifest({
+  ...baseState,
+  validatedAngleEvidence: {
+    mode: 'auto', frontClearanceCm: 15, requiredFrontClearanceCm: 50,
+    mirrorPathConfirmed: true
+  }
+});
+assert.equal(angleManifest.resolved.state.captureType, 'mirror-selfie');
+assert.equal(angleManifest.angleDecision?.status, 'validated');
