@@ -267,3 +267,19 @@ export function compileNeutralPrompt(
     compression: compressed.stats,
   };
 }
+
+export type CausalEvidenceKind = 'input-fact' | 'geometric-inference' | 'unverified-assumption';
+export interface CausalLedgerEntry {
+  id: string; kind: CausalEvidenceKind; evidence: string[]; decision: string;
+}
+export function exportCausalAttestationLedger(
+  fragments: PromptFragment[],
+  angleAudit: string[] = []
+): CausalLedgerEntry[] {
+  return [
+    ...fragments.map(item => ({id:item.id,kind:'input-fact' as const,
+      evidence:[...item.provenance.sceneFacts,...item.provenance.ruleIds],decision:item.text})),
+    ...angleAudit.map((decision,index)=>({id:`angle-${index}`,kind:'geometric-inference' as const,
+      evidence:['camera feasibility ranking; validate source evidence separately'],decision}))
+  ];
+}
