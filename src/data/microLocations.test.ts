@@ -151,3 +151,14 @@ const addedHomeText = livingRoom
 for (const forbidden of ['majlis carpet', 'floor seating', 'traditional majlis sofa', 'mabkhara', 'misbaha']) {
   assert(!addedHomeText.includes(forbidden), 'modern home location leaked majlis-only cue: ' + forbidden);
 }
+
+console.log('▶ Saudi grocery light-profile regression');
+const baqala = MICRO_LOCATIONS['saudi-outdoor'].find(item => item.id === 'so_beside_baqala');
+assert(Boolean(baqala), 'neighborhood grocery entrance must exist');
+assert(Boolean(baqala?.lightingProfile), 'grocery must declare its actual lighting sources');
+assert(baqala!.lightingProfile!.cri === 'fixture-dependent', 'CRI must not be invented as a fixed location value');
+assert(baqala!.lightingProfile!.kelvinRange![0] < baqala!.lightingProfile!.kelvinRange![1], 'plausible fixture color temperatures must be a range');
+assert(/daylight/i.test(baqala!.lightingHints) && /fluorescent|LED/i.test(baqala!.lightingHints), 'grocery must describe mixed practical and exterior light');
+assert(!/studio lighting|beauty light|softbox/i.test(baqala!.lightingProfile!.source), 'grocery cannot invent photographic light equipment');
+assert(/glass/i.test(baqala!.lightingProfile!.materialResponse), 'grocery must model door-glass reflectance');
+assert(MICRO_LOCATIONS['saudi-outdoor'].length === 20, 'retrofitting the existing grocery must preserve the 20-site taxonomy');

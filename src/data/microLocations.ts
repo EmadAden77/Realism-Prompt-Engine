@@ -24,6 +24,14 @@ export interface MicroLocation {
   backgroundElements: string[];
   activity: string;
   lightingHints: string;
+  /** Optional grounded lighting/material data; no fixed Kelvin or CRI assumed for a location. */
+  lightingProfile?: {
+    source: string;
+    kelvinRange?: readonly [number, number];
+    cri?: 'fixture-dependent' | 'unknown';
+    spill: string;
+    materialResponse: string;
+  };
   isOutdoor: boolean;
   groupAR?: string;
   spaceType?: MicroLocationSpaceType;
@@ -144,11 +152,18 @@ export const MICRO_LOCATIONS: Record<SceneFamilyId, MicroLocation[]> = {
     {
       id: 'so_beside_baqala',
       labelAR: 'بجانب بقالة الحي',
-      environmentPrompt: 'small Saudi neighborhood grocery frontage, generic Arabic signage, stacked ordinary commercial elements like water bottle crates, glass entry door with beverage decals, and parked delivery car',
-      spatialBehavior: 'informal candid stance beside the grocery store entrance, ordinary authentic neighborhood life setting',
-      backgroundElements: ['neighborhood grocery Arabic signboard above door', 'stacked plastic drinking water crates by entrance wall', 'glass sliding grocery entrance with beverage stickers', 'concrete entrance ramp with metal handrail', 'compact delivery car parked at curb'],
-      activity: 'customer stepping out with grocery bag, everyday neighborhood routine',
-      lightingHints: 'fluorescent shop signage glow combined with ambient daylight or street lighting',
+      environmentPrompt: 'ordinary Saudi neighborhood grocery entrance with partly sticker-covered glazing, a modest generic Arabic sign, stacked bottled-water crates, tiled threshold, and visible but not overly clear refrigerated shelves behind the door; everyday shopfront, not a commercial photo shoot',
+      spatialBehavior: 'casual selfie or candid stance beside the entrance, with exterior daylight dominant outside and interior ceiling light visible only through the actual door opening; sticker-covered glass partially occludes interior details',
+      backgroundElements: ['generic Arabic neighborhood grocery sign above the entrance', 'stacked plastic drinking-water crates near the wall', 'glass entrance with beverage decals covering parts of the glazing', 'small tiled threshold and practical aluminum door frame', 'restrained reflections of the opposite street in unobstructed glass', 'refrigerated drinks visible only through uncovered door glass'],
+      activity: 'ordinary customer entering or leaving with a small shopping bag, without staged promotional posing',
+      lightingHints: 'daylight from the street competes with ordinary interior fluorescent/LED ceiling fixtures only when visible through the entrance; believable interior-exterior exposure contrast, weak glass reflections, and no invented studio lighting',
+      lightingProfile: {
+        source: 'real grocery ceiling fluorescent/LED fixtures plus available daylight at the entrance',
+        kelvinRange: [4000, 6500],
+        cri: 'fixture-dependent',
+        spill: 'interior practical spill fades at the doorway and cannot evenly illuminate the sunlit street',
+        materialResponse: 'glazing reflects the opposite street only at plausible angles; stickers block transmission locally; matte crates and tile respond differently from the glass'
+      },
       isOutdoor: true
     },
     {
