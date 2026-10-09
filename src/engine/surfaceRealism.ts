@@ -58,7 +58,7 @@ export function deriveSurfaceRealism(input: SurfaceRealismInput): SurfaceRealism
     'automotive glass and coated paint reflect actual nearby sources at their material-specific angles; never copy skin shading onto glazing'
   );
 
-  const skinResponse = phoneOnly
+  const baseSkinResponse = phoneOnly
     ? 'natural skin microtexture with pores and fine facial hair visible only on phone-facing planes; rapid highlight falloff across cheeks, ears, jaw and neck; no uniform beauty-light sheen'
     : harshSun
       ? 'natural skin microtexture with directional specular breakup on forehead, nose and cheekbone peaks, preserved pore contrast, restrained highlight clipping and non-uniform subsurface warmth'
@@ -67,6 +67,8 @@ export function deriveSurfaceRealism(input: SurfaceRealismInput): SurfaceRealism
   const ear = input.earTransmissionEvidence;
   const transmits = Boolean(ear?.sourceBehindEar && ear.earExposed && !ear.hairOccluded && ear.viewerOnOppositeSide && ear.tissuePathMm > 0 && ear.tissuePathMm < 5);
   if (transmits) consistencyGuards.push('Physically grounded restrained warm red translucency through the exposed ear rim only; no glowing nose or uniformly illuminated skin.');
+
+  const skinResponse = transmits ? baseSkinResponse + '; restrained warm red translucency through the exposed ear rim from verified transmitted light' : baseSkinResponse;
 
   let fabricResponse: string;
   if (input.clothingCondition === 'worn-all-day') {
