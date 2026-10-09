@@ -162,3 +162,9 @@ assert(/daylight/i.test(baqala!.lightingHints) && /fluorescent|LED/i.test(baqala
 assert(!/studio lighting|beauty light|softbox/i.test(baqala!.lightingProfile!.source), 'grocery cannot invent photographic light equipment');
 assert(/glass/i.test(baqala!.lightingProfile!.materialResponse), 'grocery must model door-glass reflectance');
 assert(MICRO_LOCATIONS['saudi-outdoor'].length === 20, 'retrofitting the existing grocery must preserve the 20-site taxonomy');
+
+console.log('▶ Conditional location wear invariants');
+assert(baqala!.wearProfile?.surfaceCondition === 'dry', 'grocery threshold must default dry');
+assert(baqala!.wearProfile!.supportedCues.some(item => /fingerprint/i.test(item)), 'wear must have a plausible touch source');
+assert(baqala!.wearProfile!.preconditions.some(item => /visible/i.test(item)), 'wear must depend on visibility');
+assert(baqala!.wearProfile!.unsupportedCues.some(item => /wet floor/i.test(item)), 'dry location must reject unsupported wet-floor claims');

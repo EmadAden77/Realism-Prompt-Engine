@@ -33,6 +33,13 @@ export interface MicroLocation {
     materialResponse: string;
   };
   isOutdoor: boolean;
+  /** Scene-specific wear cues are optional, never universal defects. */
+  wearProfile?: {
+    surfaceCondition: 'dry' | 'wet' | 'variable';
+    supportedCues: string[];
+    unsupportedCues: string[];
+    preconditions: string[];
+  };
   groupAR?: string;
   spaceType?: MicroLocationSpaceType;
   zone?: MicroLocationZone;
@@ -164,7 +171,13 @@ export const MICRO_LOCATIONS: Record<SceneFamilyId, MicroLocation[]> = {
         spill: 'interior practical spill fades at the doorway and cannot evenly illuminate the sunlit street',
         materialResponse: 'glazing reflects the opposite street only at plausible angles; stickers block transmission locally; matte crates and tile respond differently from the glass'
       },
-      isOutdoor: true
+      isOutdoor: true,
+      wearProfile: {
+        surfaceCondition: 'dry',
+        supportedCues: ['occasional fingerprint smudges on touched entrance glass', 'uneven existing beverage decals', 'light threshold wear from routine foot traffic'],
+        unsupportedCues: ['wet floor', 'standing puddles', 'water streaks on dry tiles'],
+        preconditions: ['door glass is actually visible', 'wear is confined to touched or frequently used surfaces']
+      }
     },
     {
       id: 'so_open_parking_lot',
