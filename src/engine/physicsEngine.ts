@@ -50,6 +50,27 @@ import type {
 
 // --- TYPES ---
 export type CaptureType = 'front-selfie' | 'mirror-selfie' | 'third-person-candid';
+
+/**
+ * Apparent optical path for an image in a plane mirror.
+ * Distances are measured along the actual reflected ray path, not inferred
+ * from camera type. The 2x shortcut is valid only for special geometry.
+ */
+export function resolveMirrorOpticalPath(input: {
+  cameraToMirrorCm: number;
+  mirrorToSubjectCm: number;
+}): { opticalPathCm: number; nearDoubleMirrorDistance: boolean } | null {
+  const { cameraToMirrorCm, mirrorToSubjectCm } = input;
+  if (![cameraToMirrorCm, mirrorToSubjectCm].every(x => Number.isFinite(x) && x > 0)) {
+    return null;
+  }
+  const opticalPathCm = cameraToMirrorCm + mirrorToSubjectCm;
+  return {
+    opticalPathCm,
+    nearDoubleMirrorDistance: Math.abs(cameraToMirrorCm - mirrorToSubjectCm) <= 1,
+  };
+}
+
 export type Framing = 'head-shoulders' | 'chest-up' | 'half-body';
 export type CameraAngle = 'eye-level' | 'slightly-high' | 'slightly-low' | 'slightly-off-center';
 export type TimeOfDay = 'morning' | 'midday' | 'afternoon' | 'sunset' | 'night';
@@ -862,10 +883,10 @@ function calculateDetailedPhysicalState(
     opticalPerspective = XIAOMI_15_ULTRA_FRONT_CAMERA_PROFILE.getPerspectiveDescription(distanceCm, framingClass);
   } else if (state.captureType === 'mirror-selfie') {
     distanceCm = 85;
-    cameraDistance = 'approx 80-95cm (camera-to-mirror-to-subject optical plane)';
+    cameraDistance = 'mirror-selfie reflection path: camera-to-mirror plus mirror-to-subject distance (do not assume fixed 2x path without geometry)';
     armReach = 'dominant hand visibly holding smartphone at mid-chest or upper-abdomen level aimed steadily at mirror surface';
     fieldOfView = 'standard smartphone main rear lens perspective (~24mm eq, ~68° horizontal FOV)';
-    opticalPerspective = 'rear camera optics through flat mirror: true reflective geometry, smartphone visibly grasped in hand partially occluding fingers in reflection';
+    opticalPerspective = 'rear camera optics through flat mirror: reflected subject appears at the sum of camera-to-mirror and mirror-to-subject optical distances; do not focus the reflection at the glass plane, and do not force background blur; smartphone visibly grasped in hand partially occluding fingers';
   } else {
     // third-person-candid
     distanceCm = 240;
