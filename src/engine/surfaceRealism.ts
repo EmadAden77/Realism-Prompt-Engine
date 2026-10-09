@@ -18,6 +18,7 @@ export interface SurfaceRealismInput {
   clothingCondition: 'crisp' | 'worn-all-day' | 'vintage-washed';
   atmosphericCondition: 'neutral' | 'high-humidity' | 'dusty-haze' | 'breezy';
   lighting: LightingCausalityState;
+  earTransmissionEvidence?: { sourceBehindEar: boolean; earExposed: boolean; hairOccluded: boolean; tissuePathMm: number; viewerOnOppositeSide: boolean; };
 }
 
 export interface SurfaceRealismState {
@@ -62,6 +63,10 @@ export function deriveSurfaceRealism(input: SurfaceRealismInput): SurfaceRealism
     : harshSun
       ? 'natural skin microtexture with directional specular breakup on forehead, nose and cheekbone peaks, preserved pore contrast, restrained highlight clipping and non-uniform subsurface warmth'
       : 'natural human skin microtexture with non-uniform pores, fine vellus hair, subtle regional oiliness and physically local highlight response; no waxy smoothing or uniform synthetic shine';
+
+  const ear = input.earTransmissionEvidence;
+  const transmits = Boolean(ear?.sourceBehindEar && ear.earExposed && !ear.hairOccluded && ear.viewerOnOppositeSide && ear.tissuePathMm > 0 && ear.tissuePathMm < 5);
+  if (transmits) consistencyGuards.push('Physically grounded restrained warm red translucency through the exposed ear rim only; no glowing nose or uniformly illuminated skin.');
 
   let fabricResponse: string;
   if (input.clothingCondition === 'worn-all-day') {
