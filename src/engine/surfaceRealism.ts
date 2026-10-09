@@ -48,6 +48,11 @@ export function deriveSurfaceRealism(input: SurfaceRealismInput): SurfaceRealism
   const phoneOnly = input.lighting.primarySource.name === 'smartphone display glow';
   const harshSun = input.lighting.primarySource.name.includes('midday sun');
 
+  consistencyGuards.push(
+    'human skin uses layered diffuse and restrained subsurface color response, not mirror-like automotive or glass Fresnel reflections',
+    'automotive glass and coated paint reflect actual nearby sources at their material-specific angles; never copy skin shading onto glazing'
+  );
+
   const skinResponse = phoneOnly
     ? 'natural skin microtexture with pores and fine facial hair visible only on phone-facing planes; rapid highlight falloff across cheeks, ears, jaw and neck; no uniform beauty-light sheen'
     : harshSun

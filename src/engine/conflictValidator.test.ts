@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { detectCarSelfieOpticalConflicts, detectConditionalWearConflict, validateUnifiedConflicts } from './conflictValidator';
+import { detectCarSelfieOpticalConflicts, detectConditionalWearConflict, detectArtificialBackgroundPattern, validateUnifiedConflicts } from './conflictValidator';
 import { compileUnifiedPromptPipeline } from './unifiedPromptPipeline';
 import type { SceneState } from './physicsEngine';
 
@@ -331,3 +331,9 @@ assert.equal(detectConditionalWearConflict(groceryWear, 'wet floor reflecting ce
 assert.equal(detectConditionalWearConflict(groceryWear, 'No wet floor, ordinary dry tile threshold'), false);
 assert.equal(detectConditionalWearConflict(groceryWear, 'fingerprints on the glass entrance door'), false);
 assert.equal(detectConditionalWearConflict(undefined, 'wet floor'), false);
+
+assert.deepEqual(detectArtificialBackgroundPattern('all pedestrians are looking at the camera'), ['BACKGROUND_UNIFORM_GAZE']);
+assert.deepEqual(detectArtificialBackgroundPattern('one pedestrian briefly glances at camera'), []);
+assert.deepEqual(detectArtificialBackgroundPattern('three cars parked neatly in marked bays', 'marked-bays'), []);
+assert.deepEqual(detectArtificialBackgroundPattern('three cloned cars at the informal curb', 'informal'), ['BACKGROUND_CLONED_VEHICLES']);
+assert.deepEqual(detectArtificialBackgroundPattern('no cloned cars at the informal curb', 'informal'), []);
