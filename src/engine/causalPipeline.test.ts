@@ -125,3 +125,10 @@ const coolCeiling = deriveCausalHairExpression({ ...baseState, lightingMode: '65
 assert.ok(!coolCeiling.hair.some(text => text.includes('fine hair shafts')));
 const harshSunEyes = deriveCausalHairExpression({ ...baseState, timeOfDay: 'midday', lightingMode: 'direct sunlight' });
 assert.ok(harshSunEyes.expression.some(text => text.includes('eyelid response')));
+
+const negatedRearLight = deriveCausalHairExpression({ ...baseState, lightingMode: 'no backlight, ambient ceiling light 6500K' });
+assert.ok(!negatedRearLight.hair.some(text => text.includes('fine hair shafts')));
+const negatedDirectSun = deriveCausalHairExpression({ ...baseState, timeOfDay: 'midday', lightingMode: 'without direct sunlight, open shade' });
+assert.ok(!negatedDirectSun.expression.some(text => text.includes('eyelid response')));
+const rearLightFinal = compileUnifiedPromptPipeline({ ...baseState, lightingMode: 'rear light behind head' });
+assert.ok(rearLightFinal.neutral.text.includes('fine hair shafts'));
