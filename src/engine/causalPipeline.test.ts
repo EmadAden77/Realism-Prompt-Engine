@@ -1,3 +1,4 @@
+import { compileUnifiedPromptPipeline } from './unifiedPromptPipeline';
 import assert from 'node:assert/strict';
 import {
   createSceneManifest,
@@ -109,3 +110,11 @@ const causalBreeze = deriveCausalHairExpression({ ...baseState, atmosphericCondi
 assert.ok(causalBreeze.hair.some(text => text.includes('breeze')));
 const causalMirror = deriveCausalHairExpression({ ...baseState, captureType: 'mirror-selfie' });
 assert.ok(causalMirror.hair.some(text => text.includes('planar mirror')));
+
+const selectedFace = deriveCausalHairExpression({ ...baseState, expression: 'fx02' });
+assert.ok(selectedFace.expression.some(rule => rule.includes('corrugator')));
+const selectedHair = deriveCausalHairExpression({ ...baseState, hairPhysicsPreset: 'hp01' });
+assert.ok(selectedHair.hair.some(rule => rule.includes('scalp')));
+const endToEnd = compileUnifiedPromptPipeline({ ...baseState, atmosphericCondition: 'breezy', expression: 'fx02' });
+assert.ok(endToEnd.neutral.text.includes('Loose exposed strands respond naturally to the breeze.'));
+assert.ok(endToEnd.neutral.text.includes('corrugator'));
