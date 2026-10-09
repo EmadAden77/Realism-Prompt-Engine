@@ -137,3 +137,8 @@ const frontalOnly = deriveCausalHairExpression({ ...baseState, lightingMode: 'fr
 assert.ok(!frontalOnly.hair.some(text => text.includes('Back-facing fine strands')));
 const noBacklightFinal = compileUnifiedPromptPipeline({ ...baseState, lightingMode: 'no backlight, white ceiling 6500K' });
 assert.ok(!noBacklightFinal.neutral.text.includes('Back-facing fine strands'));
+
+const noRimFromTemperature = compileUnifiedPromptPipeline({ ...baseState, lightingMode: '6500K cool white ceiling light' });
+assert.ok(!noRimFromTemperature.neutral.text.includes('Back-facing fine strands'));
+const explicitBacklight = compileUnifiedPromptPipeline({ ...baseState, lightingMode: 'rear light behind head' });
+assert.ok(explicitBacklight.neutral.text.includes('Back-facing fine strands'));
