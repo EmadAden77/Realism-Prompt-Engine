@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { detectCarSelfieOpticalConflicts, validateUnifiedConflicts } from './conflictValidator';
+import { detectCarSelfieOpticalConflicts, detectConditionalWearConflict, validateUnifiedConflicts } from './conflictValidator';
 import { compileUnifiedPromptPipeline } from './unifiedPromptPipeline';
 import type { SceneState } from './physicsEngine';
 
@@ -325,3 +325,9 @@ assert.equal(detectCarSelfieOpticalConflicts(carSelfie, 'Natural depth and ordin
 assert.equal(detectCarSelfieOpticalConflicts({ ...carSelfie, captureType: 'third-person-candid' }, 'Add fake bokeh.'), false);
 
 console.log('conflictValidator tests passed');
+
+const groceryWear = { wearProfile: { surfaceCondition: 'dry' as const } };
+assert.equal(detectConditionalWearConflict(groceryWear, 'wet floor reflecting ceiling lights'), true);
+assert.equal(detectConditionalWearConflict(groceryWear, 'No wet floor, ordinary dry tile threshold'), false);
+assert.equal(detectConditionalWearConflict(groceryWear, 'fingerprints on the glass entrance door'), false);
+assert.equal(detectConditionalWearConflict(undefined, 'wet floor'), false);
