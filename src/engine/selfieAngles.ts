@@ -575,6 +575,9 @@ export interface SmartAngleEvidence {
   minimumFrontClearanceCm?: number;
   independentPhotographer?: boolean;
   wetGroundVisible?: boolean;
+  tripodAvailable?: boolean;
+  manualCaptureType?: SmartCapture;
+  mirrorGeometry?: { cameraToMirrorCm: number; mirrorToFaceCm: number; halfWidthCm: number; lateralFaceOffsetCm: number; occluded: boolean };
 }
 
 export type SmartCapture = 'front-selfie' | 'mirror-selfie' | 'third-person-candid';
@@ -617,4 +620,43 @@ export function rankSmartAngles(evidence: SmartAngleEvidence): SmartAngleRanking
   }
   return options.filter(item => Number.isFinite(item.score))
     .sort((a, b) => b.score - a.score);
+}
+
+export interface FinalSmartAngleDecision {
+  captureType: SmartCapture | null;
+  status: 'validated' | 'insufficient-evidence';
+  rankedCandidates: Array<SmartAngleRanking & { feasible: boolean }>;
+  decisionAuditTrail: string[];
+}
+
+/** One pass: reject unsupported capture geometry, rank feasible candidates, record reasons. */
+export function finalizeSmartAngle(evidence: SmartAngleEvidence): FinalSmartAngleDecision {
+  const g = evidence.mirrorGeometry;
+  const mirrorGeometryValid = !!g && [g.cameraToMirrorCm, g.mirrorToFaceCm, g.halfWidthCm, g.lateralFaceOffsetCm]
+    .every(value => Number.isFinite(value) && value > 0) &&
+    !g.occluded && g.lateralFaceOffsetCm <= g.halfWidthCm;
+  const mirrorReady = evidence.mirrorVisible === true &&
+    evidence.mirrorPathObstructed === false && mirrorGeometryValid;
+  const frontReady = evidence.cameraClearanceCm !== undefined &&
+    evidence.minimumFrontClearanceCm !== undefined &&
+    evidence.cameraClearanceCm >= evidence.minimumFrontClearanceCm;
+  const candidReady = evidence.independentPhotographer === true || evidence.tripodAvailable === true;
+  const candidates: Array<SmartAngleRanking & { feasible: boolean }> = [
+    { captureType: 'front-selfie', score: 50 - (evidence.spaceWidthMeters !== undefined && evidence.spaceWidthMeters <= 1.2 ? (evidence.aisleOrientation === 'transverse' ? 40 : 15) : 0), feasible: frontReady, reasons: [frontReady ? 'measured front clearance sufficient' : 'front clearance unverified or insufficient'] },
+    { captureType: 'mirror-selfie', score: 60, feasible: mirrorReady, reasons: [mirrorReady ? 'visible unoccluded mirror with bounded geometric path' : 'mirror reflection geometry missing or obstructed'] },
+    { captureType: 'third-person-candid', score: 55 + (evidence.wetGroundVisible ? 15 : 0), feasible: candidReady, reasons: [candidReady ? 'independent camera support confirmed' : 'no photographer or camera support'] },
+  ];
+  const ranked = candidates.filter(c => c.feasible && c.score > 0).sort((a, b) => b.score - a.score);
+  const chosen = evidence.mode === 'manual' && evidence.manualCaptureType
+    ? ranked.find(c => c.captureType === evidence.manualCaptureType) ?? null
+    : ranked[0] ?? null;
+  return {
+    captureType: chosen?.captureType ?? null,
+    status: chosen ? 'validated' : 'insufficient-evidence',
+    rankedCandidates: candidates,
+    decisionAuditTrail: [
+      ...candidates.map(c => c.captureType + ': score=' + c.score + ', feasible=' + c.feasible + ', ' + c.reasons.join('; ')),
+      evidence.mode === 'manual' && evidence.manualCaptureType && !chosen ? 'manual selection rejected or insufficient evidence' : 'single-pass selection completed'
+    ],
+  };
 }
