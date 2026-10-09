@@ -118,3 +118,10 @@ assert.ok(selectedHair.hair.some(rule => rule.includes('scalp')));
 const endToEnd = compileUnifiedPromptPipeline({ ...baseState, atmosphericCondition: 'breezy', expression: 'fx02' });
 assert.ok(endToEnd.neutral.text.includes('Loose exposed strands respond naturally to the breeze.'));
 assert.ok(endToEnd.neutral.text.includes('corrugator'));
+
+const rearLitHair = deriveCausalHairExpression({ ...baseState, lightingMode: 'backlit rim light 6500K' });
+assert.ok(rearLitHair.hair.some(text => text.includes('fine hair shafts')));
+const coolCeiling = deriveCausalHairExpression({ ...baseState, lightingMode: '6500K ceiling light' });
+assert.ok(!coolCeiling.hair.some(text => text.includes('fine hair shafts')));
+const harshSunEyes = deriveCausalHairExpression({ ...baseState, timeOfDay: 'midday', lightingMode: 'direct sunlight' });
+assert.ok(harshSunEyes.expression.some(text => text.includes('eyelid response')));
