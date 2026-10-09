@@ -991,6 +991,31 @@ app.post('/api/ai/enhance-prompt', async (req, res) => {
   const basePrompt = req.body?.basePrompt || '';
   const targetEngine = req.body?.targetEngine || 'chatgpt';
 
+  // Recompute the canonical decision on the server. The client cannot attest to readiness.
+  if (targetEngine !== 'chatgpt' && targetEngine !== 'gemini') {
+    return res.status(400).json({ error: 'Unsupported prompt target' });
+  }
+  if (!req.body?.sceneState || typeof basePrompt !== 'string') {
+    return res.status(422).json({ error: 'Scene evidence and prompt are required' });
+  }
+  try {
+    // Lazy import preserves the startup boundary for unrelated API routes.
+    const { compileUnifiedPromptPipeline } = await import('./src/engine/unifiedPromptPipeline.ts');
+    const pipeline = compileUnifiedPromptPipeline(req.body.sceneState);
+    if (!pipeline.diagnostics.anglePromptReady || !pipeline.diagnostics.isValid) {
+      return res.status(422).json({
+        error: 'Scene is not ready for prompt enhancement',
+        reasons: pipeline.diagnostics.angleBlockingReasons,
+      });
+    }
+    if (basePrompt !== pipeline.platforms[targetEngine].prompt) {
+      return res.status(422).json({ error: 'Prompt does not match the validated scene' });
+    }
+  } catch (err) {
+    console.warn('Prompt readiness verification failed:', err);
+    return res.status(422).json({ error: 'Could not verify camera geometry and prompt integrity' });
+  }
+
   try {
     const response = await callGeminiWithFallback({
       preferredModels: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
