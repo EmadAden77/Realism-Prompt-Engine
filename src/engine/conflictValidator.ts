@@ -472,6 +472,52 @@ const crossPlatformConflicts = (
   return results;
 };
 
+/**
+ * Reject explicit simulated/cinematic background separation in a car front selfie.
+ * This is a consistency rule, not a depth-of-field calculation: equivalent focal
+ * length alone cannot determine optical DOF without sensor and focus geometry.
+ * Negative instructions must not trigger positive-intent conflicts.
+ */
+export function detectCarSelfieOpticalConflicts(
+  scene: Pick<SceneState, 'sceneFamily' | 'captureType'>,
+  prompt: string
+): boolean {
+  if (scene.sceneFamily !== 'car' || scene.captureType !== 'front-selfie') return false;
+
+  const segments = prompt.split(/[.;\n]+/);
+  const artifact = /\b(?:fake bokeh|cinematic (?:background )?blur|extreme shallow depth of field|DSLR (?:extreme )?shallow depth of field)\b/i;
+  const negation = /\b(?:no|without|avoid|exclude|reject|never|forbid|prohibit|prevent|not|absence of|do not|don't)\b/i;
+
+  return segments.some(segment => {
+    const found = artifact.exec(segment);
+    if (!found) return false;
+    const prefix = segment.slice(Math.max(0, found.index - 70), found.index);
+    return !negation.test(prefix);
+  });
+}
+
+const opticalConflicts = (input: ConflictValidatorInput): UnifiedConflictResult[] => {
+  const state = input.manifest.resolved.state;
+  const prompts = [
+    ['chatgpt-prompt', input.chatgptPrompt],
+    ['gemini-prompt', input.geminiPrompt],
+    ['midjourney-prompt', input.midjourneyPrompt],
+  ] as const;
+
+  return prompts.flatMap(([source, prompt]) =>
+    detectCarSelfieOpticalConflicts(state, prompt)
+      ? [{
+          ruleId: 'OPTICAL_CAR_SELFIE_ARTIFICIAL_BLUR',
+          severity: 'error' as const,
+          code: 'CAR_SELFIE_ARTIFICIAL_BOKEH',
+          message: 'Car front selfie requests artificial cinematic/DSLR blur; preserve camera-consistent natural depth instead.',
+          affectedFields: ['captureType', 'sceneFamily'],
+          source,
+        }]
+      : []
+  );
+};
+
 const dedupe = (
   results: UnifiedConflictResult[]
 ): UnifiedConflictResult[] => {
@@ -546,6 +592,7 @@ export function validateUnifiedConflicts(
     ...sceneResults,
     ...continuityConflicts(input.manifest),
     ...sceneIntentConflicts(input),
+    ...opticalConflicts(input),
     ...referenceConflicts(input),
     ...negativeConflicts(input.negative),
     ...promptValidationToConflicts(
