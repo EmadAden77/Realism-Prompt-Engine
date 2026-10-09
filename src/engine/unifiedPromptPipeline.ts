@@ -275,6 +275,14 @@ export function compileUnifiedPromptPipeline(
 
   const anglePromptReady = manifest.angleDecision?.status !== 'insufficient-evidence';
   const angleBlockingReasons = anglePromptReady ? [] : ['No verified camera geometry available'];
+  if (!anglePromptReady) {
+    neutral.text = '';
+    for (const platform of [chatgpt, gemini, midjourney]) {
+      platform.prompt = '';
+      platform.rawPrompt = '';
+      platform.negativePrompt = '';
+    }
+  }
 
   const conflictReport = validateUnifiedConflicts({
     rawState,
@@ -333,6 +341,9 @@ export function validateExternalPromptCandidate(
   target: UnifiedPromptTarget,
   candidatePrompt: string
 ): PlatformPromptResult {
+  if (!pipeline.diagnostics.anglePromptReady) {
+    throw new Error('Camera evidence insufficient: prompt export blocked');
+  }
   const negative = compileNegativeConstraints(
     pipeline.manifest.resolved.state,
     pipeline.semantic,
