@@ -191,4 +191,62 @@ assert.equal(
   'Outfit changes must not replace environment geometry through the unified pipeline'
 );
 
+
+assert.equal(
+  pipeline.spatialPlan.backgroundCapacity,
+  pipeline.manifest.resolved.physicalState.backgroundRealism.visibilityClass,
+  'Planner must reuse the canonical visibility decision'
+);
+assert.equal(pipeline.spatialPlan.regions[0].role, 'subject');
+assert.match(pipeline.semantic.visibleEnvironment, /Spatial composition:/);
+assert.match(pipeline.platforms.gemini.prompt, /Spatial composition:/);
+
+const closeSpatial = compileUnifiedPromptPipeline({
+  ...base,
+  framing: 'head-shoulders',
+  backgroundHumans: 'high',
+  backgroundVehicles: 'high',
+});
+assert.match(closeSpatial.spatialPlan.promptInstruction, /narrow areas actually visible/);
+assert.equal(
+  closeSpatial.spatialPlan.regions.find(region => region.role === 'near-background')?.visibility,
+  'limited',
+  'Tight selfies must not promise an expansive visible background'
+);
+assert.equal(
+  closeSpatial.spatialPlan.regions.some(region => region.role === 'far-background'),
+  false
+);
+
+const wideSpatial = compileUnifiedPromptPipeline({
+  ...base,
+  framing: 'half-body',
+  cameraAngle: 'slightly-off-center',
+  backgroundAutoAngle: false,
+  backgroundPresence: 'visible',
+});
+assert.match(wideSpatial.spatialPlan.promptInstruction, /slightly off-center/);
+assert.equal(wideSpatial.spatialPlan.regions[0].visibility, 'dominant');
+
+const mirrorSpatial = compileUnifiedPromptPipeline({
+  ...base,
+  sceneFamily: 'bedroom',
+  subScene: 'بجانب السرير',
+  captureType: 'mirror-selfie',
+  lightingMode: 'إضاءة أباجورة دافئة',
+});
+assert.match(mirrorSpatial.spatialPlan.promptInstruction, /one coherent flat mirror plane/);
+assert.doesNotMatch(mirrorSpatial.spatialPlan.promptInstruction, /outside the direct selfie image/);
+
+assert.deepEqual(
+  repeated.spatialPlan,
+  pipeline.spatialPlan,
+  'Spatial composition must be deterministic for identical scene settings'
+);
+assert.deepEqual(
+  outfitChanged.spatialPlan,
+  pipeline.spatialPlan,
+  'Changing outfit cannot change spatial composition'
+);
+
 console.log('unifiedPromptPipeline tests passed');

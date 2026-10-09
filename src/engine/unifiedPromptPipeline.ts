@@ -1,4 +1,5 @@
 import { createSceneManifest, type SceneManifest } from './causalPipeline';
+import { planSpatialComposition, type SpatialCompositionPlan } from './spatialCompositionPlanner';
 import {
   validatePrompt,
   validateScene,
@@ -55,6 +56,7 @@ export interface UnifiedPromptDiagnostics {
 
 export interface UnifiedPromptPipelineResult {
   manifest: SceneManifest;
+  spatialPlan: SpatialCompositionPlan;
   semantic: SemanticPromptScene;
   neutral: CompiledNeutralPrompt;
   negative: CompiledNegativeConstraints;
@@ -189,6 +191,13 @@ export function compileUnifiedPromptPipeline(
     resolved.physicalState
   );
 
+  // Build one qualitative spatial plan from the canonical resolved geometry.
+  // Reuse existing FOV/occlusion decisions instead of creating another solver.
+  const spatialPlan = planSpatialComposition(resolved.state, resolved.physicalState);
+  semantic.visibleEnvironment = [semantic.visibleEnvironment, spatialPlan.promptInstruction]
+    .filter(Boolean)
+    .join(' ');
+
   const neutral = compileNeutralPrompt(
     semantic,
     manifest.knowledgeDecisions
@@ -287,6 +296,7 @@ export function compileUnifiedPromptPipeline(
 
   return {
     manifest,
+    spatialPlan,
     semantic,
     neutral,
     negative,
