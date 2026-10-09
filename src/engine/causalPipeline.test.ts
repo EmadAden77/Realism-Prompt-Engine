@@ -120,15 +120,20 @@ assert.ok(endToEnd.neutral.text.includes('Loose exposed strands respond naturall
 assert.ok(endToEnd.neutral.text.includes('corrugator'));
 
 const rearLitHair = deriveCausalHairExpression({ ...baseState, lightingMode: 'backlit rim light 6500K' });
-assert.ok(rearLitHair.hair.some(text => text.includes('fine hair shafts')));
+assert.ok(rearLitHair.hair.some(text => text.includes('Back-facing fine strands')));
 const coolCeiling = deriveCausalHairExpression({ ...baseState, lightingMode: '6500K ceiling light' });
-assert.ok(!coolCeiling.hair.some(text => text.includes('fine hair shafts')));
+assert.ok(!coolCeiling.hair.some(text => text.includes('Back-facing fine strands')));
 const harshSunEyes = deriveCausalHairExpression({ ...baseState, timeOfDay: 'midday', lightingMode: 'direct sunlight' });
 assert.ok(harshSunEyes.expression.some(text => text.includes('eyelid response')));
 
 const negatedRearLight = deriveCausalHairExpression({ ...baseState, lightingMode: 'no backlight, ambient ceiling light 6500K' });
-assert.ok(!negatedRearLight.hair.some(text => text.includes('fine hair shafts')));
+assert.ok(!negatedRearLight.hair.some(text => text.includes('Back-facing fine strands')));
 const negatedDirectSun = deriveCausalHairExpression({ ...baseState, timeOfDay: 'midday', lightingMode: 'without direct sunlight, open shade' });
 assert.ok(!negatedDirectSun.expression.some(text => text.includes('eyelid response')));
 const rearLightFinal = compileUnifiedPromptPipeline({ ...baseState, lightingMode: 'rear light behind head' });
-assert.ok(rearLightFinal.neutral.text.includes('fine hair shafts'));
+assert.ok(rearLightFinal.neutral.text.includes('Back-facing fine strands'));
+
+const frontalOnly = deriveCausalHairExpression({ ...baseState, lightingMode: 'front-only lighting, no rear light' });
+assert.ok(!frontalOnly.hair.some(text => text.includes('Back-facing fine strands')));
+const noBacklightFinal = compileUnifiedPromptPipeline({ ...baseState, lightingMode: 'no backlight, white ceiling 6500K' });
+assert.ok(!noBacklightFinal.neutral.text.includes('Back-facing fine strands'));
