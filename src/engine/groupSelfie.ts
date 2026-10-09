@@ -437,3 +437,19 @@ export function resolveGroupSelfie(input: GroupSelfieInput): ResolvedGroupSelfie
     physicsGuards
   };
 }
+
+/** Clearance estimate, not a per-person projection or proof of a cropped shoulder. */
+export function estimateShoulderClearance(input: {
+  spaceWidthMeters?: number; personCount: number; shoulderWidthCm?: number;
+}): { clearanceConstraint: 'tight' | 'open' | 'unknown'; maxSideBySide: number | null; overlapProbable: boolean; evidence: string[] } {
+  const {spaceWidthMeters,personCount,shoulderWidthCm=47}=input;
+  if (!Number.isFinite(spaceWidthMeters) || !spaceWidthMeters || spaceWidthMeters <= 0 ||
+      !Number.isFinite(shoulderWidthCm) || shoulderWidthCm <= 0 || !Number.isInteger(personCount) || personCount < 1) {
+    return {clearanceConstraint:'unknown',maxSideBySide:null,overlapProbable:false,evidence:['insufficient measured lateral clearance']};
+  }
+  const maxSideBySide = Math.max(0,Math.floor(spaceWidthMeters*100/shoulderWidthCm));
+  const tight = personCount > maxSideBySide;
+  return {clearanceConstraint:tight?'tight':'open',maxSideBySide,overlapProbable:tight,
+    evidence:[`spaceWidthMeters=${spaceWidthMeters}`,`personCount=${personCount}`,`assumedShoulderWidthCm=${shoulderWidthCm}`,
+      'lateral occupancy estimate only; no specific cropped shoulder is inferred']};
+}
