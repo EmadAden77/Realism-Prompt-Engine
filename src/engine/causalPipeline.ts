@@ -111,6 +111,7 @@ export function deriveCausalHairExpression(state: SceneState): { hair: string[];
   if (chosenExpression) expression.push(chosenExpression.anatomy);
   if (state.atmosphericCondition === 'breezy') hair.push('Loose exposed strands respond naturally to the breeze.');
   // A selected rear/side source is needed; color temperature alone proves no rim light.
+  // Require an explicitly rear-facing source, not merely a color temperature.
   const backlight = /(?:backlight|backlit|rim light|rear light|إضاءة خلفية|ضوء خلفي)/i.test(state.lightingMode)
     && !/(?:no backlight|without backlight|no rim light|بدون إضاءة خلفية|بدون ضوء خلفي)/i.test(state.lightingMode)
     && !/(?:front[- ]only|frontal[- ]only|from camera side only)/i.test(state.lightingMode);
