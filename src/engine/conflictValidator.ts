@@ -557,6 +557,42 @@ const conditionalWearConflicts = (input: ConflictValidatorInput): UnifiedConflic
   );
 };
 
+
+/** Descriptive anomalies only: do not forbid natural individual glances or marked-bay parking. */
+export function detectArtificialBackgroundPattern(prompt: string, parkingPattern: 'marked-bays' | 'curbside' | 'informal' = 'curbside'): string[] {
+  const clauses = prompt.split(/[.;\n]+/).filter(part => !/\b(?:no|not|without|avoid|exclude|never|prevent|forbid)\b/i.test(part));
+  const result: string[] = [];
+  if (clauses.some(part => /\b(?:all|every|entire crowd of)\s+(?:the\s+)?(?:people|pedestrians|passersby|background figures)\s+(?:are\s+)?(?:looking|staring|gazing)\s+(?:at|towards?|into)\s+(?:the\s+)?camera\b/i.test(part))) {
+    result.push('BACKGROUND_UNIFORM_GAZE');
+  }
+  if (clauses.some(part => /\b(?:cloned pedestrians|identical background faces|duplicated background people|all pedestrians in identical poses)\b/i.test(part))) {
+    result.push('BACKGROUND_REPEATED_IDENTITIES');
+  }
+  if (parkingPattern !== 'marked-bays' && clauses.some(part => /\b(?:cloned cars|identical cars in identical positions|perfectly identical parking angles)\b/i.test(part))) {
+    result.push('BACKGROUND_CLONED_VEHICLES');
+  }
+  return result;
+}
+
+const backgroundPatternConflicts = (input: ConflictValidatorInput): UnifiedConflictResult[] => {
+  const state = input.manifest.resolved.state;
+  const loc = getMicroLocation(state.sceneFamily, state.subScene);
+  const parkingPattern = loc?.backgroundComposition?.parkingPattern ?? 'curbside';
+  const descriptions = [
+    ['chatgpt-prompt', input.chatgptPrompt],
+    ['gemini-prompt', input.geminiPrompt],
+    ['midjourney-prompt', input.midjourneyPrompt],
+  ] as const;
+  return descriptions.flatMap(([source, prompt]) => detectArtificialBackgroundPattern(prompt, parkingPattern).map(code => ({
+    ruleId: 'GROUNDED_BACKGROUND_DIVERSITY',
+    severity: 'error' as const,
+    code,
+    message: 'Background repetition should follow real crowd and parking behavior, not fabricated uniformity.',
+    affectedFields: ['subScene', 'backgroundRealism'],
+    source,
+  })));
+};
+
 const dedupe = (
   results: UnifiedConflictResult[]
 ): UnifiedConflictResult[] => {
@@ -633,6 +669,7 @@ export function validateUnifiedConflicts(
     ...sceneIntentConflicts(input),
     ...opticalConflicts(input),
     ...conditionalWearConflicts(input),
+    ...backgroundPatternConflicts(input),
     ...referenceConflicts(input),
     ...negativeConflicts(input.negative),
     ...promptValidationToConflicts(

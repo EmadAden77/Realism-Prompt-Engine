@@ -303,7 +303,12 @@ export function deriveLightingCausality(input: LightingCausalityInput): Lighting
         ? 'high requested intensity must still preserve highlight roll-off and source direction rather than flattening the scene'
         : 'requested illumination level must remain subordinate to the actual source geometry';
 
+  const exposureResponseGuard = isNight
+    ? 'in low light preserve exposure-dependent luminance texture only if sensor gain and processing support it; do not invent fixed ISO, shutter speed, heavy chroma grain or blanket blur'
+    : 'in adequate daylight preserve clean smartphone capture; do not mandate ISO grain or artificial vignetting';
+
   const consistencyGuards = [
+    exposureResponseGuard,
     'every visible highlight and cast shadow must trace back to the primary source, a listed secondary source, or a listed bounce surface',
     'subject and background must share the same light direction, color family, and occlusion logic',
     'reflections may not invent light sources that do not exist in the scene',

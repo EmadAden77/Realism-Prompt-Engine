@@ -52,6 +52,10 @@ export function deriveSurfaceRealism(input: SurfaceRealismInput): SurfaceRealism
     ? 'if sun exposure and heat are evident, retain localized skin flush and restrained natural perspiration without uniform redness; preserve personal complexion'
     : 'no mandatory heat flush or perspiration without evidence of heat exposure';
   consistencyGuards.push(thermalSkinResponse);
+  consistencyGuards.push(
+    'human skin uses layered diffuse and restrained subsurface color response, not mirror-like automotive or glass Fresnel reflections',
+    'automotive glass and coated paint reflect actual nearby sources at their material-specific angles; never copy skin shading onto glazing'
+  );
 
   const skinResponse = phoneOnly
     ? 'natural skin microtexture with pores and fine facial hair visible only on phone-facing planes; rapid highlight falloff across cheeks, ears, jaw and neck; no uniform beauty-light sheen'

@@ -92,6 +92,21 @@ const baseLighting: LightingCausalityState = {
 console.log('surfaceRealism tests passed');
 
 {
+  const result = deriveSurfaceRealism({
+    familyId: 'bedroom',
+    isOutdoor: false,
+    timeOfDay: 'morning',
+    captureType: 'front-selfie',
+    glassesMode: 'no_glasses',
+    clothingCondition: 'crisp',
+    atmosphericCondition: 'neutral',
+    lighting: baseLighting,
+  });
+  assert(result.consistencyGuards.some(rule => rule.includes('subsurface color response')));
+  assert(result.consistencyGuards.some(rule => rule.includes('automotive glass')));
+}
+
+{
   const midday = deriveSurfaceRealism({
     familyId: 'saudi-outdoor', isOutdoor: true, timeOfDay: 'midday',
     captureType: 'front-selfie', glassesMode: 'no_glasses',

@@ -54,3 +54,12 @@ assert(
 assert.match(combined.shadowBehavior, /preserve ceiling direction/i);
 
 console.log('lightingCausality tests passed');
+
+assert(neutral5000.consistencyGuards.some(rule => /low light preserve exposure-dependent/i.test(rule)));
+const dayLighting = deriveLightingCausality({
+  ...base,
+  timeOfDay: 'midday',
+  isOutdoor: true,
+  lightingMode: 'daylight',
+});
+assert(dayLighting.consistencyGuards.some(rule => /do not mandate ISO grain/i.test(rule)));

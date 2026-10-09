@@ -34,6 +34,12 @@ export interface MicroLocation {
   };
   isOutdoor: boolean;
   /** Scene-specific wear cues are optional, never universal defects. */
+  backgroundComposition?: {
+    parkingPattern?: 'marked-bays' | 'curbside' | 'informal';
+    peopleBehavior?: 'natural-candid' | 'none';
+    edgeTruncation?: 'only-if-at-frame-edge';
+    vehicleSurface?: 'dust-conditional' | 'unconstrained';
+  };
   wearProfile?: {
     surfaceCondition: 'dry' | 'wet' | 'variable';
     supportedCues: string[];
@@ -158,6 +164,12 @@ export const MICRO_LOCATIONS: Record<SceneFamilyId, MicroLocation[]> = {
     },
     {
       id: 'so_beside_baqala',
+      backgroundComposition: {
+        parkingPattern: 'curbside',
+        peopleBehavior: 'natural-candid',
+        edgeTruncation: 'only-if-at-frame-edge',
+        vehicleSurface: 'dust-conditional'
+      },
       labelAR: 'بجانب بقالة الحي',
       environmentPrompt: 'ordinary Saudi neighborhood grocery entrance with partly sticker-covered glazing, a modest generic Arabic sign, stacked bottled-water crates, tiled threshold, and visible but not overly clear refrigerated shelves behind the door; everyday shopfront, not a commercial photo shoot',
       spatialBehavior: 'casual selfie or candid stance beside the entrance, with exterior daylight dominant outside and interior ceiling light visible only through the actual door opening; sticker-covered glass partially occludes interior details',
@@ -181,6 +193,12 @@ export const MICRO_LOCATIONS: Record<SceneFamilyId, MicroLocation[]> = {
     },
     {
       id: 'so_open_parking_lot',
+      backgroundComposition: {
+        parkingPattern: 'marked-bays',
+        peopleBehavior: 'natural-candid',
+        edgeTruncation: 'only-if-at-frame-edge',
+        vehicleSurface: 'dust-conditional'
+      },
       labelAR: 'موقف سيارات مفتوح',
       environmentPrompt: 'open Saudi parking area with asphalt, painted parking bays, ordinary vehicles (sedans and SUVs), wheel stops, surrounding ordinary buildings, dusty tire marks, and realistic sun or night lighting',
       spatialBehavior: 'open wide perspective, standing between parked vehicles, expansive sky visibility and genuine depth',
