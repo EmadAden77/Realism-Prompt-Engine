@@ -249,4 +249,26 @@ assert.deepEqual(
   'Changing outfit cannot change spatial composition'
 );
 
+
+const insufficientAngle = compileUnifiedPromptPipeline({
+  ...base,
+  validatedAngleEvidence: { mode: 'auto' },
+});
+assert.equal(insufficientAngle.diagnostics.anglePromptReady, false);
+assert.equal(insufficientAngle.diagnostics.isValid, false);
+assert.equal(insufficientAngle.platforms.chatgpt.prompt, '');
+assert.equal(insufficientAngle.platforms.gemini.prompt, '');
+assert.equal(insufficientAngle.platforms.midjourney.prompt, '');
+assert.equal(insufficientAngle.neutral.text, '');
+assert.throws(
+  () => validateExternalPromptCandidate(insufficientAngle, 'gemini', 'unsafe external prompt'),
+  /Camera evidence insufficient/
+);
+const supportedAngle = compileUnifiedPromptPipeline({
+  ...base,
+  validatedAngleEvidence: { mode: 'auto', frontClearanceCm: 90, requiredFrontClearanceCm: 55 },
+});
+assert.equal(supportedAngle.diagnostics.anglePromptReady, true);
+assert.ok(supportedAngle.platforms.gemini.prompt.length > 0);
+
 console.log('unifiedPromptPipeline tests passed');

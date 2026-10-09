@@ -25,4 +25,22 @@ for (const specifier of relativeImports) {
   );
 }
 
+
+assert(
+  serverSource.includes("compileUnifiedPromptPipeline(req.body.sceneState)"),
+  'prompt enhancement must independently recompute scene validation on the server'
+);
+assert(
+  serverSource.includes("!pipeline.diagnostics.anglePromptReady"),
+  'prompt enhancement must deny requests without verified camera evidence'
+);
+assert(
+  serverSource.includes("basePrompt !== pipeline.platforms[targetEngine].prompt"),
+  'prompt enhancement must reject prompt text not derived from the validated scene'
+);
+assert(
+  serverSource.indexOf("!pipeline.diagnostics.anglePromptReady") < serverSource.indexOf("Refine this prompt for"),
+  'readiness check must run before AI enhancement'
+);
+
 console.log('✓ Server runtime boundary: no client-engine imports and all relative ESM imports are explicit.');

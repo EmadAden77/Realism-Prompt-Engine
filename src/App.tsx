@@ -1638,6 +1638,9 @@ export default function PhysFrameApp() {
     try {
       setIsEnhancingPrompt(true);
       const enhancePipeline = compileUnifiedPromptPipeline(state as any);
+      if (!enhancePipeline.diagnostics.anglePromptReady) {
+        throw new Error('لا يمكن تعزيز أو إرسال برومبت دون أدلة هندسية كافية للكاميرا.');
+      }
       const base = enhancePipeline.platforms[targetEngine].prompt;
 
       const res = await fetch('/api/ai/enhance-prompt', {
@@ -1646,6 +1649,7 @@ export default function PhysFrameApp() {
         body: JSON.stringify({
           basePrompt: base,
           targetEngine,
+          sceneState: state,
         }),
       });
 
@@ -1695,16 +1699,18 @@ export default function PhysFrameApp() {
   };
 
   let chatGPTPrompt = "", geminiPrompt = "", negativePrompt = "";
+  let angleExportReady = false;
   if (state.sceneFamily) {
     // Single authoritative engine path:
     // SceneState -> Manifest -> Semantic -> Neutral -> Negative -> Platform -> Validation
     const pipeline = compileUnifiedPromptPipeline(state as any);
+    angleExportReady = pipeline.diagnostics.anglePromptReady;
     chatGPTPrompt = pipeline.platforms.chatgpt.prompt;
     geminiPrompt = pipeline.platforms.gemini.prompt;
     negativePrompt = pipeline.platforms.chatgpt.negativePrompt || pipeline.negative.text;
   }
 
-  const currentDisplayPrompt = activeTab === 'chatgpt'
+  const currentDisplayPrompt = !angleExportReady ? '' : activeTab === 'chatgpt'
     ? (useEnhancedPrompt && enhancedPrompts.chatgpt ? enhancedPrompts.chatgpt : chatGPTPrompt)
     : activeTab === 'gemini'
     ? (useEnhancedPrompt && enhancedPrompts.gemini ? enhancedPrompts.gemini : geminiPrompt)
@@ -3563,7 +3569,7 @@ export default function PhysFrameApp() {
                {/* Action Footer */}
                <div className="p-4 border-t border-white/10 pb-[calc(1.25rem+env(safe-area-inset-bottom))] flex gap-2">
                   <button
-                    onClick={() => copyToClipboard(currentDisplayPrompt)}
+                    onClick={() => angleExportReady ? copyToClipboard(currentDisplayPrompt) : showToast('تعذر نسخ البرومبت: أدلة زاوية الكاميرا غير كافية')}
                     className="flex-1 py-3 bg-[var(--accent)] hover:bg-[#d6b783] text-black rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md active:scale-98"
                   >
                     <Copy className="w-4 h-4" />
