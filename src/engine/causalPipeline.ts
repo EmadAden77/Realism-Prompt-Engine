@@ -1,4 +1,4 @@
-import { rankSmartAngles } from './selfieAngles';
+import { rankSmartAngles, finalizeSmartAngle, type FinalSmartAngleDecision } from './selfieAngles';
 import { getHairPhysicsPreset } from '../data/hairPhysicsLibrary';
 import { ADVANCED_FACIAL_EXPRESSIONS } from '../data/facialExpressionLibrary';
 import { resolveScene, type ResolvedScene, type SceneState } from './physicsEngine';
@@ -25,6 +25,7 @@ export interface SceneManifest {
   continuityContext: HomeContinuityContext | null;
   referencePlan: ReferencePlan;
   knowledgeDecisions: KnowledgeRuleDecision[];
+  smartAngleDecision?: FinalSmartAngleDecision;
 }
 
 export interface RuleCandidate {
@@ -65,8 +66,9 @@ export function createSceneManifest(
   sceneId?: string
 ): SceneManifest {
   const evidence = rawState.smartAngleEvidence;
-  const ranked = evidence?.mode === 'auto' ? rankSmartAngles(evidence) : [];
-  const selectedCapture = ranked[0]?.captureType;
+  const finalDecision = evidence?.mode === 'auto' && (evidence.mirrorGeometry || evidence.cameraClearanceCm !== undefined) ? finalizeSmartAngle(evidence) : undefined;
+  const ranked = evidence?.mode === 'auto' && !finalDecision ? rankSmartAngles(evidence) : [];
+  const selectedCapture = finalDecision ? finalDecision.captureType : ranked[0]?.captureType;
   const effectiveState: SceneState = selectedCapture
     ? { ...rawState, captureType: selectedCapture }
     : rawState;
@@ -79,6 +81,7 @@ export function createSceneManifest(
     sceneId: sceneId || buildSceneId(resolved.state),
     platformTarget,
     resolved,
+    smartAngleDecision: finalDecision,
     continuityContext,
     referencePlan,
     knowledgeDecisions: evaluateV20Knowledge(
