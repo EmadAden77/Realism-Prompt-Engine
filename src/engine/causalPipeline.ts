@@ -1,3 +1,5 @@
+import { getHairPhysicsPreset } from '../data/hairPhysicsLibrary';
+import { ADVANCED_FACIAL_EXPRESSIONS } from '../data/facialExpressionLibrary';
 import { resolveScene, type ResolvedScene, type SceneState } from './physicsEngine';
 import { evaluateV20Knowledge, type KnowledgeRuleDecision } from './v20KnowledgeBase';
 import { resolveHomeContinuity, type HomeContinuityContext } from './fixedHomeContinuity';
@@ -102,6 +104,11 @@ export function resolveRuleConflict(
 export function deriveCausalHairExpression(state: SceneState): { hair: string[]; expression: string[] } {
   const hair = ['Keep the chosen hairstyle and natural strand texture without uniform artificial shine.'];
   const expression = ['Preserve the chosen facial expression and subtle natural skin detail.'];
+  if (state.hairPhysicsPreset && state.hairPhysicsPreset !== 'hp_auto') {
+    hair.push(getHairPhysicsPreset(state.hairPhysicsPreset).prompt);
+  }
+  const chosenExpression = ADVANCED_FACIAL_EXPRESSIONS.find(item => item.id === state.expression);
+  if (chosenExpression) expression.push(chosenExpression.anatomy);
   if (state.atmosphericCondition === 'breezy') hair.push('Loose exposed strands respond naturally to the breeze.');
   if (state.captureType === 'mirror-selfie') {
     hair.push('Hair reflection follows the same planar mirror geometry as the face.');
