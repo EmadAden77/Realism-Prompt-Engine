@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   compileUnifiedPromptPipeline,
   causalFingerprint,
+  verifyCausalFingerprint,
   validateExternalPromptCandidate,
 } from './unifiedPromptPipeline';
 import type { SceneState } from './physicsEngine';
@@ -280,3 +281,21 @@ assert.notEqual(recordedFingerprint, causalFingerprint({
   state: {...pipeline.manifest.resolved.state, timeOfDay:'midday'},
   angle:pipeline.manifest.angleDecision, prompt:pipeline.neutral.text
 }), 'post-compile scene edit must change fingerprint');
+
+const earIntegrated = compileUnifiedPromptPipeline({
+  ...base,
+  earTransmissionEvidence: {
+    sourceBehindEar:true, earExposed:true, hairOccluded:false, tissuePathMm:3, viewerOnOppositeSide:true
+  }
+});
+assert.match(earIntegrated.semantic.skinResponse, /warm red translucency/);
+const earBlocked = compileUnifiedPromptPipeline({
+  ...base,
+  earTransmissionEvidence: {
+    sourceBehindEar:true, earExposed:true, hairOccluded:true, tissuePathMm:3, viewerOnOppositeSide:true
+  }
+});
+assert.doesNotMatch(earBlocked.semantic.skinResponse, /warm red translucency/);
+assert.equal(verifyCausalFingerprint(pipeline), true);
+pipeline.manifest.resolved.state.timeOfDay = 'midday';
+assert.equal(verifyCausalFingerprint(pipeline), false);
