@@ -189,6 +189,14 @@ export function causalFingerprint(value: unknown): string {
   return (hash>>>0).toString(16).padStart(8,'0');
 }
 
+export function verifyCausalFingerprint(pipeline: UnifiedPromptPipelineResult): boolean {
+  return pipeline.causalFingerprint === causalFingerprint({
+    state: pipeline.manifest.resolved.state,
+    angle: pipeline.manifest.angleDecision,
+    prompt: pipeline.neutral.text
+  });
+}
+
 export function compileUnifiedPromptPipeline(
   rawState: SceneState
 ): UnifiedPromptPipelineResult {
@@ -361,7 +369,7 @@ export function validateExternalPromptCandidate(
   target: UnifiedPromptTarget,
   candidatePrompt: string
 ): PlatformPromptResult {
-  if (!pipeline.diagnostics.anglePromptReady) {
+  if (!pipeline.diagnostics.anglePromptReady || !verifyCausalFingerprint(pipeline)) {
     throw new Error('Camera evidence insufficient: prompt export blocked');
   }
   const negative = compileNegativeConstraints(
