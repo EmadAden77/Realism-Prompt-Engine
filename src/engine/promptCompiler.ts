@@ -277,9 +277,9 @@ export function exportCausalAttestationLedger(
   angleAudit: string[] = []
 ): CausalLedgerEntry[] {
   return [
-    ...fragments.map(item => ({id:item.id,kind:'input-fact' as const,
-      evidence:[...item.provenance.sceneFacts,...item.provenance.ruleIds],decision:item.text})),
+    ...fragments.map(item => ({id:item.id,kind:'unverified-assumption' as const,
+      evidence:[...item.provenance.sceneFacts,...item.provenance.ruleIds,'prompt fragment is not independently measured evidence'],decision:item.text})),
     ...angleAudit.map((decision,index)=>({id:`angle-${index}`,kind:'geometric-inference' as const,
-      evidence:['camera feasibility ranking; validate source evidence separately'],decision}))
+      evidence:['candidate feasibility derived from provided observations; input measurement provenance unverified'],decision}))
   ];
 }
