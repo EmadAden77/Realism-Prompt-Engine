@@ -95,7 +95,7 @@ console.log('surfaceRealism tests passed');
   const midday = deriveSurfaceRealism({
     familyId: 'saudi-outdoor', isOutdoor: true, timeOfDay: 'midday',
     captureType: 'front-selfie', glassesMode: 'no_glasses',
-    clothingCondition: 'crisp', atmosphericCondition: 'neutral', lighting: baseLighting
+    clothingCondition: 'crisp', atmosphericCondition: 'neutral', lighting: { ...baseLighting, primarySource: { ...baseLighting.primarySource, name: 'midday sun' } }
   });
   assert.ok(midday.consistencyGuards.some(text => text.includes('localized skin flush')));
   const neutral = deriveSurfaceRealism({
@@ -104,4 +104,13 @@ console.log('surfaceRealism tests passed');
     clothingCondition: 'crisp', atmosphericCondition: 'neutral', lighting: baseLighting
   });
   assert.ok(neutral.consistencyGuards.some(text => text.includes('no mandatory heat flush')));
+}
+
+{
+  const shade = deriveSurfaceRealism({
+    familyId: 'saudi-outdoor', isOutdoor: true, timeOfDay: 'midday',
+    captureType: 'front-selfie', glassesMode: 'no_glasses',
+    clothingCondition: 'crisp', atmosphericCondition: 'neutral', lighting: baseLighting
+  });
+  assert.ok(shade.consistencyGuards.some(text => text.includes('no mandatory heat flush')));
 }
