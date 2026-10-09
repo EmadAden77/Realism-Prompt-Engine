@@ -1037,4 +1037,4 @@ assert(unequalMirror?.opticalPathCm === 110 && !unequalMirror.nearDoubleMirrorDi
 assert(resolveMirrorOpticalPath({ cameraToMirrorCm: 0, mirrorToSubjectCm: 80 }) === null, 'invalid geometry must be rejected');
 assert(resolveMirrorOpticalPath({ cameraToMirrorCm: Infinity, mirrorToSubjectCm: 80 }) === null, 'non-finite geometry must be rejected');
 const mirrorSceneOptics = resolveScene({ ...explicitHomePeopleState, captureType: 'mirror-selfie' });
-assert(/camera-to-mirror plus mirror-to-subject/i.test(mirrorSceneOptics.physicalState.cameraPhysics?.cameraDistance || ''), 'mirror scene should communicate actual reflection optical path');
+assert(/camera-to-mirror plus mirror-to-subject/i.test(mirrorSceneOptics.physicalState.cameraDistance), 'mirror scene should communicate actual reflection optical path');
