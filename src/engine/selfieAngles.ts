@@ -563,3 +563,56 @@ function describeDirection(pitchDeg: number, yawDeg: number, rollDeg: number): s
   const roll = Math.abs(rollDeg) > 0.5 ? `${Math.abs(Math.round(rollDeg))}° natural frame roll` : 'near-zero roll';
   return `${pitch}, ${yaw}, ${roll}`;
 }
+
+/** One-pass ranking: no invented photographer or mirror, no false validation. */
+export interface AngleEvidence {
+  mode: 'auto' | 'manual';
+  manualCapture?: 'front-selfie' | 'mirror-selfie' | 'third-person-candid';
+  frontClearanceCm?: number;
+  requiredFrontClearanceCm?: number;
+  mirrorPathConfirmed?: boolean;
+  photographerAvailable?: boolean;
+  supportAvailable?: boolean;
+}
+export type AngleCapture = 'front-selfie' | 'mirror-selfie' | 'third-person-candid';
+export interface AngleCandidate {
+  type: AngleCapture;
+  feasible: boolean;
+  score: number;
+  reasons: string[];
+}
+export interface ValidatedAngleDecision {
+  captureType: AngleCapture | null;
+  status: 'validated' | 'insufficient-evidence';
+  rankedCandidates: AngleCandidate[];
+  decisionAuditTrail: string[];
+}
+export function resolveValidatedSmartAngle(input: AngleEvidence): ValidatedAngleDecision {
+  const frontKnown = Number.isFinite(input.frontClearanceCm) &&
+    Number.isFinite(input.requiredFrontClearanceCm) &&
+    (input.requiredFrontClearanceCm ?? 0) > 0;
+  const candidates: AngleCandidate[] = [
+    { type: 'front-selfie', feasible: frontKnown &&
+      input.frontClearanceCm! >= input.requiredFrontClearanceCm!, score: 60,
+      reasons: [frontKnown ? 'measured selfie clearance' : 'missing selfie clearance measurement'] },
+    { type: 'mirror-selfie', feasible: input.mirrorPathConfirmed === true, score: 75,
+      reasons: [input.mirrorPathConfirmed === true ? 'mirror optical path confirmed' : 'mirror geometry unconfirmed'] },
+    { type: 'third-person-candid', feasible: input.photographerAvailable === true || input.supportAvailable === true,
+      score: 55, reasons: ['requires independent photographer or camera support'] },
+  ];
+  const rankedCandidates = candidates
+    .sort((a, b) => Number(b.feasible) - Number(a.feasible) || b.score - a.score);
+  const manual = input.mode === 'manual' && input.manualCapture
+    ? rankedCandidates.find(c => c.type === input.manualCapture)
+    : undefined;
+  const chosen = manual?.feasible ? manual : rankedCandidates.find(c => c.feasible);
+  const decisionAuditTrail = rankedCandidates.map(c =>
+    c.type + ': feasible=' + c.feasible + ', score=' + c.score + ', ' + c.reasons.join('; '));
+  if (manual && !manual.feasible) decisionAuditTrail.push('Manual selection rejected: ' + manual.reasons.join('; '));
+  return {
+    captureType: chosen?.type ?? null,
+    status: chosen ? 'validated' : 'insufficient-evidence',
+    rankedCandidates,
+    decisionAuditTrail,
+  };
+}
