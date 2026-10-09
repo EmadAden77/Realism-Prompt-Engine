@@ -524,13 +524,13 @@ export function detectConditionalWearConflict(
   positiveDescription: string
 ): boolean {
   if (location?.wearProfile?.surfaceCondition !== 'dry') return false;
-  const sentenceParts = positiveDescription.split(/[.;\\n]+/);
-  const wetClaim = /\\b(?:wet (?:tiled? )?floor|floor (?:is )?wet|puddles? on (?:the )?(?:floor|tiles)|water streaks on (?:the )?(?:floor|tiles))\\b/i;
+  const sentenceParts = positiveDescription.split(/[.;\n]+/);
+  const wetClaim = /\b(?:wet (?:tiled? )?floor|floor (?:is )?wet|puddles? on (?:the )?(?:floor|tiles)|water streaks on (?:the )?(?:floor|tiles))\b/i;
   return sentenceParts.some(part => {
     const hit = wetClaim.exec(part);
     if (!hit) return false;
     const preceding = part.slice(Math.max(0, hit.index - 70), hit.index);
-    return !/\\b(?:no|not|without|avoid|exclude|prevent|never|reject|forbid|do not|don't)\\b/i.test(preceding);
+    return !/\b(?:no|not|without|avoid|exclude|prevent|never|reject|forbid|do not|don't)\b/i.test(preceding);
   });
 }
 
