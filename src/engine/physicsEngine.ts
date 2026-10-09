@@ -411,7 +411,8 @@ export function resolveScene(rawState: SceneState): ResolvedScene {
       familyId,
       subScene: s.subScene,
       framing: s.framing,
-      microLoc
+      microLoc,
+      measuredSpaceWidthMeters: s.measuredGroupSpaceWidthMeters
     });
 
     if (s.captureType !== 'front-selfie') {
