@@ -116,6 +116,7 @@ export interface SceneState {
   earTransmissionEvidence?: { sourceBehindEar: boolean; earExposed: boolean; hairOccluded: boolean; tissuePathMm: number; viewerOnOppositeSide: boolean; };
   /** Optional measured accessible width; unspecified locations retain unknown clearance. */
   measuredGroupSpaceWidthMeters?: number;
+  groupSpaceWidthSource?: 'user-provided' | 'estimated';
 
   // Appearance & Accessories
   glassesMode: GlassesMode;
@@ -412,7 +413,8 @@ export function resolveScene(rawState: SceneState): ResolvedScene {
       subScene: s.subScene,
       framing: s.framing,
       microLoc,
-      measuredSpaceWidthMeters: s.measuredGroupSpaceWidthMeters
+      measuredSpaceWidthMeters: s.measuredGroupSpaceWidthMeters,
+      widthEvidenceSource: s.groupSpaceWidthSource
     });
 
     if (s.captureType !== 'front-selfie') {
@@ -848,7 +850,8 @@ function calculateDetailedPhysicalState(
         subScene: state.subScene,
         framing: state.framing,
         microLoc,
-        measuredSpaceWidthMeters: state.measuredGroupSpaceWidthMeters
+        measuredSpaceWidthMeters: state.measuredGroupSpaceWidthMeters,
+        widthEvidenceSource: state.groupSpaceWidthSource
       })
     : null;
 
