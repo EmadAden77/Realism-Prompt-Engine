@@ -51,6 +51,8 @@ export interface UnifiedPromptDiagnostics {
     totalSavedChars: number;
   };
   isValid: boolean;
+  anglePromptReady: boolean;
+  angleBlockingReasons: string[];
 }
 
 export interface UnifiedPromptPipelineResult {
@@ -271,6 +273,9 @@ export function compileUnifiedPromptPipeline(
     midjourney: midjourney.validation.warnings,
   };
 
+  const anglePromptReady = manifest.angleDecision?.status !== 'insufficient-evidence';
+  const angleBlockingReasons = anglePromptReady ? [] : ['No verified camera geometry available'];
+
   const conflictReport = validateUnifiedConflicts({
     rawState,
     manifest,
@@ -312,7 +317,9 @@ export function compileUnifiedPromptPipeline(
         totalSavedChars:
           neutral.compression.savedChars + negative.compression.savedChars,
       },
-      isValid: conflictReport.isValid,
+      isValid: conflictReport.isValid && anglePromptReady,
+      anglePromptReady,
+      angleBlockingReasons,
     },
   };
 }
