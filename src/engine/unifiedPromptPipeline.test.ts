@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   compileUnifiedPromptPipeline,
+  causalFingerprint,
   validateExternalPromptCandidate,
 } from './unifiedPromptPipeline';
 import type { SceneState } from './physicsEngine';
@@ -272,3 +273,10 @@ assert.equal(supportedAngle.diagnostics.anglePromptReady, true);
 assert.ok(supportedAngle.platforms.gemini.prompt.length > 0);
 
 console.log('unifiedPromptPipeline tests passed');
+
+assert.ok(pipeline.causalLedger.length > 0, 'causal ledger should list prompt decisions');
+const recordedFingerprint = pipeline.causalFingerprint;
+assert.notEqual(recordedFingerprint, causalFingerprint({
+  state: {...pipeline.manifest.resolved.state, timeOfDay:'midday'},
+  angle:pipeline.manifest.angleDecision, prompt:pipeline.neutral.text
+}), 'post-compile scene edit must change fingerprint');
