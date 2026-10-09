@@ -1,3 +1,4 @@
+import { planSpatialComposition, type SpatialCompositionPlan } from './spatialCompositionPlanner';
 import { createSceneManifest, deriveCausalHairExpression, type SceneManifest } from './causalPipeline';
 import {
   validatePrompt,
@@ -57,6 +58,7 @@ export interface UnifiedPromptDiagnostics {
 
 export interface UnifiedPromptPipelineResult {
   manifest: SceneManifest;
+  spatialPlan: SpatialCompositionPlan;
   semantic: SemanticPromptScene;
   neutral: CompiledNeutralPrompt;
   negative: CompiledNegativeConstraints;
@@ -191,6 +193,9 @@ export function compileUnifiedPromptPipeline(
     resolved.physicalState
   );
 
+  const spatialPlan = planSpatialComposition(resolved.state, resolved.physicalState);
+  semantic.visibleEnvironment = [semantic.visibleEnvironment, spatialPlan.promptInstruction].filter(Boolean).join(' ');
+
   const hairExpression = deriveCausalHairExpression(resolved.state);
   semantic.hair = [semantic.hair, ...hairExpression.hair].join(' ');
   semantic.expression = [semantic.expression, ...hairExpression.expression].join(' ');
@@ -304,6 +309,7 @@ export function compileUnifiedPromptPipeline(
 
   return {
     manifest,
+    spatialPlan,
     semantic,
     neutral,
     negative,
