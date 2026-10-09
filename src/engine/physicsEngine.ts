@@ -847,7 +847,8 @@ function calculateDetailedPhysicalState(
         familyId,
         subScene: state.subScene,
         framing: state.framing,
-        microLoc
+        microLoc,
+        measuredSpaceWidthMeters: state.measuredGroupSpaceWidthMeters
       })
     : null;
 
