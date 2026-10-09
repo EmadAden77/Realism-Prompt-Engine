@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   createSceneManifest,
+  deriveCausalHairExpression,
   decideEffectActivation,
   resolveRuleConflict,
   type RuleCandidate,
@@ -100,3 +101,11 @@ assert.equal(PLATFORM_CAPABILITY_REGISTRY.midjourney.defaultVersion, '8.2');
 assert.match(adaptPromptToPlatform(neutral, 'midjourney'), /--v 8\.2 --raw$/);
 
 console.log('causalPipeline tests passed');
+
+const causalNormal = deriveCausalHairExpression(baseState);
+assert.ok(causalNormal.hair.some(text => text.includes('chosen hairstyle')));
+assert.ok(!causalNormal.hair.some(text => text.includes('breeze')));
+const causalBreeze = deriveCausalHairExpression({ ...baseState, atmosphericCondition: 'breezy' });
+assert.ok(causalBreeze.hair.some(text => text.includes('breeze')));
+const causalMirror = deriveCausalHairExpression({ ...baseState, captureType: 'mirror-selfie' });
+assert.ok(causalMirror.hair.some(text => text.includes('planar mirror')));
