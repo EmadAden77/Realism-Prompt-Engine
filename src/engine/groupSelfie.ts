@@ -409,8 +409,12 @@ export function resolveGroupSelfie(input: GroupSelfieInput): ResolvedGroupSelfie
     `Companion ${i + 1}: adult male, ${p.ageBand}, ${p.heightCm}cm, ${p.bodyBuild}; ${p.faceShape}; ${p.jawShape}; ${p.eyeShape}; ${p.noseShape}; ${p.hair}; ${p.facialHair}; ${p.eyewear}; ${p.complexion}. Clothing: ${p.outfit}. Position/gaze: ${p.position}; ${p.gaze}. Interaction: ${p.interaction}.`
   ).join('\n');
 
+  const clearanceInstruction = shoulderClearance.clearanceConstraint === 'tight'
+    ? `Lateral space is constrained to approximately ${shoulderClearance.maxSideBySide} people side-by-side; use physically plausible staggered depth without assigning an unsupported specific shoulder crop.`
+    : '';
+
   const prompt = input.enabled
-    ? `GROUP SELFIE MODE: total people=${resolvedSize}. The reference-image subject remains the only identity-locked person and the only person holding the Xiaomi 15 Ultra front-camera phone. Relationship: ${relationshipLabel(relationship)}. Arrangement: ${arrangement}. Camera distance should be about ${recommendedDistanceCm}cm, remaining within real one-arm reach.\n${cast}\nANTI-CLONING: every companion must be a genuinely different individual. Do not reuse the reference subject's face, skull shape, hairline, beard pattern, body proportions, height, or outfit. Do not reuse one companion's face on another companion. Preserve the listed differences in face geometry, height, body build, hair, facial hair, complexion, eyewear, and clothing. Faces must not look like siblings, twins, clones, face-swaps, or variations of one latent identity.`
+    ? `GROUP SELFIE MODE: total people=${resolvedSize}. The reference-image subject remains the only identity-locked person and the only person holding the Xiaomi 15 Ultra front-camera phone. Relationship: ${relationshipLabel(relationship)}. Arrangement: ${arrangement}. ${clearanceInstruction} Camera distance should be about ${recommendedDistanceCm}cm, remaining within real one-arm reach.\n${cast}\nANTI-CLONING: every companion must be a genuinely different individual. Do not reuse the reference subject's face, skull shape, hairline, beard pattern, body proportions, height, or outfit. Do not reuse one companion's face on another companion. Preserve the listed differences in face geometry, height, body build, hair, facial hair, complexion, eyewear, and clothing. Faces must not look like siblings, twins, clones, face-swaps, or variations of one latent identity.`
     : '';
 
   const physicsGuards = input.enabled ? [
