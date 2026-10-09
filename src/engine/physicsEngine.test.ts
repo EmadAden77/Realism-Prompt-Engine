@@ -9,6 +9,7 @@ import {
   validateScene,
   validatePrompt,
   SceneState,
+  resolveMirrorOpticalPath,
   XIAOMI_15_ULTRA_FRONT_CAMERA_PROFILE
 } from './physicsEngine';
 import { MICRO_LOCATIONS, SceneFamilyId } from '../data/microLocations';
@@ -1027,3 +1028,13 @@ assert(
 console.log('  ✓ Background Realism → Selfie Angle Link V2 regression suite passed!\n');
 
 console.log('🎉 ALL AUTOMATED VALIDATION TESTS PASSED PERFECTLY!\n');
+
+console.log('▶ Mirror optical path regression');
+const equalMirror = resolveMirrorOpticalPath({ cameraToMirrorCm: 60, mirrorToSubjectCm: 60 });
+assert(equalMirror?.opticalPathCm === 120 && equalMirror.nearDoubleMirrorDistance, 'equal mirrored path may be 2x');
+const unequalMirror = resolveMirrorOpticalPath({ cameraToMirrorCm: 30, mirrorToSubjectCm: 80 });
+assert(unequalMirror?.opticalPathCm === 110 && !unequalMirror.nearDoubleMirrorDistance, 'unequal geometry must not force 2x');
+assert(resolveMirrorOpticalPath({ cameraToMirrorCm: 0, mirrorToSubjectCm: 80 }) === null, 'invalid geometry must be rejected');
+assert(resolveMirrorOpticalPath({ cameraToMirrorCm: Infinity, mirrorToSubjectCm: 80 }) === null, 'non-finite geometry must be rejected');
+const mirrorSceneOptics = resolveScene({ ...explicitHomePeopleState, captureType: 'mirror-selfie' });
+assert(/camera-to-mirror plus mirror-to-subject/i.test(mirrorSceneOptics.physicalState.cameraDistance), 'mirror scene should communicate actual reflection optical path');
