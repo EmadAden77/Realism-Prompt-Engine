@@ -518,6 +518,45 @@ const opticalConflicts = (input: ConflictValidatorInput): UnifiedConflictResult[
   );
 };
 
+/** Check unsupported *positive* material claims without forcing dirt on clean scenes. */
+export function detectConditionalWearConflict(
+  location: { wearProfile?: { surfaceCondition: 'dry' | 'wet' | 'variable' } } | undefined,
+  positiveDescription: string
+): boolean {
+  if (location?.wearProfile?.surfaceCondition !== 'dry') return false;
+  const sentenceParts = positiveDescription.split(/[.;\\n]+/);
+  const wetClaim = /\\b(?:wet (?:tiled? )?floor|floor (?:is )?wet|puddles? on (?:the )?(?:floor|tiles)|water streaks on (?:the )?(?:floor|tiles))\\b/i;
+  return sentenceParts.some(part => {
+    const hit = wetClaim.exec(part);
+    if (!hit) return false;
+    const preceding = part.slice(Math.max(0, hit.index - 70), hit.index);
+    return !/\\b(?:no|not|without|avoid|exclude|prevent|never|reject|forbid|do not|don't)\\b/i.test(preceding);
+  });
+}
+
+const conditionalWearConflicts = (input: ConflictValidatorInput): UnifiedConflictResult[] => {
+  const state = input.manifest.resolved.state;
+  const loc = getMicroLocation(state.sceneFamily, state.subScene);
+  if (!loc?.wearProfile) return [];
+  const descriptions = [
+    ['chatgpt-prompt', input.chatgptPrompt],
+    ['gemini-prompt', input.geminiPrompt],
+    ['midjourney-prompt', input.midjourneyPrompt],
+  ] as const;
+  return descriptions.flatMap(([source, prompt]) =>
+    detectConditionalWearConflict(loc, prompt)
+      ? [{
+          ruleId: 'CONDITIONAL_LOCATION_WEAR',
+          severity: 'error' as const,
+          code: 'DRY_LOCATION_UNGROUNDED_WET_SURFACE',
+          message: 'A dry micro-location cannot invent wet floors, puddles or water streaks without a scene-supported cause.',
+          affectedFields: ['subScene', 'visibleEnvironment'],
+          source,
+        }]
+      : []
+  );
+};
+
 const dedupe = (
   results: UnifiedConflictResult[]
 ): UnifiedConflictResult[] => {
@@ -593,6 +632,7 @@ export function validateUnifiedConflicts(
     ...continuityConflicts(input.manifest),
     ...sceneIntentConflicts(input),
     ...opticalConflicts(input),
+    ...conditionalWearConflicts(input),
     ...referenceConflicts(input),
     ...negativeConflicts(input.negative),
     ...promptValidationToConflicts(
