@@ -98,3 +98,14 @@ export function resolveRuleConflict(
 
   return { status: 'ambiguous', candidates: [first, second] };
 }
+
+export function deriveCausalHairExpression(state: SceneState): { hair: string[]; expression: string[] } {
+  const hair = ['Keep the chosen hairstyle and natural strand texture without uniform artificial shine.'];
+  const expression = ['Preserve the chosen facial expression and subtle natural skin detail.'];
+  if (state.atmosphericCondition === 'breezy') hair.push('Loose exposed strands respond naturally to the breeze.');
+  if (state.captureType === 'mirror-selfie') {
+    hair.push('Hair reflection follows the same planar mirror geometry as the face.');
+    expression.push('Maintain expression and identity in the mirror reflection.');
+  }
+  return { hair, expression };
+}
