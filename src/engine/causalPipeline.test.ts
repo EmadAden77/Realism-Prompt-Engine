@@ -1,4 +1,4 @@
-import { rankSmartAngles } from './selfieAngles';
+import { rankSmartAngles, finalizeSmartAngle } from './selfieAngles';
 import { compileUnifiedPromptPipeline } from './unifiedPromptPipeline';
 import assert from 'node:assert/strict';
 import {
@@ -156,3 +156,20 @@ const smartManifest = createSceneManifest({ ...baseState, smartAngleEvidence: { 
 assert.equal(smartManifest.resolved.state.captureType, 'mirror-selfie');
 const manualManifest = createSceneManifest({ ...baseState, smartAngleEvidence: { mode: 'manual', spaceWidthMeters: 0.9, aisleOrientation: 'transverse', mirrorVisible: true, mirrorPathObstructed: false } });
 assert.equal(manualManifest.resolved.state.captureType, 'front-selfie');
+
+const noGeometry = finalizeSmartAngle({ mode: 'auto', mirrorVisible: true, mirrorPathObstructed: false });
+assert.equal(noGeometry.captureType, null);
+assert.equal(noGeometry.status, 'insufficient-evidence');
+const measuredMirror = {
+  mode: 'auto' as const,
+  mirrorVisible: true, mirrorPathObstructed: false,
+  mirrorGeometry: { cameraToMirrorCm: 80, mirrorToFaceCm: 70, halfWidthCm: 40, lateralFaceOffsetCm: 15, occluded: false },
+};
+assert.equal(finalizeSmartAngle(measuredMirror).captureType, 'mirror-selfie');
+assert.equal(finalizeSmartAngle({ ...measuredMirror, mirrorGeometry: { ...measuredMirror.mirrorGeometry, occluded: true } }).captureType, null);
+const measuredManifest = createSceneManifest({ ...baseState, smartAngleEvidence: measuredMirror });
+assert.equal(measuredManifest.smartAngleDecision?.captureType, 'mirror-selfie');
+assert.equal(measuredManifest.resolved.state.captureType, 'mirror-selfie');
+assert.ok(measuredManifest.smartAngleDecision?.decisionAuditTrail.some(line => line.includes('mirror-selfie')));
+const unsupportedCandid = finalizeSmartAngle({ mode: 'auto', wetGroundVisible: true });
+assert.ok(!unsupportedCandid.rankedCandidates.find(c => c.captureType === 'third-person-candid')?.feasible);
