@@ -470,7 +470,7 @@ export function resolveScene(rawState: SceneState): ResolvedScene {
     const naturallyMirrorLocations: SceneFamilyId[] = ['bedroom', 'gym', 'living-room'];
     const hasShopWindowGlass = familyId === 'saudi-outdoor' && (s.subScene.includes('مقهى') || s.subScene.includes('محلات') || s.subScene.includes('خدمات'));
 
-    if (!naturallyMirrorLocations.includes(familyId) && !hasShopWindowGlass) {
+    if (!naturallyMirrorLocations.includes(familyId) && !hasShopWindowGlass && !(s.smartAngleEvidence?.mirrorVisible === true && s.smartAngleEvidence?.mirrorPathObstructed === false)) {
       issues.push({
         type: 'physical_impossibility',
         field: 'captureType',
