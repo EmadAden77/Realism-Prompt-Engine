@@ -313,3 +313,17 @@ const openGroupPipeline = compileUnifiedPromptPipeline({
 });
 assert.equal(openGroupPipeline.manifest.resolved.physicalState.groupSelfie?.shoulderClearance?.clearanceConstraint,'open');
 assert.doesNotMatch(openGroupPipeline.platforms.gemini.prompt,/Lateral space is constrained/);
+
+const sourcedWidth = compileUnifiedPromptPipeline({
+  ...base,groupSelfieEnabled:true,groupSelfieSize:4,
+  measuredGroupSpaceWidthMeters:1.2,groupSpaceWidthSource:'user-provided'
+});
+assert.equal(sourcedWidth.manifest.resolved.physicalState.groupSelfie?.measurementConfidence.classification,'measured');
+assert.equal(sourcedWidth.manifest.resolved.physicalState.groupSelfie?.measurementConfidence.confidence,'medium');
+const estimatedWidth = compileUnifiedPromptPipeline({
+  ...base,groupSelfieEnabled:true,groupSelfieSize:4,
+  measuredGroupSpaceWidthMeters:1.2,groupSpaceWidthSource:'estimated'
+});
+assert.equal(estimatedWidth.manifest.resolved.physicalState.groupSelfie?.measurementConfidence.classification,'estimated');
+const noWidth = compileUnifiedPromptPipeline({...base,groupSelfieEnabled:true,groupSelfieSize:2});
+assert.equal(noWidth.manifest.resolved.physicalState.groupSelfie?.measurementConfidence.classification,'unknown');
