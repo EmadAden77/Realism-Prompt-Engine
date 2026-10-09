@@ -1649,6 +1649,7 @@ export default function PhysFrameApp() {
         body: JSON.stringify({
           basePrompt: base,
           targetEngine,
+          sceneState: state,
         }),
       });
 
