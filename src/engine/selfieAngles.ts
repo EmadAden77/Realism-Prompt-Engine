@@ -563,3 +563,58 @@ function describeDirection(pitchDeg: number, yawDeg: number, rollDeg: number): s
   const roll = Math.abs(rollDeg) > 0.5 ? `${Math.abs(Math.round(rollDeg))}° natural frame roll` : 'near-zero roll';
   return `${pitch}, ${yaw}, ${roll}`;
 }
+
+/** Optional measured scene evidence for automatic capture-type ranking. */
+export interface SmartAngleEvidence {
+  mode: 'auto' | 'manual';
+  aisleOrientation?: 'transverse' | 'longitudinal';
+  spaceWidthMeters?: number;
+  mirrorVisible?: boolean;
+  mirrorPathObstructed?: boolean;
+  cameraClearanceCm?: number;
+  minimumFrontClearanceCm?: number;
+  independentPhotographer?: boolean;
+  wetGroundVisible?: boolean;
+}
+
+export type SmartCapture = 'front-selfie' | 'mirror-selfie' | 'third-person-candid';
+export interface SmartAngleRanking {
+  captureType: SmartCapture;
+  score: number;
+  reasons: string[];
+}
+export function rankSmartAngles(evidence: SmartAngleEvidence): SmartAngleRanking[] {
+  const options: SmartAngleRanking[] = [
+    { captureType: 'front-selfie', score: 50, reasons: [] },
+    { captureType: 'mirror-selfie', score: 15, reasons: [] },
+    { captureType: 'third-person-candid', score: 20, reasons: [] },
+  ];
+  const front = options[0];
+  const mirror = options[1];
+  const candid = options[2];
+  if (evidence.spaceWidthMeters !== undefined && evidence.spaceWidthMeters <= 1.2) {
+    front.score -= evidence.aisleOrientation === 'transverse' ? 40 : 15;
+    front.reasons.push('narrow aisle: orientation-dependent clearance penalty');
+  }
+  if (evidence.cameraClearanceCm !== undefined && evidence.minimumFrontClearanceCm !== undefined &&
+      evidence.cameraClearanceCm < evidence.minimumFrontClearanceCm) {
+    front.score = -Infinity;
+    front.reasons.push('measured camera clearance insufficient');
+  }
+  if (evidence.mirrorVisible === true && evidence.mirrorPathObstructed === false) {
+    mirror.score += 45;
+    mirror.reasons.push('unobstructed visible mirror path');
+  } else {
+    mirror.score = -Infinity;
+    mirror.reasons.push('mirror visibility not confirmed');
+  }
+  if (evidence.independentPhotographer === true) {
+    candid.score += 35;
+    if (evidence.wetGroundVisible === true) candid.score += 15;
+  } else {
+    candid.score = -Infinity;
+    candid.reasons.push('independent photographer not confirmed');
+  }
+  return options.filter(item => Number.isFinite(item.score))
+    .sort((a, b) => b.score - a.score);
+}
