@@ -147,6 +147,7 @@ export interface SceneState {
   // Gemini-assisted selfie camera direction. Local physics always validates/caps it.
   cameraAngleMode?: SelfieAngleMode;
   selfieAngleAdvice?: SelfieAngleAdvice;
+  smartAngleEvidence?: import('./selfieAngles').SmartAngleEvidence;
 
   // Dynamic group selfie. The reference subject remains the sole identity-locked phone holder.
   groupSelfieEnabled?: boolean;
