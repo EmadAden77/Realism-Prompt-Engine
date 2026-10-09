@@ -31,6 +31,7 @@ export interface GroupSelfieInput {
   subScene: string;
   framing: Framing;
   microLoc?: MicroLocation;
+  measuredSpaceWidthMeters?: number;
 }
 
 export interface ResolvedGroupSelfie {
@@ -49,6 +50,7 @@ export interface ResolvedGroupSelfie {
   validationNotes: string[];
   prompt: string;
   physicsGuards: string[];
+  shoulderClearance?: ReturnType<typeof estimateShoulderClearance>;
 }
 
 const FACE_SHAPES = [
@@ -392,7 +394,9 @@ export function resolveGroupSelfie(input: GroupSelfieInput): ResolvedGroupSelfie
     resolvedSize === 3 ? 56 :
     resolvedSize === 4 ? 59 : 60;
 
+  const shoulderClearance = estimateShoulderClearance({spaceWidthMeters: input.measuredSpaceWidthMeters,personCount:resolvedSize});
   const validationNotes: string[] = [];
+  if (shoulderClearance.clearanceConstraint === 'tight') validationNotes.push('Lateral group clearance is tight; no particular person or shoulder is assumed cropped.');
   if (requestedSize > maxByLocation) {
     validationNotes.push(`Requested group size ${requestedSize} was capped to ${resolvedSize} because the selected micro-location cannot physically hold a larger selfie cluster.`);
   }
@@ -434,7 +438,8 @@ export function resolveGroupSelfie(input: GroupSelfieInput): ResolvedGroupSelfie
     uniquenessScore: uniqueness.score,
     validationNotes,
     prompt,
-    physicsGuards
+    physicsGuards,
+    shoulderClearance
   };
 }
 
