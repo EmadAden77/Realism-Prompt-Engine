@@ -989,10 +989,10 @@ Return your assessment in Arabic.`,
 // 4. AI Hyper-Polish: Enhance prompt with micro-sensor physics & organic flaws
 app.post('/api/ai/enhance-prompt', async (req, res) => {
   const basePrompt = req.body?.basePrompt || '';
-  const targetEngine = req.body?.targetEngine || 'chatgpt';
+  const targetEngine: 'chatgpt' | 'gemini' = req.body?.targetEngine === 'gemini' ? 'gemini' : 'chatgpt';
 
   // Recompute the canonical decision on the server. The client cannot attest to readiness.
-  if (targetEngine !== 'chatgpt' && targetEngine !== 'gemini') {
+  if (req.body?.targetEngine !== 'chatgpt' && req.body?.targetEngine !== 'gemini') {
     return res.status(400).json({ error: 'Unsupported prompt target' });
   }
   if (!req.body?.sceneState || typeof basePrompt !== 'string') {
