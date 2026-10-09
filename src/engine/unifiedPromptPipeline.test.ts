@@ -299,3 +299,17 @@ assert.doesNotMatch(earBlocked.semantic.skinResponse, /warm red translucency/);
 assert.equal(verifyCausalFingerprint(pipeline), true);
 pipeline.manifest.resolved.state.timeOfDay = 'midday';
 assert.equal(verifyCausalFingerprint(pipeline), false);
+
+const tightGroupPipeline = compileUnifiedPromptPipeline({
+  ...base, groupSelfieEnabled:true, groupSelfieSize:4,
+  measuredGroupSpaceWidthMeters:1.2,
+});
+assert.equal(tightGroupPipeline.manifest.resolved.physicalState.groupSelfie?.shoulderClearance?.clearanceConstraint,'tight');
+assert.match(tightGroupPipeline.semantic.groupSelfie || '', /Lateral space is constrained/);
+assert.match(tightGroupPipeline.platforms.gemini.prompt, /Lateral space is constrained/);
+const openGroupPipeline = compileUnifiedPromptPipeline({
+  ...base, groupSelfieEnabled:true, groupSelfieSize:2,
+  measuredGroupSpaceWidthMeters:3,
+});
+assert.equal(openGroupPipeline.manifest.resolved.physicalState.groupSelfie?.shoulderClearance?.clearanceConstraint,'open');
+assert.doesNotMatch(openGroupPipeline.platforms.gemini.prompt,/Lateral space is constrained/);
