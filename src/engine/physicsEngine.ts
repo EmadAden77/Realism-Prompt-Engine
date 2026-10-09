@@ -112,6 +112,11 @@ export interface SceneState {
   environmentRealism: string;
   realismStyle: RealismStyle;
   customIdentityPrompt?: string;
+  /** Optional explicit observations; never inferred solely from a lighting label. */
+  earTransmissionEvidence?: { sourceBehindEar: boolean; earExposed: boolean; hairOccluded: boolean; tissuePathMm: number; viewerOnOppositeSide: boolean; };
+  /** Optional measured accessible width; unspecified locations retain unknown clearance. */
+  measuredGroupSpaceWidthMeters?: number;
+  groupSpaceWidthSource?: 'user-provided' | 'estimated';
 
   // Appearance & Accessories
   glassesMode: GlassesMode;
@@ -407,7 +412,9 @@ export function resolveScene(rawState: SceneState): ResolvedScene {
       familyId,
       subScene: s.subScene,
       framing: s.framing,
-      microLoc
+      microLoc,
+      measuredSpaceWidthMeters: s.measuredGroupSpaceWidthMeters,
+      widthEvidenceSource: s.groupSpaceWidthSource
     });
 
     if (s.captureType !== 'front-selfie') {
@@ -842,7 +849,9 @@ function calculateDetailedPhysicalState(
         familyId,
         subScene: state.subScene,
         framing: state.framing,
-        microLoc
+        microLoc,
+        measuredSpaceWidthMeters: state.measuredGroupSpaceWidthMeters,
+        widthEvidenceSource: state.groupSpaceWidthSource
       })
     : null;
 
@@ -1090,7 +1099,8 @@ function calculateDetailedPhysicalState(
     glassesMode: state.glassesMode,
     clothingCondition: state.clothingCondition,
     atmosphericCondition: state.atmosphericCondition,
-    lighting: lightingCausality
+    lighting: lightingCausality,
+    earTransmissionEvidence: state.earTransmissionEvidence
   });
 
   // --- 9. Physical Reflections (Section 17) ---

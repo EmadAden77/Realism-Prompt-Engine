@@ -1,3 +1,4 @@
+import { exportCausalAttestationLedger, type CausalLedgerEntry } from './promptCompiler';
 import { planSpatialComposition, type SpatialCompositionPlan } from './spatialCompositionPlanner';
 import { createSceneManifest, deriveCausalHairExpression, type SceneManifest } from './causalPipeline';
 import {
@@ -58,6 +59,8 @@ export interface UnifiedPromptDiagnostics {
 
 export interface UnifiedPromptPipelineResult {
   manifest: SceneManifest;
+  causalLedger: CausalLedgerEntry[];
+  causalFingerprint: string;
   spatialPlan: SpatialCompositionPlan;
   semantic: SemanticPromptScene;
   neutral: CompiledNeutralPrompt;
@@ -179,6 +182,21 @@ const validatePlatformPrompt = (
  * React and other callers should consume this result rather than rebuilding
  * any of these stages independently.
  */
+export function causalFingerprint(value: unknown): string {
+  const json=JSON.stringify(value);
+  let hash=2166136261;
+  for(let i=0;i<json.length;i++) hash=Math.imul(hash ^ json.charCodeAt(i),16777619);
+  return (hash>>>0).toString(16).padStart(8,'0');
+}
+
+export function verifyCausalFingerprint(pipeline: UnifiedPromptPipelineResult): boolean {
+  return pipeline.causalFingerprint === causalFingerprint({
+    state: pipeline.manifest.resolved.state,
+    angle: pipeline.manifest.angleDecision,
+    prompt: pipeline.neutral.text
+  });
+}
+
 export function compileUnifiedPromptPipeline(
   rawState: SceneState
 ): UnifiedPromptPipelineResult {
@@ -307,8 +325,12 @@ export function compileUnifiedPromptPipeline(
     midjourneyPrompt: midjourney.prompt,
   });
 
+  const causalLedger = exportCausalAttestationLedger(neutral.fragments,manifest.angleDecision?.decisionAuditTrail);
+  const fingerprint = causalFingerprint({state:resolved.state, angle:manifest.angleDecision, prompt:neutral.text});
   return {
     manifest,
+    causalLedger,
+    causalFingerprint:fingerprint,
     spatialPlan,
     semantic,
     neutral,
@@ -347,7 +369,7 @@ export function validateExternalPromptCandidate(
   target: UnifiedPromptTarget,
   candidatePrompt: string
 ): PlatformPromptResult {
-  if (!pipeline.diagnostics.anglePromptReady) {
+  if (!pipeline.diagnostics.anglePromptReady || !verifyCausalFingerprint(pipeline)) {
     throw new Error('Camera evidence insufficient: prompt export blocked');
   }
   const negative = compileNegativeConstraints(

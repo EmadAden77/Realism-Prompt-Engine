@@ -31,6 +31,8 @@ export interface GroupSelfieInput {
   subScene: string;
   framing: Framing;
   microLoc?: MicroLocation;
+  measuredSpaceWidthMeters?: number;
+  widthEvidenceSource?: 'user-provided' | 'estimated';
 }
 
 export interface ResolvedGroupSelfie {
@@ -49,6 +51,8 @@ export interface ResolvedGroupSelfie {
   validationNotes: string[];
   prompt: string;
   physicsGuards: string[];
+  shoulderClearance?: ReturnType<typeof estimateShoulderClearance>;
+  measurementConfidence: { classification: 'measured' | 'estimated' | 'unknown'; confidence: 'high' | 'medium' | 'low'; source: string };
 }
 
 const FACE_SHAPES = [
@@ -392,7 +396,14 @@ export function resolveGroupSelfie(input: GroupSelfieInput): ResolvedGroupSelfie
     resolvedSize === 3 ? 56 :
     resolvedSize === 4 ? 59 : 60;
 
+  const shoulderClearance = estimateShoulderClearance({spaceWidthMeters: input.measuredSpaceWidthMeters,personCount:resolvedSize});
+  const measurementConfidence = input.measuredSpaceWidthMeters === undefined
+    ? {classification:'unknown' as const,confidence:'low' as const,source:'No available width evidence'}
+    : input.widthEvidenceSource === 'estimated'
+      ? {classification:'estimated' as const,confidence:'medium' as const,source:'Scene width supplied as an estimate'}
+      : {classification:'measured' as const,confidence:'medium' as const,source:'User-provided measurement; not independently verified'};
   const validationNotes: string[] = [];
+  if (shoulderClearance.clearanceConstraint === 'tight') validationNotes.push('Lateral group clearance is tight; no particular person or shoulder is assumed cropped.');
   if (requestedSize > maxByLocation) {
     validationNotes.push(`Requested group size ${requestedSize} was capped to ${resolvedSize} because the selected micro-location cannot physically hold a larger selfie cluster.`);
   }
@@ -405,8 +416,12 @@ export function resolveGroupSelfie(input: GroupSelfieInput): ResolvedGroupSelfie
     `Companion ${i + 1}: adult male, ${p.ageBand}, ${p.heightCm}cm, ${p.bodyBuild}; ${p.faceShape}; ${p.jawShape}; ${p.eyeShape}; ${p.noseShape}; ${p.hair}; ${p.facialHair}; ${p.eyewear}; ${p.complexion}. Clothing: ${p.outfit}. Position/gaze: ${p.position}; ${p.gaze}. Interaction: ${p.interaction}.`
   ).join('\n');
 
+  const clearanceInstruction = shoulderClearance.clearanceConstraint === 'tight'
+    ? `Lateral space is constrained to approximately ${shoulderClearance.maxSideBySide} people side-by-side; use physically plausible staggered depth without assigning an unsupported specific shoulder crop.`
+    : '';
+
   const prompt = input.enabled
-    ? `GROUP SELFIE MODE: total people=${resolvedSize}. The reference-image subject remains the only identity-locked person and the only person holding the Xiaomi 15 Ultra front-camera phone. Relationship: ${relationshipLabel(relationship)}. Arrangement: ${arrangement}. Camera distance should be about ${recommendedDistanceCm}cm, remaining within real one-arm reach.\n${cast}\nANTI-CLONING: every companion must be a genuinely different individual. Do not reuse the reference subject's face, skull shape, hairline, beard pattern, body proportions, height, or outfit. Do not reuse one companion's face on another companion. Preserve the listed differences in face geometry, height, body build, hair, facial hair, complexion, eyewear, and clothing. Faces must not look like siblings, twins, clones, face-swaps, or variations of one latent identity.`
+    ? `GROUP SELFIE MODE: total people=${resolvedSize}. The reference-image subject remains the only identity-locked person and the only person holding the Xiaomi 15 Ultra front-camera phone. Relationship: ${relationshipLabel(relationship)}. Arrangement: ${arrangement}. ${clearanceInstruction} Camera distance should be about ${recommendedDistanceCm}cm, remaining within real one-arm reach.\n${cast}\nANTI-CLONING: every companion must be a genuinely different individual. Do not reuse the reference subject's face, skull shape, hairline, beard pattern, body proportions, height, or outfit. Do not reuse one companion's face on another companion. Preserve the listed differences in face geometry, height, body build, hair, facial hair, complexion, eyewear, and clothing. Faces must not look like siblings, twins, clones, face-swaps, or variations of one latent identity.`
     : '';
 
   const physicsGuards = input.enabled ? [
@@ -434,6 +449,24 @@ export function resolveGroupSelfie(input: GroupSelfieInput): ResolvedGroupSelfie
     uniquenessScore: uniqueness.score,
     validationNotes,
     prompt,
-    physicsGuards
+    physicsGuards,
+    shoulderClearance,
+    measurementConfidence
   };
+}
+
+/** Clearance estimate, not a per-person projection or proof of a cropped shoulder. */
+export function estimateShoulderClearance(input: {
+  spaceWidthMeters?: number; personCount: number; shoulderWidthCm?: number;
+}): { clearanceConstraint: 'tight' | 'open' | 'unknown'; maxSideBySide: number | null; overlapProbable: boolean; evidence: string[] } {
+  const {spaceWidthMeters,personCount,shoulderWidthCm=47}=input;
+  if (!Number.isFinite(spaceWidthMeters) || !spaceWidthMeters || spaceWidthMeters <= 0 ||
+      !Number.isFinite(shoulderWidthCm) || shoulderWidthCm <= 0 || !Number.isInteger(personCount) || personCount < 1) {
+    return {clearanceConstraint:'unknown',maxSideBySide:null,overlapProbable:false,evidence:['insufficient measured lateral clearance']};
+  }
+  const maxSideBySide = Math.max(0,Math.floor(spaceWidthMeters*100/shoulderWidthCm));
+  const tight = personCount > maxSideBySide;
+  return {clearanceConstraint:tight?'tight':'open',maxSideBySide,overlapProbable:tight,
+    evidence:[`spaceWidthMeters=${spaceWidthMeters}`,`personCount=${personCount}`,`assumedShoulderWidthCm=${shoulderWidthCm}`,
+      'lateral occupancy estimate only; no specific cropped shoulder is inferred']};
 }

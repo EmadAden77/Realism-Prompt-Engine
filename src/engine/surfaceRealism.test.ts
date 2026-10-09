@@ -129,3 +129,12 @@ console.log('surfaceRealism tests passed');
   });
   assert.ok(shade.consistencyGuards.some(text => text.includes('no mandatory heat flush')));
 }
+
+const earCase = (overrides: Partial<NonNullable<Parameters<typeof deriveSurfaceRealism>[0]['earTransmissionEvidence']>>) => deriveSurfaceRealism({
+  familyId:'bedroom',isOutdoor:false,timeOfDay:'night',captureType:'front-selfie',
+  glassesMode:'no_glasses',clothingCondition:'crisp',atmosphericCondition:'neutral',lighting:baseLighting,
+  earTransmissionEvidence:{sourceBehindEar:true,earExposed:true,hairOccluded:false,tissuePathMm:3,viewerOnOppositeSide:true,...overrides}
+}).consistencyGuards.join(' ');
+assert.match(earCase({}),/warm red translucency/);
+assert.doesNotMatch(earCase({hairOccluded:true}),/warm red translucency/);
+assert.doesNotMatch(earCase({sourceBehindEar:false}),/warm red translucency/);

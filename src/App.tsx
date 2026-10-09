@@ -42,6 +42,7 @@ import {
 } from './engine/semanticSceneCompiler';
 import {
   compileUnifiedPromptPipeline,
+  verifyCausalFingerprint,
   validateExternalPromptCandidate,
 } from './engine/unifiedPromptPipeline';
 import type { UnifiedConflictReport } from './engine/conflictValidator';
@@ -1704,7 +1705,7 @@ export default function PhysFrameApp() {
     // Single authoritative engine path:
     // SceneState -> Manifest -> Semantic -> Neutral -> Negative -> Platform -> Validation
     const pipeline = compileUnifiedPromptPipeline(state as any);
-    angleExportReady = pipeline.diagnostics.anglePromptReady;
+    angleExportReady = pipeline.diagnostics.anglePromptReady && verifyCausalFingerprint(pipeline);
     chatGPTPrompt = pipeline.platforms.chatgpt.prompt;
     geminiPrompt = pipeline.platforms.gemini.prompt;
     negativePrompt = pipeline.platforms.chatgpt.negativePrompt || pipeline.negative.text;

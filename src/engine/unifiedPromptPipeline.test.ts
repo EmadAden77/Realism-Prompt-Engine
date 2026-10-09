@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {
   compileUnifiedPromptPipeline,
+  causalFingerprint,
+  verifyCausalFingerprint,
   validateExternalPromptCandidate,
 } from './unifiedPromptPipeline';
 import type { SceneState } from './physicsEngine';
@@ -272,3 +274,56 @@ assert.equal(supportedAngle.diagnostics.anglePromptReady, true);
 assert.ok(supportedAngle.platforms.gemini.prompt.length > 0);
 
 console.log('unifiedPromptPipeline tests passed');
+
+assert.ok(pipeline.causalLedger.length > 0, 'causal ledger should list prompt decisions');
+const recordedFingerprint = pipeline.causalFingerprint;
+assert.notEqual(recordedFingerprint, causalFingerprint({
+  state: {...pipeline.manifest.resolved.state, timeOfDay:'midday'},
+  angle:pipeline.manifest.angleDecision, prompt:pipeline.neutral.text
+}), 'post-compile scene edit must change fingerprint');
+
+const earIntegrated = compileUnifiedPromptPipeline({
+  ...base,
+  earTransmissionEvidence: {
+    sourceBehindEar:true, earExposed:true, hairOccluded:false, tissuePathMm:3, viewerOnOppositeSide:true
+  }
+});
+assert.match(earIntegrated.semantic.skinResponse, /warm red translucency/);
+const earBlocked = compileUnifiedPromptPipeline({
+  ...base,
+  earTransmissionEvidence: {
+    sourceBehindEar:true, earExposed:true, hairOccluded:true, tissuePathMm:3, viewerOnOppositeSide:true
+  }
+});
+assert.doesNotMatch(earBlocked.semantic.skinResponse, /warm red translucency/);
+assert.equal(verifyCausalFingerprint(pipeline), true);
+pipeline.manifest.resolved.state.timeOfDay = 'midday';
+assert.equal(verifyCausalFingerprint(pipeline), false);
+
+const tightGroupPipeline = compileUnifiedPromptPipeline({
+  ...base, groupSelfieEnabled:true, groupSelfieSize:4,
+  measuredGroupSpaceWidthMeters:1.2,
+});
+assert.equal(tightGroupPipeline.manifest.resolved.physicalState.groupSelfie?.shoulderClearance?.clearanceConstraint,'tight');
+assert.match(tightGroupPipeline.semantic.groupSelfie || '', /Lateral space is constrained/);
+assert.match(tightGroupPipeline.platforms.gemini.prompt, /Lateral space is constrained/);
+const openGroupPipeline = compileUnifiedPromptPipeline({
+  ...base, groupSelfieEnabled:true, groupSelfieSize:2,
+  measuredGroupSpaceWidthMeters:3,
+});
+assert.equal(openGroupPipeline.manifest.resolved.physicalState.groupSelfie?.shoulderClearance?.clearanceConstraint,'open');
+assert.doesNotMatch(openGroupPipeline.platforms.gemini.prompt,/Lateral space is constrained/);
+
+const sourcedWidth = compileUnifiedPromptPipeline({
+  ...base,groupSelfieEnabled:true,groupSelfieSize:4,
+  measuredGroupSpaceWidthMeters:1.2,groupSpaceWidthSource:'user-provided'
+});
+assert.equal(sourcedWidth.manifest.resolved.physicalState.groupSelfie?.measurementConfidence.classification,'measured');
+assert.equal(sourcedWidth.manifest.resolved.physicalState.groupSelfie?.measurementConfidence.confidence,'medium');
+const estimatedWidth = compileUnifiedPromptPipeline({
+  ...base,groupSelfieEnabled:true,groupSelfieSize:4,
+  measuredGroupSpaceWidthMeters:1.2,groupSpaceWidthSource:'estimated'
+});
+assert.equal(estimatedWidth.manifest.resolved.physicalState.groupSelfie?.measurementConfidence.classification,'estimated');
+const noWidth = compileUnifiedPromptPipeline({...base,groupSelfieEnabled:true,groupSelfieSize:2});
+assert.equal(noWidth.manifest.resolved.physicalState.groupSelfie?.measurementConfidence.classification,'unknown');

@@ -5,6 +5,7 @@ import {
   getGroupSelfieLocationLimit,
   getRequiredGroupFraming,
   resolveGroupSelfie,
+  estimateShoulderClearance,
   widenFramingForGroup
 } from './groupSelfie';
 import { resolveScene, type SceneState } from './physicsEngine';
@@ -139,3 +140,10 @@ assert((resolved.physicalState.groupSelfie?.profiles.length || 0) === 2, 'resolv
 assert(resolved.physicalState.cameraDistance.includes('group selfie reach'), 'camera distance must switch to group-selfie mechanics');
 
 console.log('✓ Dynamic group selfie regression suite passed.');
+
+const crowded = estimateShoulderClearance({spaceWidthMeters:1.2,personCount:4});
+assert(crowded.clearanceConstraint === 'tight' && crowded.overlapProbable && crowded.maxSideBySide === 2,
+  'narrow aisle should flag lateral capacity without predicting a particular shoulder');
+const open = estimateShoulderClearance({spaceWidthMeters:3,personCount:2});
+assert(open.clearanceConstraint === 'open' && !open.overlapProbable,
+  'wide aisle should not invent overlap');
