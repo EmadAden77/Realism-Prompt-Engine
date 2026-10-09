@@ -1,3 +1,4 @@
+import { rankSmartAngles } from './selfieAngles';
 import { compileUnifiedPromptPipeline } from './unifiedPromptPipeline';
 import assert from 'node:assert/strict';
 import {
@@ -142,3 +143,16 @@ const noRimFromTemperature = compileUnifiedPromptPipeline({ ...baseState, lighti
 assert.ok(!noRimFromTemperature.neutral.text.includes('Back-facing fine strands'));
 const explicitBacklight = compileUnifiedPromptPipeline({ ...baseState, lightingMode: 'rear light behind head' });
 assert.ok(explicitBacklight.neutral.text.includes('Back-facing fine strands'));
+
+const narrowTransverse = rankSmartAngles({ mode: 'auto', spaceWidthMeters: 0.9, aisleOrientation: 'transverse', mirrorVisible: true, mirrorPathObstructed: false });
+assert.equal(narrowTransverse[0]?.captureType, 'mirror-selfie');
+const narrowLongitudinal = rankSmartAngles({ mode: 'auto', spaceWidthMeters: 0.9, aisleOrientation: 'longitudinal', mirrorVisible: false });
+assert.equal(narrowLongitudinal[0]?.captureType, 'front-selfie');
+const obstructedMirror = rankSmartAngles({ mode: 'auto', mirrorVisible: true, mirrorPathObstructed: true });
+assert.ok(!obstructedMirror.some(item => item.captureType === 'mirror-selfie'));
+const unsafeSelfie = rankSmartAngles({ mode: 'auto', cameraClearanceCm: 20, minimumFrontClearanceCm: 50, mirrorVisible: true, mirrorPathObstructed: false });
+assert.ok(!unsafeSelfie.some(item => item.captureType === 'front-selfie'));
+const smartManifest = createSceneManifest({ ...baseState, smartAngleEvidence: { mode: 'auto', spaceWidthMeters: 0.9, aisleOrientation: 'transverse', mirrorVisible: true, mirrorPathObstructed: false } });
+assert.equal(smartManifest.resolved.state.captureType, 'mirror-selfie');
+const manualManifest = createSceneManifest({ ...baseState, smartAngleEvidence: { mode: 'manual', spaceWidthMeters: 0.9, aisleOrientation: 'transverse', mirrorVisible: true, mirrorPathObstructed: false } });
+assert.equal(manualManifest.resolved.state.captureType, 'front-selfie');

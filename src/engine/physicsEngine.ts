@@ -147,6 +147,7 @@ export interface SceneState {
   // Gemini-assisted selfie camera direction. Local physics always validates/caps it.
   cameraAngleMode?: SelfieAngleMode;
   selfieAngleAdvice?: SelfieAngleAdvice;
+  smartAngleEvidence?: import('./selfieAngles').SmartAngleEvidence;
 
   // Dynamic group selfie. The reference subject remains the sole identity-locked phone holder.
   groupSelfieEnabled?: boolean;
@@ -469,7 +470,7 @@ export function resolveScene(rawState: SceneState): ResolvedScene {
     const naturallyMirrorLocations: SceneFamilyId[] = ['bedroom', 'gym', 'living-room'];
     const hasShopWindowGlass = familyId === 'saudi-outdoor' && (s.subScene.includes('مقهى') || s.subScene.includes('محلات') || s.subScene.includes('خدمات'));
 
-    if (!naturallyMirrorLocations.includes(familyId) && !hasShopWindowGlass) {
+    if (!naturallyMirrorLocations.includes(familyId) && !hasShopWindowGlass && !(s.smartAngleEvidence?.mirrorVisible === true && s.smartAngleEvidence?.mirrorPathObstructed === false)) {
       issues.push({
         type: 'physical_impossibility',
         field: 'captureType',

@@ -1,3 +1,4 @@
+import { rankSmartAngles } from './selfieAngles';
 import { getHairPhysicsPreset } from '../data/hairPhysicsLibrary';
 import { ADVANCED_FACIAL_EXPRESSIONS } from '../data/facialExpressionLibrary';
 import { resolveScene, type ResolvedScene, type SceneState } from './physicsEngine';
@@ -63,7 +64,13 @@ export function createSceneManifest(
   platformTarget: PlatformTarget = 'neutral',
   sceneId?: string
 ): SceneManifest {
-  const resolved = resolveScene(rawState);
+  const evidence = rawState.smartAngleEvidence;
+  const ranked = evidence?.mode === 'auto' ? rankSmartAngles(evidence) : [];
+  const selectedCapture = ranked[0]?.captureType;
+  const effectiveState: SceneState = selectedCapture
+    ? { ...rawState, captureType: selectedCapture }
+    : rawState;
+  const resolved = resolveScene(effectiveState);
   const continuityContext = resolveHomeContinuity(resolved.state);
   const referencePlan = resolveReferencePlan(resolved.state);
 
