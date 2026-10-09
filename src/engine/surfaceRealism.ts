@@ -48,7 +48,7 @@ export function deriveSurfaceRealism(input: SurfaceRealismInput): SurfaceRealism
   const phoneOnly = input.lighting.primarySource.name === 'smartphone display glow';
   const harshSun = input.lighting.primarySource.name.includes('midday sun');
 
-  const thermalSkinResponse = input.isOutdoor && input.timeOfDay === 'midday'
+  const thermalSkinResponse = input.isOutdoor && harshSun
     ? 'if sun exposure and heat are evident, retain localized skin flush and restrained natural perspiration without uniform redness; preserve personal complexion'
     : 'no mandatory heat flush or perspiration without evidence of heat exposure';
   consistencyGuards.push(thermalSkinResponse);
