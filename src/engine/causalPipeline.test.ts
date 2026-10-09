@@ -1,6 +1,8 @@
+import { compileUnifiedPromptPipeline } from './unifiedPromptPipeline';
 import assert from 'node:assert/strict';
 import {
   createSceneManifest,
+  deriveCausalHairExpression,
   decideEffectActivation,
   resolveRuleConflict,
   type RuleCandidate,
@@ -100,3 +102,43 @@ assert.equal(PLATFORM_CAPABILITY_REGISTRY.midjourney.defaultVersion, '8.2');
 assert.match(adaptPromptToPlatform(neutral, 'midjourney'), /--v 8\.2 --raw$/);
 
 console.log('causalPipeline tests passed');
+
+const causalNormal = deriveCausalHairExpression(baseState);
+assert.ok(causalNormal.hair.some(text => text.includes('chosen hairstyle')));
+assert.ok(!causalNormal.hair.some(text => text.includes('breeze')));
+const causalBreeze = deriveCausalHairExpression({ ...baseState, atmosphericCondition: 'breezy' });
+assert.ok(causalBreeze.hair.some(text => text.includes('breeze')));
+const causalMirror = deriveCausalHairExpression({ ...baseState, captureType: 'mirror-selfie' });
+assert.ok(causalMirror.hair.some(text => text.includes('planar mirror')));
+
+const selectedFace = deriveCausalHairExpression({ ...baseState, expression: 'fx02' });
+assert.ok(selectedFace.expression.some(rule => rule.includes('corrugator')));
+const selectedHair = deriveCausalHairExpression({ ...baseState, hairPhysicsPreset: 'hp01' });
+assert.ok(selectedHair.hair.some(rule => rule.includes('scalp')));
+const endToEnd = compileUnifiedPromptPipeline({ ...baseState, atmosphericCondition: 'breezy', expression: 'fx02' });
+assert.ok(endToEnd.neutral.text.includes('Loose exposed strands respond naturally to the breeze.'));
+assert.ok(endToEnd.neutral.text.includes('corrugator'));
+
+const rearLitHair = deriveCausalHairExpression({ ...baseState, lightingMode: 'backlit rim light 6500K' });
+assert.ok(rearLitHair.hair.some(text => text.includes('Back-facing fine strands')));
+const coolCeiling = deriveCausalHairExpression({ ...baseState, lightingMode: '6500K ceiling light' });
+assert.ok(!coolCeiling.hair.some(text => text.includes('Back-facing fine strands')));
+const harshSunEyes = deriveCausalHairExpression({ ...baseState, timeOfDay: 'midday', lightingMode: 'direct sunlight' });
+assert.ok(harshSunEyes.expression.some(text => text.includes('eyelid response')));
+
+const negatedRearLight = deriveCausalHairExpression({ ...baseState, lightingMode: 'no backlight, ambient ceiling light 6500K' });
+assert.ok(!negatedRearLight.hair.some(text => text.includes('Back-facing fine strands')));
+const negatedDirectSun = deriveCausalHairExpression({ ...baseState, timeOfDay: 'midday', lightingMode: 'without direct sunlight, open shade' });
+assert.ok(!negatedDirectSun.expression.some(text => text.includes('eyelid response')));
+const rearLightFinal = compileUnifiedPromptPipeline({ ...baseState, lightingMode: 'rear light behind head' });
+assert.ok(rearLightFinal.neutral.text.includes('Back-facing fine strands'));
+
+const frontalOnly = deriveCausalHairExpression({ ...baseState, lightingMode: 'front-only lighting, no rear light' });
+assert.ok(!frontalOnly.hair.some(text => text.includes('Back-facing fine strands')));
+const noBacklightFinal = compileUnifiedPromptPipeline({ ...baseState, lightingMode: 'no backlight, white ceiling 6500K' });
+assert.ok(!noBacklightFinal.neutral.text.includes('Back-facing fine strands'));
+
+const noRimFromTemperature = compileUnifiedPromptPipeline({ ...baseState, lightingMode: '6500K cool white ceiling light' });
+assert.ok(!noRimFromTemperature.neutral.text.includes('Back-facing fine strands'));
+const explicitBacklight = compileUnifiedPromptPipeline({ ...baseState, lightingMode: 'rear light behind head' });
+assert.ok(explicitBacklight.neutral.text.includes('Back-facing fine strands'));

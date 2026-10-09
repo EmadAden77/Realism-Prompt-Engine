@@ -1,3 +1,5 @@
+import { getHairPhysicsPreset } from '../data/hairPhysicsLibrary';
+import { ADVANCED_FACIAL_EXPRESSIONS } from '../data/facialExpressionLibrary';
 import { resolveScene, type ResolvedScene, type SceneState } from './physicsEngine';
 import { evaluateV20Knowledge, type KnowledgeRuleDecision } from './v20KnowledgeBase';
 import { resolveHomeContinuity, type HomeContinuityContext } from './fixedHomeContinuity';
@@ -97,4 +99,32 @@ export function resolveRuleConflict(
   }
 
   return { status: 'ambiguous', candidates: [first, second] };
+}
+
+export function deriveCausalHairExpression(state: SceneState): { hair: string[]; expression: string[] } {
+  const hair = ['Keep the chosen hairstyle and natural strand texture without uniform artificial shine.'];
+  const expression = ['Preserve the chosen facial expression and subtle natural skin detail.'];
+  if (state.hairPhysicsPreset && state.hairPhysicsPreset !== 'hp_auto') {
+    hair.push(getHairPhysicsPreset(state.hairPhysicsPreset).prompt);
+  }
+  const chosenExpression = ADVANCED_FACIAL_EXPRESSIONS.find(item => item.id === state.expression);
+  if (chosenExpression) expression.push(chosenExpression.anatomy);
+  if (state.atmosphericCondition === 'breezy') hair.push('Loose exposed strands respond naturally to the breeze.');
+  // A selected rear/side source is needed; color temperature alone proves no rim light.
+  // Require an explicitly rear-facing source, not merely a color temperature.
+  const backlight = /(?:backlight|backlit|rim light|rear light|إضاءة خلفية|ضوء خلفي)/i.test(state.lightingMode)
+    && !/(?:no backlight|without backlight|no rim light|بدون إضاءة خلفية|بدون ضوء خلفي)/i.test(state.lightingMode)
+    && !/(?:front[- ]only|frontal[- ]only|from camera side only)/i.test(state.lightingMode);
+  if (backlight) {
+    hair.push('Back-facing fine strands respond to the specified rear or rim source; maintain coherent source direction and avoid invented dandruff or uniform halo.');
+  }
+  const directSun = state.timeOfDay !== 'night' && /(?:شمس مباشرة|direct sun|direct sunlight)/i.test(state.lightingMode) && !/(?:no direct sun|without direct sunlight|بدون شمس مباشرة)/i.test(state.lightingMode);
+  if (directSun) {
+    expression.push('Direct facial sunlight permits a restrained eyelid response consistent with the chosen expression; no fixed left-right squint ratio.');
+  }
+  if (state.captureType === 'mirror-selfie') {
+    hair.push('Hair reflection follows the same planar mirror geometry as the face.');
+    expression.push('Maintain expression and identity in the mirror reflection.');
+  }
+  return { hair, expression };
 }

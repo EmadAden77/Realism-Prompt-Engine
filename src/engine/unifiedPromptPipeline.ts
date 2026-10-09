@@ -1,4 +1,4 @@
-import { createSceneManifest, type SceneManifest } from './causalPipeline';
+import { createSceneManifest, deriveCausalHairExpression, type SceneManifest } from './causalPipeline';
 import {
   validatePrompt,
   validateScene,
@@ -188,6 +188,10 @@ export function compileUnifiedPromptPipeline(
     resolved.derived,
     resolved.physicalState
   );
+
+  const hairExpression = deriveCausalHairExpression(resolved.state);
+  semantic.hair = [semantic.hair, ...hairExpression.hair].join(' ');
+  semantic.expression = [semantic.expression, ...hairExpression.expression].join(' ');
 
   const neutral = compileNeutralPrompt(
     semantic,
