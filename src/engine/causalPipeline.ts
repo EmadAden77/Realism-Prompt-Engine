@@ -111,9 +111,11 @@ export function deriveCausalHairExpression(state: SceneState): { hair: string[];
   if (chosenExpression) expression.push(chosenExpression.anatomy);
   if (state.atmosphericCondition === 'breezy') hair.push('Loose exposed strands respond naturally to the breeze.');
   // A selected rear/side source is needed; color temperature alone proves no rim light.
-  const backlight = /(?:backlight|backlit|rim light|rear light|إضاءة خلفية|ضوء خلفي)/i.test(state.lightingMode) && !/(?:no backlight|without backlight|no rim light|بدون إضاءة خلفية)/i.test(state.lightingMode);
+  const backlight = /(?:backlight|backlit|rim light|rear light|إضاءة خلفية|ضوء خلفي)/i.test(state.lightingMode)
+    && !/(?:no backlight|without backlight|no rim light|بدون إضاءة خلفية|بدون ضوء خلفي)/i.test(state.lightingMode)
+    && !/(?:front[- ]only|frontal[- ]only|from camera side only)/i.test(state.lightingMode);
   if (backlight) {
-    hair.push('Visible fine hair shafts receive directionally consistent rim transmission and scattering from the selected rear light; no invented dandruff.');
+    hair.push('Back-facing fine strands respond to the specified rear or rim source; maintain coherent source direction and avoid invented dandruff or uniform halo.');
   }
   const directSun = state.timeOfDay !== 'night' && /(?:شمس مباشرة|direct sun|direct sunlight)/i.test(state.lightingMode) && !/(?:no direct sun|without direct sunlight|بدون شمس مباشرة)/i.test(state.lightingMode);
   if (directSun) {
