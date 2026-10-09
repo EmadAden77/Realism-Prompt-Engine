@@ -32,6 +32,7 @@ export interface GroupSelfieInput {
   framing: Framing;
   microLoc?: MicroLocation;
   measuredSpaceWidthMeters?: number;
+  widthEvidenceSource?: 'user-provided' | 'estimated';
 }
 
 export interface ResolvedGroupSelfie {
@@ -51,6 +52,7 @@ export interface ResolvedGroupSelfie {
   prompt: string;
   physicsGuards: string[];
   shoulderClearance?: ReturnType<typeof estimateShoulderClearance>;
+  measurementConfidence: { classification: 'measured' | 'estimated' | 'unknown'; confidence: 'high' | 'medium' | 'low'; source: string };
 }
 
 const FACE_SHAPES = [
@@ -395,6 +397,11 @@ export function resolveGroupSelfie(input: GroupSelfieInput): ResolvedGroupSelfie
     resolvedSize === 4 ? 59 : 60;
 
   const shoulderClearance = estimateShoulderClearance({spaceWidthMeters: input.measuredSpaceWidthMeters,personCount:resolvedSize});
+  const measurementConfidence = input.measuredSpaceWidthMeters === undefined
+    ? {classification:'unknown' as const,confidence:'low' as const,source:'No available width evidence'}
+    : input.widthEvidenceSource === 'estimated'
+      ? {classification:'estimated' as const,confidence:'medium' as const,source:'Scene width supplied as an estimate'}
+      : {classification:'measured' as const,confidence:'medium' as const,source:'User-provided measurement; not independently verified'};
   const validationNotes: string[] = [];
   if (shoulderClearance.clearanceConstraint === 'tight') validationNotes.push('Lateral group clearance is tight; no particular person or shoulder is assumed cropped.');
   if (requestedSize > maxByLocation) {
@@ -443,7 +450,8 @@ export function resolveGroupSelfie(input: GroupSelfieInput): ResolvedGroupSelfie
     validationNotes,
     prompt,
     physicsGuards,
-    shoulderClearance
+    shoulderClearance,
+    measurementConfidence
   };
 }
 
