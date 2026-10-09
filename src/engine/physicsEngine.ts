@@ -112,6 +112,10 @@ export interface SceneState {
   environmentRealism: string;
   realismStyle: RealismStyle;
   customIdentityPrompt?: string;
+  /** Optional explicit observations; never inferred solely from a lighting label. */
+  earTransmissionEvidence?: { sourceBehindEar: boolean; earExposed: boolean; hairOccluded: boolean; tissuePathMm: number; viewerOnOppositeSide: boolean; };
+  /** Optional measured accessible width; unspecified locations retain unknown clearance. */
+  measuredGroupSpaceWidthMeters?: number;
 
   // Appearance & Accessories
   glassesMode: GlassesMode;
@@ -1090,7 +1094,8 @@ function calculateDetailedPhysicalState(
     glassesMode: state.glassesMode,
     clothingCondition: state.clothingCondition,
     atmosphericCondition: state.atmosphericCondition,
-    lighting: lightingCausality
+    lighting: lightingCausality,
+    earTransmissionEvidence: state.earTransmissionEvidence
   });
 
   // --- 9. Physical Reflections (Section 17) ---
