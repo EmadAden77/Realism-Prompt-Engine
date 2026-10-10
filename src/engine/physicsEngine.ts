@@ -112,6 +112,8 @@ export interface SceneState {
   environmentRealism: string;
   realismStyle: RealismStyle;
   customIdentityPrompt?: string;
+  /** Explicit user-selected bedroom interaction performed at shutter time. */
+  bedroomSelfieActionId?: string;
   /** Optional explicit observations; never inferred solely from a lighting label. */
   earTransmissionEvidence?: { sourceBehindEar: boolean; earExposed: boolean; hairOccluded: boolean; tissuePathMm: number; viewerOnOppositeSide: boolean; };
   /** Optional measured accessible width; unspecified locations retain unknown clearance. */
