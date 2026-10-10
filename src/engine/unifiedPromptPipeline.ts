@@ -1,3 +1,4 @@
+import { resolveBedroomSelfieActivity } from './bedroomSelfieAffordances';
 import { exportCausalAttestationLedger, type CausalLedgerEntry } from './promptCompiler';
 import { planSpatialComposition, type SpatialCompositionPlan } from './spatialCompositionPlanner';
 import { createSceneManifest, deriveCausalHairExpression, type SceneManifest } from './causalPipeline';
@@ -296,8 +297,12 @@ export function compileUnifiedPromptPipeline(
     midjourney: midjourney.validation.warnings,
   };
 
-  const anglePromptReady = manifest.angleDecision?.status !== 'insufficient-evidence';
-  const angleBlockingReasons = anglePromptReady ? [] : ['No verified camera geometry available'];
+  const bedroomInteraction = resolveBedroomSelfieActivity(resolved.state);
+  const anglePromptReady = manifest.angleDecision?.status !== 'insufficient-evidence' && bedroomInteraction.status !== 'blocked';
+  const angleBlockingReasons = [
+    ...(manifest.angleDecision?.status === 'insufficient-evidence' ? ['No verified camera geometry available'] : []),
+    ...bedroomInteraction.reasons
+  ];
   if (!anglePromptReady) {
     neutral.text = '';
     for (const platform of [chatgpt, gemini, midjourney]) {
