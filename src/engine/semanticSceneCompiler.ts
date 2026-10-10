@@ -1,3 +1,4 @@
+import { resolveBedroomSelfieActivity } from './bedroomSelfieAffordances';
 import { getMicroLocation } from '../data/microLocations';
 import { OUTFITS } from '../data/clothingOutfits';
 import {
@@ -334,6 +335,7 @@ export const buildSemanticScene = (
   const attireBasePrompt = getAttireAwareOutfitPrompt(outfit, state);
   const attireBasePhysics = getAttireAwareBasePhysics(outfit, state);
   const activityDefinition = getActivityDefinition(state.activity);
+  const interactiveSelfie = resolveBedroomSelfieActivity(state);
   const hair = HAIRSTYLES.find(h => h.id === state.hairStyle);
   const hairPhysics = getHairPhysicsPreset(state.hairPhysicsPreset);
   const expression = EXPRESSIONS.find(e => e.id === state.expression);
@@ -451,7 +453,7 @@ export const buildSemanticScene = (
     expression: expressionDetails,
     outfit: `${attireBasePrompt}. Wear configuration: ${attire.prompt}`,
     outfitPhysics: [...attireBasePhysics, ...derived.fabricBehavior, ...attire.physics].join(', '),
-    poseAndContact: `Pose: ${state.pose}. Activity: ${activityDefinition.prompt}. Activity mechanics: ${activityDefinition.mechanics}. Gaze behavior: ${activityDefinition.gaze}. Contact rules: ${derived.contactPhysics.filter(p => !p.includes('arm')).join('. ')}`,
+    poseAndContact: `Pose: ${state.pose}. Activity: ${activityDefinition.prompt}. Activity mechanics: ${activityDefinition.mechanics}. Gaze behavior: ${activityDefinition.gaze}. Contact rules: ${derived.contactPhysics.filter(p => !p.includes('arm')).join('. ')}. ${interactiveSelfie.prompt}`,
     visibleEnvironment: visibleEnvironmentText,
     lighting: `Time: ${state.timeOfDay}. Lighting source: ${state.lightingMode}. Lighting Intensity: ${state.lightingIntensity}% (${derived.lightingIntensityDescription}). Ambient bounce: ${derived.environmentalLightBehavior}. Shadow Depth: ${state.shadowDepth}% (${derived.shadowDepthDescription}). Shadows: ${derived.shadowBehavior}.`,
     atmosphere: derived.atmosphericEffects,
