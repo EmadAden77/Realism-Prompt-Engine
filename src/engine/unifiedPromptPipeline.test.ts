@@ -273,6 +273,30 @@ const supportedAngle = compileUnifiedPromptPipeline({
 assert.equal(supportedAngle.diagnostics.anglePromptReady, true);
 assert.ok(supportedAngle.platforms.gemini.prompt.length > 0);
 
+
+const bedroomWork = compileUnifiedPromptPipeline({
+  ...base, sceneFamily: 'bedroom', subScene: 'قرب الجدار المقابل للسرير',
+  activity: 'يعمل على اللابتوب عند المكتب', pose: 'جالس على كرسي المكتب',
+  timeOfDay: 'morning', lightingMode: 'ضوء نهاري طبيعي',
+  bedroomSelfieActionId: 'desk-trackpad', captureType: 'front-selfie'
+});
+assert.equal(bedroomWork.diagnostics.anglePromptReady, true);
+assert.match(bedroomWork.semantic.poseAndContact, /free hand on laptop trackpad/);
+assert.match(bedroomWork.platforms.gemini.prompt, /INTERACTIVE BEDROOM SELFIE AT SHUTTER TIME/);
+assert.match(bedroomWork.platforms.chatgpt.prompt, /compact bedroom work desk/);
+const incompatibleCapture = compileUnifiedPromptPipeline({
+  ...base, sceneFamily: 'bedroom', subScene: 'قرب الجدار المقابل للسرير',
+  bedroomSelfieActionId: 'desk-trackpad', captureType: 'mirror-selfie'
+});
+assert.equal(incompatibleCapture.diagnostics.anglePromptReady, false);
+assert.equal(incompatibleCapture.platforms.gemini.prompt, '');
+assert.deepEqual(incompatibleCapture.diagnostics.angleBlockingReasons, ['Interactive selfie zone, sub-location or capture mode mismatch']);
+const mirrorInteraction = compileUnifiedPromptPipeline({
+  ...base, sceneFamily: 'bedroom', subScene: 'أمام المرآة',
+  bedroomSelfieActionId: 'mirror-collar', captureType: 'mirror-selfie'
+});
+assert.match(mirrorInteraction.platforms.gemini.prompt, /one real capturing smartphone/);
+
 console.log('unifiedPromptPipeline tests passed');
 
 assert.ok(pipeline.causalLedger.length > 0, 'causal ledger should list prompt decisions');
