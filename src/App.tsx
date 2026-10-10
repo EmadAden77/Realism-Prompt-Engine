@@ -87,6 +87,7 @@ import {
   type HomeBackgroundPeopleMode,
 } from './engine/homeBackgroundPeople';
 import { HOME_SECTION_LABEL_AR } from './engine/homeYard';
+import { BEDROOM_SELFIE_ZONE_LABELS, getBedroomSelfieActivities, getBedroomSelfieActivity, type BedroomSelfieZone } from './engine/bedroomSelfieAffordances';
 
 // --- TYPES ---
 type CaptureType = 'front-selfie' | 'mirror-selfie' | 'third-person-candid';
@@ -133,6 +134,7 @@ interface SceneState {
   environmentRealism: string;
   realismStyle: RealismStyle;
   customIdentityPrompt?: string;
+  bedroomSelfieActionId?: string;
 
   // Appearance & Accessories
   glassesMode: GlassesMode;
@@ -565,6 +567,7 @@ const DEFAULT_STATE: SceneState = {
 
 export default function PhysFrameApp() {
   const [state, setState] = useState<SceneState>(DEFAULT_STATE);
+  const [bedroomSelfieZone, setBedroomSelfieZone] = useState<BedroomSelfieZone>('desk');
   const [showPromptSheet, setShowPromptSheet] = useState(false);
   const [activeTab, setActiveTab] = useState<'chatgpt' | 'gemini' | 'negative'>('chatgpt');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -687,6 +690,7 @@ export default function PhysFrameApp() {
 
   const activeFamily = state.sceneFamily ? SCENE_FAMILIES[state.sceneFamily] : null;
   const selectedOutfit = OUTFITS.find(o => o.id === state.outfitId);
+  const selectedBedroomSelfie = getBedroomSelfieActivity(state.bedroomSelfieActionId);
   const outfitCapabilities = getOutfitCapabilities(selectedOutfit);
   const activityOptions = state.sceneFamily ? getActivityOptions(state.sceneFamily, state.subScene) : [];
   const poseOptions = state.sceneFamily ? getPoseOptions(state.sceneFamily, state.subScene) : [];
@@ -2133,6 +2137,7 @@ export default function PhysFrameApp() {
                           onClick={() => setState(prev => ({
                             ...prev,
                             subScene: sub,
+                            bedroomSelfieActionId: undefined,
                             selfieAngleAdvice: undefined,
                             backgroundGeminiAdvice: undefined
                           }))}
@@ -2145,6 +2150,62 @@ export default function PhysFrameApp() {
                   )}
                 </section>
 
+                {/* Live interactive actions happen at the moment of capture, never as a separate staged photo. */}
+                {state.sceneFamily === 'bedroom' && state.captureType !== 'third-person-candid' && (
+                  <section className="bg-[var(--bg-card)] p-4 rounded-2xl border border-[var(--accent)]/40 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="font-bold text-xs text-white">📸 وضعيات سيلفي تفاعلية داخل الغرفة</h3>
+                      <span className="text-[10px] text-[var(--accent)]">لحظة التقاط الصورة</span>
+                    </div>
+                    <p className="text-[10px] leading-relaxed text-[var(--text-muted)]">
+                      اختر المنطقة ثم النشاط. الهاتف بيد، واليد الأخرى تتفاعل مع العنصر الموجود أو الذي تختار إضافته للمشهد.
+                      العمل على اللابتوب متاح عند المكتب والكرسي والنافذة والأرض والسرير.
+                    </p>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {(Object.keys(BEDROOM_SELFIE_ZONE_LABELS) as BedroomSelfieZone[]).map(zone => (
+                        <button type="button" key={zone} onClick={() => setBedroomSelfieZone(zone)}
+                          className={`rounded-lg border px-1 py-2 text-[10px] transition-colors ${bedroomSelfieZone === zone ? 'border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent)] font-bold' : 'border-[var(--border)] text-[var(--text-muted)] hover:bg-white/5'}`}>
+                          {BEDROOM_SELFIE_ZONE_LABELS[zone]}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-1 gap-2">
+                      {getBedroomSelfieActivities(bedroomSelfieZone).map(action => (
+                        <button type="button" key={action.id}
+                          onClick={() => {
+                            setState(prev => ({
+                              ...prev,
+                              bedroomSelfieActionId: action.id,
+                              subScene: action.subScene,
+                              captureType: action.captureType,
+                              activity: action.labelAR,
+                              pose: action.poseAR,
+                              groupSelfieEnabled: false,
+                              selfieAngleAdvice: undefined,
+                              backgroundGeminiAdvice: undefined
+                            }));
+                            setUseEnhancedPrompt(false);
+                            setEnhancedPrompts({});
+                          }}
+                          className={`text-right rounded-xl border px-3 py-2.5 transition-colors ${state.bedroomSelfieActionId === action.id ? 'border-[var(--accent)] bg-[var(--accent)]/10 text-white' : 'border-[var(--border)] text-[var(--text-muted)] hover:bg-white/5'}`}>
+                          <span className="block text-[11px] font-bold">{action.labelAR}</span>
+                          <span className="block text-[9px] mt-1 opacity-80">
+                            {action.captureType === 'mirror-selfie' ? 'سيلفي مرآة · يظهر الهاتف بانعكاس واحد' : 'سيلفي أمامي · الهاتف خارج الإطار'} · {action.subScene}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                    {selectedBedroomSelfie && (
+                      <div className="rounded-lg bg-black/20 border border-white/10 px-3 py-2 text-[10px] leading-relaxed">
+                        <div className="font-bold text-[var(--accent)]">المشهد المختار: {selectedBedroomSelfie.labelAR}</div>
+                        <div className="mt-1 text-[var(--text-muted)]">الميكانيكا: يد تحمل الهاتف وأخرى تتفاعل. يُضاف العنصر المختار عند إعداد المشهد، ولا يُفترض أنه موجود في الصورة المرجعية.</div>
+                        <button type="button" className="mt-2 underline text-[var(--text-muted)]"
+                          onClick={() => setState(prev => ({ ...prev, bedroomSelfieActionId: undefined }))}>إلغاء الوضعية التفاعلية</button>
+                      </div>
+                    )}
+                  </section>
+                )}
+
                 {/* Activity & Pose */}
                 <section className="bg-[var(--bg-card)] p-4 rounded-2xl border border-[var(--border)]">
                   <h3 className="font-bold text-xs text-[var(--text-muted)] uppercase tracking-wider mb-3">النشاط والوضعية والاتكاء</h3>
@@ -2155,10 +2216,12 @@ export default function PhysFrameApp() {
                     onChange={e => setState({
                       ...state,
                       activity: e.target.value,
+                      bedroomSelfieActionId: undefined,
                       selfieAngleAdvice: undefined
                     })}
                     className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-xs text-[#F3EFE7] focus:outline-none focus:border-[var(--accent)] mb-3"
                   >
+                    {selectedBedroomSelfie && !activityOptions.some(item => item.labelAR === state.activity) && <option value={state.activity}>{state.activity}</option>}
                     {sceneRecommendations.activities.length > 0 && (
                       <optgroup label="★ مقترح لهذا المشهد">
                         {sceneRecommendations.activities.map(labelAR => (
@@ -2181,10 +2244,12 @@ export default function PhysFrameApp() {
                     onChange={e => setState({
                       ...state,
                       pose: e.target.value,
+                      bedroomSelfieActionId: undefined,
                       selfieAngleAdvice: undefined
                     })}
                     className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-xs text-[#F3EFE7] focus:outline-none focus:border-[var(--accent)]"
                   >
+                    {selectedBedroomSelfie && !poseOptions.includes(state.pose) && <option value={state.pose}>{state.pose}</option>}
                     {sceneRecommendations.poses.length > 0 && (
                       <optgroup label="★ مقترح لهذا المشهد">
                         {sceneRecommendations.poses.map(p => (
@@ -2222,6 +2287,7 @@ export default function PhysFrameApp() {
                           onClick={() => setState({
                            ...state,
                            captureType: t.id as CaptureType,
+                           bedroomSelfieActionId: undefined,
                            groupSelfieEnabled: t.id === 'front-selfie' ? state.groupSelfieEnabled : false,
                            selfieAngleAdvice: undefined,
                            backgroundGeminiAdvice: undefined
