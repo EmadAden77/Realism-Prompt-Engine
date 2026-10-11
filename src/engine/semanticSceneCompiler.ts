@@ -6,6 +6,7 @@ import {
   type FacialExpressionDefinition,
 } from '../data/facialExpressionLibrary';
 import { getHairPhysicsPreset } from '../data/hairPhysicsLibrary';
+import { gazeInteractionPrompt } from '../data/gazeInteractions';
 import {
   compileHomeBackgroundPeoplePrompt,
   isHomeBackgroundScene,
@@ -450,7 +451,7 @@ export const buildSemanticScene = (
     glasses: glassesText,
     captureMechanics,
     hair: `${hair?.prompt}. Base hair physics: ${hair?.physics}. Scene hair condition: ${derived.hairCondition}. Hair physics preset: ${hairPhysicsPrompt}.`,
-    expression: expressionDetails,
+    expression: [expressionDetails, gazeInteractionPrompt(state.gazeInteractionId)].filter(Boolean).join(' '),
     outfit: `${attireBasePrompt}. Wear configuration: ${attire.prompt}`,
     outfitPhysics: [...attireBasePhysics, ...derived.fabricBehavior, ...attire.physics].join(', '),
     poseAndContact: `Pose: ${state.pose}. Activity: ${activityDefinition.prompt}. Activity mechanics: ${activityDefinition.mechanics}. Gaze behavior: ${activityDefinition.gaze}. Contact rules: ${derived.contactPhysics.filter(p => !p.includes('arm')).join('. ')}. ${interactiveSelfie.prompt}`,

@@ -78,6 +78,7 @@ import {
   GroupSelfieRelationship
 } from './engine/groupSelfie';
 import { HAIR_PHYSICS_PRESETS } from './data/hairPhysicsLibrary';
+import { GAZE_INTERACTIONS } from './data/gazeInteractions';
 import {
   HOME_BACKGROUND_CLOTHING_OPTIONS,
   HOME_BACKGROUND_MODE_LABELS,
@@ -129,6 +130,7 @@ interface SceneState {
   hairStyle: string;
   hairPhysicsPreset: string;
   expression: string;
+  gazeInteractionId?: string;
   timeOfDay: TimeOfDay;
   lightingMode: string;
   environmentRealism: string;
@@ -3043,6 +3045,25 @@ export default function PhysFrameApp() {
                          ))}
                        </select>
                      </div>
+                   </div>
+
+                   <div className="mt-2.5">
+                     <label className="text-[10px] text-[var(--text-muted)] block mb-1 font-semibold">التفاعل والنظر أثناء التصوير:</label>
+                     <select value={state.gazeInteractionId || ''}
+                       onChange={e => {
+                         setState(prev => ({ ...prev, gazeInteractionId: e.target.value || undefined }));
+                         setUseEnhancedPrompt(false);
+                         setEnhancedPrompts({});
+                       }}
+                       className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-[var(--accent)]">
+                       <option value="">تلقائي (بدون تغيير)</option>
+                       <optgroup label="النظر والحركة">
+                         {GAZE_INTERACTIONS.slice(0, 15).map(item => <option key={item.id} value={item.id}>{item.labelAR}</option>)}
+                       </optgroup>
+                       <optgroup label="التحدث والاستماع">
+                         {GAZE_INTERACTIONS.slice(15).map(item => <option key={item.id} value={item.id}>{item.labelAR}</option>)}
+                       </optgroup>
+                     </select>
                    </div>
 
                    <div className="mt-2.5">

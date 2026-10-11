@@ -107,6 +107,7 @@ export interface SceneState {
   hairStyle: string;
   hairPhysicsPreset?: string;
   expression: string;
+  gazeInteractionId?: string;
   timeOfDay: TimeOfDay;
   lightingMode: string;
   environmentRealism: string;
