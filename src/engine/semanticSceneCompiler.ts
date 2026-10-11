@@ -391,6 +391,15 @@ export const buildSemanticScene = (
     ? resolveExpressionDetails(expression, state.muscleFatigue, derived.muscleFatigueEffects)
     : (state.muscleFatigue !== 'none' ? `Neutral resting expression with muscle fatigue: ${derived.muscleFatigueEffects}` : 'neutral resting expression');
 
+  // Photo-derived bedroom selfie geometry. Scope strictly to non-mirror, bed-seated poses;
+  // do not reinterpret wardrobe, lighting, identity, or other scene families.
+  const bedroomSeatedSelfie = state.sceneFamily === 'bedroom'
+    && state.captureType === 'front-selfie'
+    && /جالس|جلوس|حافة السرير|فوق السرير/.test([state.pose, state.subScene].join(' '));
+  const bedroomSeatedGeometry = bedroomSeatedSelfie
+    ? 'Bedroom seated selfie geometry: one raised phone-holding arm extends from its anatomically correct shoulder toward a camera slightly above face height and laterally offset, at reachable handheld distance. Near forearm can appear enlarged through natural 21mm wide-angle perspective; shoulder remains attached and torso proportions remain plausible. Pelvis and upper thighs load the mattress with localized compression and wrinkled sheets. Bed/headboard stay behind the seated torso; bedside table and lamp may appear behind one shoulder only when camera yaw and room layout permit. Preserve distinct depth planes, plausible nightstand-to-bed clearance, natural occlusion and contact shadows. No floating camera, third-person viewpoint, duplicated limb, impossible full-room visibility, or optical portrait blur.'
+    : '';
+
   const hairPhysicsPrompt = resolveHairPhysicsPrompt(hairPhysics.prompt, state.lightingMode);
 
   const microLoc = getMicroLocation(state.sceneFamily, state.subScene);
@@ -454,7 +463,7 @@ export const buildSemanticScene = (
     expression: [expressionDetails, gazeInteractionPrompt(state.gazeInteractionId)].filter(Boolean).join(' '),
     outfit: `${attireBasePrompt}. Wear configuration: ${attire.prompt}`,
     outfitPhysics: [...attireBasePhysics, ...derived.fabricBehavior, ...attire.physics].join(', '),
-    poseAndContact: `Pose: ${state.pose}. Activity: ${activityDefinition.prompt}. Activity mechanics: ${activityDefinition.mechanics}. Gaze behavior: ${activityDefinition.gaze}. Contact rules: ${derived.contactPhysics.filter(p => !p.includes('arm')).join('. ')}. ${interactiveSelfie.prompt}`,
+    poseAndContact: `Pose: ${state.pose}. Activity: ${activityDefinition.prompt}. Activity mechanics: ${activityDefinition.mechanics}. Gaze behavior: ${activityDefinition.gaze}. Contact rules: ${derived.contactPhysics.filter(p => !p.includes('arm')).join('. ')}. ${interactiveSelfie.prompt} ${bedroomSeatedGeometry}`,
     visibleEnvironment: visibleEnvironmentText,
     lighting: `Time: ${state.timeOfDay}. Lighting source: ${state.lightingMode}. Lighting Intensity: ${state.lightingIntensity}% (${derived.lightingIntensityDescription}). Ambient bounce: ${derived.environmentalLightBehavior}. Shadow Depth: ${state.shadowDepth}% (${derived.shadowDepthDescription}). Shadows: ${derived.shadowBehavior}.`,
     atmosphere: derived.atmosphericEffects,
