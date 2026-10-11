@@ -395,7 +395,8 @@ export const buildSemanticScene = (
   // do not reinterpret wardrobe, lighting, identity, or other scene families.
   const bedroomSeatedSelfie = state.sceneFamily === 'bedroom'
     && state.captureType === 'front-selfie'
-    && /جالس|جلوس|حافة السرير|فوق السرير/.test([state.pose, state.subScene].join(' '));
+    && /سرير|مرتبة|mattress|bed(?:\s|_|-)/i.test([state.pose, state.subScene].join(' '))
+    && /جالس|جلوس|حافة السرير|فوق السرير|sit|seated/i.test([state.pose, state.subScene].join(' '));
   const bedroomSeatedGeometry = bedroomSeatedSelfie
     ? 'Bedroom seated selfie geometry: one raised phone-holding arm extends from its anatomically correct shoulder toward a camera slightly above face height and laterally offset, at reachable handheld distance. Near forearm can appear enlarged through natural 21mm wide-angle perspective; shoulder remains attached and torso proportions remain plausible. Pelvis and upper thighs load the mattress with localized compression and wrinkled sheets. Bed/headboard stay behind the seated torso; bedside table and lamp may appear behind one shoulder only when camera yaw and room layout permit. Preserve distinct depth planes, plausible nightstand-to-bed clearance, natural occlusion and contact shadows. No floating camera, third-person viewpoint, duplicated limb, impossible full-room visibility, or optical portrait blur.'
     : '';
