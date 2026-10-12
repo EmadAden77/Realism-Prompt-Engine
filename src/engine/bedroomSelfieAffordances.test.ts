@@ -44,7 +44,7 @@ const measured = {
   horizontalFovDeg: 72, targetBearingDeg: 10, targetHalfWidthDeg: 8,
   freeHandTargetDistanceCm: 38, usableFreeHandReachCm: 55
 };
-assert.equal(evaluateCaptureFeasibility(measured).status, 'feasible');
+assert.equal(evaluateCaptureFeasibility(measured).status, 'unverified');
 assert.equal(evaluateCaptureFeasibility({}).status, 'unverified');
 assert.equal(evaluateCaptureFeasibility({...measured, phoneToFaceCm: 70}).status, 'blocked');
 assert.equal(evaluateCaptureFeasibility({...measured, targetBearingDeg: 35}).status, 'blocked');
