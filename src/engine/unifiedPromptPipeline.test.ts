@@ -373,3 +373,13 @@ for (const [hairStyle, descriptor] of hairstyleSamples) {
 const unknownHair = compileUnifiedPromptPipeline({...base, hairStyle: 'missing-hair-id'});
 assert.match(unknownHair.semantic.hair, /natural everyday hair/);
 assert.doesNotMatch(unknownHair.platforms.chatgpt.prompt, /undefined/);
+
+const militaryHair = compileUnifiedPromptPipeline({...base, hairStyle:'h6'});
+assert.match(militaryHair.semantic.hair, /No automatic haircut is permitted/);
+assert.match(militaryHair.platforms.chatgpt.prompt, /do not perform a digital buzz cut/);
+const noHairReference = compileUnifiedPromptPipeline({...base, referenceImageId:null, hairStyle:'h2'});
+assert.match(noHairReference.semantic.hair, /No visual hair reference is attached/);
+assert.doesNotMatch(noHairReference.semantic.hair, /Use the supplied reference to determine/);
+const referenceAwareHair = compileUnifiedPromptPipeline({...base, hairStyle:'h3'});
+assert.match(referenceAwareHair.semantic.hair, /If the chosen styling is incompatible/);
+assert.match(referenceAwareHair.platforms.gemini.prompt, /existing hair only/);
