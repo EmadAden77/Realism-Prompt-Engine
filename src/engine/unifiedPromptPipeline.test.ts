@@ -351,3 +351,25 @@ const estimatedWidth = compileUnifiedPromptPipeline({
 assert.equal(estimatedWidth.manifest.resolved.physicalState.groupSelfie?.measurementConfidence.classification,'estimated');
 const noWidth = compileUnifiedPromptPipeline({...base,groupSelfieEnabled:true,groupSelfieSize:2});
 assert.equal(noWidth.manifest.resolved.physicalState.groupSelfie?.measurementConfidence.classification,'unknown');
+
+
+// Hairstyle selector must reach the canonical semantic prompt and both platform exports.
+const hairstyleSamples = [
+  ['h1', 'natural everyday hair'],
+  ['h2', 'neatly styled back hair'],
+  ['h3', 'neatly parted to the side hair'],
+  ['h4', 'slightly messy casual hair'],
+  ['h5', 'slightly sweat-dampened post-workout hair'],
+  ['h6', 'very short neat military regulation haircut'],
+] as const;
+for (const [hairStyle, descriptor] of hairstyleSamples) {
+  const compiled = compileUnifiedPromptPipeline({...base, hairStyle});
+  assert.ok(compiled.semantic.hair.includes(descriptor), `Selected hairstyle ${hairStyle} missing from semantic engine`);
+  assert.ok(compiled.platforms.chatgpt.prompt.includes(descriptor), `Selected hairstyle ${hairStyle} missing from ChatGPT export`);
+  assert.ok(compiled.platforms.gemini.prompt.includes(descriptor), `Selected hairstyle ${hairStyle} missing from Gemini export`);
+  assert.match(compiled.semantic.hair, /preserve the original hairline, density/i);
+  assert.doesNotMatch(compiled.semantic.hair, /undefined/i);
+}
+const unknownHair = compileUnifiedPromptPipeline({...base, hairStyle: 'missing-hair-id'});
+assert.match(unknownHair.semantic.hair, /natural everyday hair/);
+assert.doesNotMatch(unknownHair.platforms.chatgpt.prompt, /undefined/);
