@@ -4,6 +4,7 @@ import {
   getBedroomSelfieActivities,
   evaluateCaptureFeasibility,
   estimateBedroomCapture,
+  estimateSelfieSubjectLayout,
   resolveBedroomSelfieActivity
 } from './bedroomSelfieAffordances';
 import type { SceneState } from './physicsEngine';
@@ -79,3 +80,15 @@ assert.equal(evaluateCaptureFeasibility({...completeFraming, faceBearingDeg: 30}
 assert.equal(evaluateCaptureFeasibility({...completeFraming, freeHandBearingDeg: -35}).status, 'blocked');
 assert.equal(resolveBedroomSelfieActivity({...pillowState, captureFrameEvidence: completeFraming}).status,'ready');
 assert.match(resolveBedroomSelfieActivity(pillowState).prompt, /face, the free hand/);
+
+const bedLayout = estimateSelfieSubjectLayout(pillow);
+assert.equal(bedLayout.confidence, 'heuristic');
+assert.match(bedLayout.guidance, /not measured visibility/);
+assert.match(bedLayout.interactingHand, /lower field/);
+assert.match(resolveBedroomSelfieActivity(pillowState).prompt, /Automatic subject layout:/);
+assert.match(resolveBedroomSelfieActivity(pillowState).prompt, /Confirm actual subject bearings/);
+const mirrorLayout = estimateSelfieSubjectLayout(mirror);
+assert.match(mirrorLayout.guidance, /No inferred pixel coordinates/);
+assert.doesNotMatch(mirrorLayout.guidance, /face near upper center/);
+const measuredLayout = resolveBedroomSelfieActivity({...pillowState,captureFrameEvidence:completeFraming});
+assert.doesNotMatch(measuredLayout.prompt,/Automatic subject layout:/);
