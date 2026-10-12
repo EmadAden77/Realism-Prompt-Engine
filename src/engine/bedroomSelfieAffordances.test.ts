@@ -3,6 +3,7 @@ import {
   BEDROOM_INTERACTIVE_SELFIES,
   getBedroomSelfieActivities,
   evaluateCaptureFeasibility,
+  estimateBedroomCapture,
   resolveBedroomSelfieActivity
 } from './bedroomSelfieAffordances';
 import type { SceneState } from './physicsEngine';
@@ -57,3 +58,12 @@ const pillowState = {
 assert.equal(resolveBedroomSelfieActivity({...pillowState, captureFrameEvidence: measured}).status, 'ready');
 assert.equal(resolveBedroomSelfieActivity({...pillowState, captureFrameEvidence: {...measured, targetBearingDeg: 50}}).status, 'blocked');
 assert.match(resolveBedroomSelfieActivity(pillowState).prompt, /without verified measurements/);
+
+const suggested = estimateBedroomCapture(pillow);
+assert.equal(suggested.confidence, 'heuristic');
+assert.equal(suggested.evidence.phoneToFaceCm, 48);
+assert.equal(suggested.evidence.targetBearingDeg, undefined);
+assert.equal(evaluateCaptureFeasibility(suggested.evidence).status, 'unverified');
+assert.match(resolveBedroomSelfieActivity(pillowState).prompt, /Heuristic framing:/);
+assert.match(resolveBedroomSelfieActivity(pillowState).prompt, /not a measurement/);
+assert.equal(estimateBedroomCapture(mirror).evidence.phoneToFaceCm, undefined);
