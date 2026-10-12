@@ -939,6 +939,58 @@ export default function PhysFrameApp() {
     });
   };
 
+  // Three-input automatic scene generator: keep the selected place family, outfit and time.
+  const generateAutoScene = () => {
+    if (!state.sceneFamily) return;
+    const familyId = state.sceneFamily;
+    const family = SCENE_FAMILIES[familyId];
+    const options = family.subScenes.filter(Boolean);
+    if (!options.length) return;
+    const night = state.timeOfDay === 'night';
+    const previous = state.subScene;
+    const scored = options.map(label => {
+      const outdoor = /شارع|خارجي|موقف|رصيف|مدخل|واجهة|مقهى|ساحة|ممشى|حديقة/.test(label);
+      const eveningFit = /مقهى|شارع|موقف|مدخل|داخل|مكتب|غرفة|سرير|صالة/.test(label);
+      return { label, weight: Math.max(1, (night ? (eveningFit ? 4 : outdoor ? 2 : 3) : outdoor ? 4 : 3) + (label === previous && options.length > 1 ? -3 : 0)) };
+    });
+    const total = scored.reduce((sum, item) => sum + item.weight, 0);
+    let draw = Math.random() * total;
+    const chosen = scored.find(item => (draw -= item.weight) < 0)?.label ?? scored[0].label;
+    const activities = getActivityOptions(familyId, chosen);
+    const poses = getPoseOptions(familyId, chosen);
+    const activity = activities[Math.floor(Math.random() * activities.length)]?.labelAR || family.activities[0] || state.activity;
+    const pose = poses[Math.floor(Math.random() * poses.length)] || family.poses[0] || state.pose;
+    const lightingChoices = family.allowedLighting.filter(light => night
+      ? !/شمس|نهار|ذهبية/.test(light)
+      : !/ليل|شارع دافئة|نيون|الشاشة الأمامية فقط|أباجورة/.test(light));
+    const lightingMode = (lightingChoices.length ? lightingChoices : family.allowedLighting)[
+      Math.floor(Math.random() * (lightingChoices.length || family.allowedLighting.length))
+    ] || state.lightingMode;
+    const proposed: SceneState = {
+      ...state,
+      sceneFamily: familyId,
+      subScene: chosen,
+      activity,
+      pose,
+      lightingMode,
+      captureType: 'front-selfie',
+      bedroomSelfieActionId: undefined,
+      selfieAngleAdvice: undefined,
+      backgroundGeminiAdvice: undefined,
+      // Do not randomize identity, hair, glasses, attire or user-specified time.
+      outfitId: state.outfitId,
+      timeOfDay: state.timeOfDay
+    };
+    const resolved = resolveConflicts(proposed);
+    setState({
+      ...resolved,
+      sceneFamily: familyId,
+      outfitId: state.outfitId,
+      timeOfDay: state.timeOfDay
+    });
+    showToast('✨ تم توليد مشهد تلقائي يناسب المكان والملابس والوقت');
+  };
+
   const applyCuratedVibe = (vibeType: 'random' | 'military-duty' | 'afternoon-cafe' | 'gym-break' | 'car-waiting' | 'home-lounge' | 'desert-winter') => {
     let targetState: SceneState;
 
@@ -2099,6 +2151,15 @@ export default function PhysFrameApp() {
                     </button>
                   </div>
 
+                  <button
+                    type="button"
+                    onClick={generateAutoScene}
+                    className="w-full mb-3 rounded-xl bg-[var(--accent)]/15 border border-[var(--accent)]/50 text-[var(--accent)] font-bold text-xs px-3 py-3 flex justify-center items-center gap-2"
+                  >
+                    <Shuffle className="w-4 h-4" />
+                    ولّد مشهد تلقائي حسب المكان والملابس والوقت
+                  </button>
+                  <p className="text-[10px] text-[var(--text-muted)] mb-3">يحافظ على المكان المختار والملابس والوقت، ويغيّر الزاوية الفرعية والنشاط والوضعية والإضاءة. اضغط مرة أخرى لمشهد مختلف.</p>
                   <label className="text-[11px] text-[var(--text-muted)] block mb-2 font-bold">الزاوية الفرعية الدقيقة:</label>
                   {state.sceneFamily === 'military-base' ? (
                     <div className="space-y-3">
