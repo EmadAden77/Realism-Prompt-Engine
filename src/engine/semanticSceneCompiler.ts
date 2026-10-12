@@ -61,7 +61,7 @@ export function resolveReferenceAwareHairPrompt(
   physicsPrompt: string,
 ): string {
   const referenceGuard = referenceImageId
-    ? 'Use the supplied reference to determine the actual achievable length, growth direction, visible hairline, and density. Never invent unobserved coverage, follicles or length. If the chosen styling is incompatible, approximate the direction and finish using existing hair only, without reshaping the head. No automatic haircut is permitted.'
+    ? 'Use the supplied reference to determine the actual achievable length, growth direction, visible hairline, and density. Preserve the original hairline, density and texture. Never invent unobserved coverage, follicles or length. If the chosen styling is incompatible, approximate the direction and finish using existing hair only, without reshaping the head. No automatic haircut is permitted.'
     : 'No visual hair reference is attached: do not claim verified length, density or hairline; describe styling as conditional and avoid inventing hair thickness or coverage.';
   const shorterCut = style.id === 'h6'
     ? 'The selected military style expresses a shorter-looking neatly controlled finish only; do not perform a digital buzz cut, fade, or change persistent hair length without separate explicit haircut permission.'
