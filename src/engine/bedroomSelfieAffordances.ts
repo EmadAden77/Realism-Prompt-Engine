@@ -289,6 +289,30 @@ export function evaluateCaptureFeasibility(e: CaptureFrameEvidence): CaptureFeas
     reasons: camera && field && hand ? [] : ['Capture geometry has not been fully measured'] };
 }
 
+/** Conservative design assumptions, NOT observations or verified distances. */
+export function estimateBedroomCapture(activity: BedroomSelfieActivity): {
+  evidence: CaptureFrameEvidence; confidence: 'heuristic'; guidance: string;
+} {
+  const mirror = activity.captureType === 'mirror-selfie';
+  const closeAction = activity.zone === 'bed' || activity.zone === 'bedside';
+  const phoneToFaceCm = mirror ? undefined : closeAction ? 48 : 52;
+  return {
+    evidence: {
+      phoneToFaceCm,
+      usablePhoneArmReachCm: mirror ? undefined : 60,
+      horizontalFovDeg: mirror ? undefined : 70,
+      // Target bearing, angular width, and free-hand reach depend on actual
+      // scene layout. Never manufacture these from a textual zone label.
+    },
+    confidence: 'heuristic',
+    guidance: mirror
+      ? 'Mirror sightline, reflected phone position and target visibility require actual mirror geometry.'
+      : 'Suggested starting phone-to-face distance ~' + phoneToFaceCm +
+        ' cm, not a measurement; place the action target naturally within arm reach and frame. ' +
+        'Do not claim visibility until target bearing and size are established.'
+  };
+}
+
 export type BedroomSelfieDecision =
   | { status: 'inactive'; prompt: ''; reasons: [] }
   | { status: 'blocked'; prompt: ''; reasons: string[] }
@@ -304,6 +328,7 @@ export function resolveBedroomSelfieActivity(state: Pick<SceneState,
       activity.subScene !== state.subScene) {
     return { status: 'blocked', prompt: '', reasons: ['Interactive selfie zone, sub-location or capture mode mismatch'] };
   }
+  const estimate = estimateBedroomCapture(activity);
   const geometry = state.captureFrameEvidence
     ? evaluateCaptureFeasibility(state.captureFrameEvidence)
     : { status: 'unverified' as const, reasons: ['No capture measurements supplied'] };
@@ -319,6 +344,7 @@ export function resolveBedroomSelfieActivity(state: Pick<SceneState,
     'Contact and body mechanics: ' + activity.contact + '.',
     'Gaze and cervical comfort: ' + activity.gaze + '.',
     'Camera constraints: ' + activity.camera + '.',
+    state.captureFrameEvidence ? '' : 'Heuristic framing: ' + estimate.guidance,
     geometry.status === 'feasible' ? 'Supplied capture measurements place the action inside usable reach and horizontal frame.' : 'Do not assert measured field-of-view or reach clearance without verified measurements.',
     'Illumination conditions: ' + activity.lighting + '.',
     phoneRule,
