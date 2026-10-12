@@ -52,6 +52,31 @@ export const HAIRSTYLES = [
   { id: 'h6', labelAR: 'عسكري (قصير جداً ومحدد)', prompt: 'very short neat military regulation haircut', physics: 'tight fade on sides, minimal volume on top, sharp natural hairline' }
 ];
 
+/** The reference is an identity constraint, not evidence of measured length or thickness.
+ * Explicit shorter styles remain suggestions, never claims of observed suitability. */
+export function resolveReferenceAwareHairPrompt(
+  style: (typeof HAIRSTYLES)[number],
+  referenceImageId: SceneState['referenceImageId'],
+  hairCondition: string,
+  physicsPrompt: string,
+): string {
+  const referenceGuard = referenceImageId
+    ? 'Use the supplied reference to determine the actual achievable length, growth direction, visible hairline, and density. Never invent unobserved coverage, follicles or length. If the chosen styling is incompatible, approximate the direction and finish using existing hair only, without reshaping the head. No automatic haircut is permitted.'
+    : 'No visual hair reference is attached: do not claim verified length, density or hairline; describe styling as conditional and avoid inventing hair thickness or coverage.';
+  const shorterCut = style.id === 'h6'
+    ? 'The selected military style expresses a shorter-looking neatly controlled finish only; do not perform a digital buzz cut, fade, or change persistent hair length without separate explicit haircut permission.'
+    : '';
+  return [
+    'Selected hairstyle: ' + style.prompt + '.',
+    'Styling behavior: ' + style.physics + '.',
+    referenceGuard,
+    shorterCut,
+    'Scene hair condition: ' + hairCondition + '.',
+    'Hair physics preset: ' + physicsPrompt + '.',
+  ].filter(Boolean).join(' ');
+}
+
+
 const BASE_EXPRESSIONS: FacialExpressionDefinition[] = [
   {
     id: 'e1',
@@ -460,7 +485,7 @@ export const buildSemanticScene = (
     body: '193cm, 83kg, tall lean-athletic male build.',
     glasses: glassesText,
     captureMechanics,
-    hair: `Selected hairstyle: ${hair.prompt}. Styling behavior: ${hair.physics}. Apply the requested styling only where the reference hair length and natural growth allow; preserve the original hairline, density, texture and facial identity. A shorter cut is allowed only when explicitly selected, never add length, follicles, fullness or coverage absent from the reference. Scene hair condition: ${derived.hairCondition}. Hair physics preset: ${hairPhysicsPrompt}.`,
+    hair: resolveReferenceAwareHairPrompt(hair, state.referenceImageId, derived.hairCondition, hairPhysicsPrompt),
     expression: [expressionDetails, gazeInteractionPrompt(state.gazeInteractionId)].filter(Boolean).join(' '),
     outfit: `${attireBasePrompt}. Wear configuration: ${attire.prompt}`,
     outfitPhysics: [...attireBasePhysics, ...derived.fabricBehavior, ...attire.physics].join(', '),
