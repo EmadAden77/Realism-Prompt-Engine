@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import {
   BEDROOM_INTERACTIVE_SELFIES,
   getBedroomSelfieActivities,
+  evaluateCaptureFeasibility,
+  estimateBedroomCapture,
   resolveBedroomSelfieActivity
 } from './bedroomSelfieAffordances';
 import type { SceneState } from './physicsEngine';
@@ -36,3 +38,32 @@ const windowActivity=BEDROOM_INTERACTIVE_SELFIES.find(a=>a.id==='window-laptop')
 assert.match(windowActivity.lighting,/daylight as side key/);
 assert.doesNotMatch(windowActivity.camera,/fixed 45-degree requirement\./i); // text explicitly warns against fixed angle
 console.log('Bedroom interactive selfie affordances passed');
+
+const measured = {
+  phoneToFaceCm: 50, usablePhoneArmReachCm: 60,
+  horizontalFovDeg: 72, targetBearingDeg: 10, targetHalfWidthDeg: 8,
+  freeHandTargetDistanceCm: 38, usableFreeHandReachCm: 55
+};
+assert.equal(evaluateCaptureFeasibility(measured).status, 'feasible');
+assert.equal(evaluateCaptureFeasibility({}).status, 'unverified');
+assert.equal(evaluateCaptureFeasibility({...measured, phoneToFaceCm: 70}).status, 'blocked');
+assert.equal(evaluateCaptureFeasibility({...measured, targetBearingDeg: 35}).status, 'blocked');
+assert.equal(evaluateCaptureFeasibility({...measured, freeHandTargetDistanceCm: 65}).status, 'blocked');
+assert.equal(evaluateCaptureFeasibility({...measured, targetBearingDeg: Number.NaN}).status, 'blocked');
+const pillow = BEDROOM_INTERACTIVE_SELFIES.find(a => a.id === 'bed-pillow')!;
+const pillowState = {
+  sceneFamily: 'bedroom' as const, subScene: pillow.subScene,
+  captureType: 'front-selfie' as const, bedroomSelfieActionId: pillow.id
+};
+assert.equal(resolveBedroomSelfieActivity({...pillowState, captureFrameEvidence: measured}).status, 'ready');
+assert.equal(resolveBedroomSelfieActivity({...pillowState, captureFrameEvidence: {...measured, targetBearingDeg: 50}}).status, 'blocked');
+assert.match(resolveBedroomSelfieActivity(pillowState).prompt, /without verified measurements/);
+
+const suggested = estimateBedroomCapture(pillow);
+assert.equal(suggested.confidence, 'heuristic');
+assert.equal(suggested.evidence.phoneToFaceCm, 48);
+assert.equal(suggested.evidence.targetBearingDeg, undefined);
+assert.equal(evaluateCaptureFeasibility(suggested.evidence).status, 'unverified');
+assert.match(resolveBedroomSelfieActivity(pillowState).prompt, /Heuristic framing:/);
+assert.match(resolveBedroomSelfieActivity(pillowState).prompt, /not a measurement/);
+assert.equal(estimateBedroomCapture(mirror).evidence.phoneToFaceCm, undefined);
