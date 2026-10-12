@@ -44,7 +44,7 @@ const measured = {
   horizontalFovDeg: 72, targetBearingDeg: 10, targetHalfWidthDeg: 8,
   freeHandTargetDistanceCm: 38, usableFreeHandReachCm: 55
 };
-assert.equal(evaluateCaptureFeasibility(measured).status, 'feasible');
+assert.equal(evaluateCaptureFeasibility(measured).status, 'unverified');
 assert.equal(evaluateCaptureFeasibility({}).status, 'unverified');
 assert.equal(evaluateCaptureFeasibility({...measured, phoneToFaceCm: 70}).status, 'blocked');
 assert.equal(evaluateCaptureFeasibility({...measured, targetBearingDeg: 35}).status, 'blocked');
@@ -67,3 +67,15 @@ assert.equal(evaluateCaptureFeasibility(suggested.evidence).status, 'unverified'
 assert.match(resolveBedroomSelfieActivity(pillowState).prompt, /Heuristic framing:/);
 assert.match(resolveBedroomSelfieActivity(pillowState).prompt, /not a measurement/);
 assert.equal(estimateBedroomCapture(mirror).evidence.phoneToFaceCm, undefined);
+
+const completeFraming = {
+  ...measured,
+  faceBearingDeg: 0, faceHalfWidthDeg: 12,
+  freeHandBearingDeg: -17, freeHandHalfWidthDeg: 6,
+};
+assert.equal(evaluateCaptureFeasibility(completeFraming).status, 'feasible');
+assert.equal(evaluateCaptureFeasibility(measured).status, 'unverified');
+assert.equal(evaluateCaptureFeasibility({...completeFraming, faceBearingDeg: 30}).status, 'blocked');
+assert.equal(evaluateCaptureFeasibility({...completeFraming, freeHandBearingDeg: -35}).status, 'blocked');
+assert.equal(resolveBedroomSelfieActivity({...pillowState, captureFrameEvidence: completeFraming}).status,'ready');
+assert.match(resolveBedroomSelfieActivity(pillowState).prompt, /face, the free hand/);

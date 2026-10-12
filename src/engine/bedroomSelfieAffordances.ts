@@ -262,6 +262,10 @@ export interface CaptureFrameEvidence {
   horizontalFovDeg?: number;
   targetBearingDeg?: number;
   targetHalfWidthDeg?: number;
+  faceBearingDeg?: number;
+  faceHalfWidthDeg?: number;
+  freeHandBearingDeg?: number;
+  freeHandHalfWidthDeg?: number;
   freeHandTargetDistanceCm?: number;
   usableFreeHandReachCm?: number;
 }
@@ -278,6 +282,15 @@ export function evaluateCaptureFeasibility(e: CaptureFrameEvidence): CaptureFeas
     e.targetBearingDeg !== undefined && e.targetHalfWidthDeg !== undefined &&
     e.targetHalfWidthDeg >= 0 && e.targetHalfWidthDeg <= 90;
   const hand = positive(e.freeHandTargetDistanceCm) && positive(e.usableFreeHandReachCm);
+  const angularFits = (bearing: number | undefined, halfWidth: number | undefined) =>
+    bearing === undefined || halfWidth === undefined || !positive(e.horizontalFovDeg) ||
+    (halfWidth >= 0 && Math.abs(bearing) + halfWidth <= e.horizontalFovDeg! / 2);
+  const faceKnown = e.faceBearingDeg !== undefined && e.faceHalfWidthDeg !== undefined;
+  const handKnown = e.freeHandBearingDeg !== undefined && e.freeHandHalfWidthDeg !== undefined;
+  if (faceKnown && !angularFits(e.faceBearingDeg, e.faceHalfWidthDeg))
+    reasons.push('Face lies outside measured horizontal camera frame');
+  if (handKnown && !angularFits(e.freeHandBearingDeg, e.freeHandHalfWidthDeg))
+    reasons.push('Interacting hand lies outside measured horizontal camera frame');
   if (camera && e.phoneToFaceCm! > e.usablePhoneArmReachCm!)
     reasons.push('Capturing phone exceeds measured usable arm reach');
   if (field && Math.abs(e.targetBearingDeg!) + e.targetHalfWidthDeg! > e.horizontalFovDeg! / 2)
@@ -285,7 +298,7 @@ export function evaluateCaptureFeasibility(e: CaptureFrameEvidence): CaptureFeas
   if (hand && e.freeHandTargetDistanceCm! > e.usableFreeHandReachCm!)
     reasons.push('Action target exceeds measured free-hand reach');
   if (reasons.length) return { status: 'blocked', reasons };
-  return { status: camera && field && hand ? 'feasible' : 'unverified',
+  return { status: camera && field && hand && faceKnown && handKnown ? 'feasible' : 'unverified',
     reasons: camera && field && hand ? [] : ['Capture geometry has not been fully measured'] };
 }
 
@@ -301,7 +314,7 @@ export function estimateBedroomCapture(activity: BedroomSelfieActivity): {
       phoneToFaceCm,
       usablePhoneArmReachCm: mirror ? undefined : 60,
       horizontalFovDeg: mirror ? undefined : 70,
-      // Target bearing, angular width, and free-hand reach depend on actual
+      // Face, hand and target bearings, angular widths and free-hand reach depend on actual
       // scene layout. Never manufacture these from a textual zone label.
     },
     confidence: 'heuristic',
@@ -309,7 +322,7 @@ export function estimateBedroomCapture(activity: BedroomSelfieActivity): {
       ? 'Mirror sightline, reflected phone position and target visibility require actual mirror geometry.'
       : 'Suggested starting phone-to-face distance ~' + phoneToFaceCm +
         ' cm, not a measurement; place the action target naturally within arm reach and frame. ' +
-        'Do not claim visibility until target bearing and size are established.'
+        'Do not claim visibility until face, acting hand and target bearings and angular sizes are established.'
   };
 }
 
@@ -344,8 +357,9 @@ export function resolveBedroomSelfieActivity(state: Pick<SceneState,
     'Contact and body mechanics: ' + activity.contact + '.',
     'Gaze and cervical comfort: ' + activity.gaze + '.',
     'Camera constraints: ' + activity.camera + '.',
+    'Composition: the face, the free hand performing the action, and its contacted object must occupy a coherent single camera view when visibility is requested. Never widen the front camera frame or move the phone beyond one-arm reach merely to include an object; allow natural partial occlusion rather than fabricating visibility.',
     state.captureFrameEvidence ? '' : 'Heuristic framing: ' + estimate.guidance,
-    geometry.status === 'feasible' ? 'Supplied capture measurements place the action inside usable reach and horizontal frame.' : 'Do not assert measured field-of-view or reach clearance without verified measurements.',
+    geometry.status === 'feasible' ? 'Supplied capture measurements place the face, interacting hand and action target inside usable reach and horizontal frame.' : 'Do not assert measured field-of-view or reach clearance without verified measurements.',
     'Illumination conditions: ' + activity.lighting + '.',
     phoneRule,
     'Do not add extra limbs, unsupported floating objects, forced glare or a staged symmetrical pose.'
