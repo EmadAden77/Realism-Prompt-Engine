@@ -320,7 +320,7 @@ export type BedroomSelfieDecision =
 
 export function resolveBedroomSelfieActivity(state: Pick<SceneState,
   'sceneFamily' | 'subScene' | 'captureType' | 'bedroomSelfieActionId'
->): BedroomSelfieDecision {
+> & { captureFrameEvidence?: CaptureFrameEvidence }): BedroomSelfieDecision {
   if (!state.bedroomSelfieActionId) return { status: 'inactive', prompt: '', reasons: [] };
   const activity = getBedroomSelfieActivity(state.bedroomSelfieActionId);
   if (!activity) return { status: 'blocked', prompt: '', reasons: ['Unknown bedroom selfie activity'] };
