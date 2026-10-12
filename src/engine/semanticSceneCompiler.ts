@@ -460,7 +460,7 @@ export const buildSemanticScene = (
     body: '193cm, 83kg, tall lean-athletic male build.',
     glasses: glassesText,
     captureMechanics,
-    hair: `Selected hairstyle: ${hair.prompt}. Styling behavior: ${hair.physics}. Apply the requested styling only where the reference hair length and natural growth allow; preserve the original hairline, density, length, texture and existing facial identity. Never invent a fade, haircut, added hair, or increased coverage. Scene hair condition: ${derived.hairCondition}. Hair physics preset: ${hairPhysicsPrompt}.`,
+    hair: `Selected hairstyle: ${hair.prompt}. Styling behavior: ${hair.physics}. Apply the requested styling only where the reference hair length and natural growth allow; preserve the original hairline, density, texture and facial identity. A shorter cut is allowed only when explicitly selected, never add length, follicles, fullness or coverage absent from the reference. Scene hair condition: ${derived.hairCondition}. Hair physics preset: ${hairPhysicsPrompt}.`,
     expression: [expressionDetails, gazeInteractionPrompt(state.gazeInteractionId)].filter(Boolean).join(' '),
     outfit: `${attireBasePrompt}. Wear configuration: ${attire.prompt}`,
     outfitPhysics: [...attireBasePhysics, ...derived.fabricBehavior, ...attire.physics].join(', '),
