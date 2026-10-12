@@ -302,6 +302,37 @@ export function evaluateCaptureFeasibility(e: CaptureFrameEvidence): CaptureFeas
     reasons: camera && field && hand ? [] : ['Capture geometry has not been fully measured'] };
 }
 
+/** Categorical shot layout only: this is a staging suggestion, never inferred image coordinates. */
+export function estimateSelfieSubjectLayout(activity: BedroomSelfieActivity): {
+  confidence: 'heuristic';
+  face: string;
+  interactingHand: string;
+  target: string;
+  guidance: string;
+} {
+  if (activity.captureType === 'mirror-selfie') {
+    return {
+      confidence: 'heuristic',
+      face: 'within the single reflected view',
+      interactingHand: 'near the torso or collar in the same reflection',
+      target: 'visible only if the actual mirror sightline permits',
+      guidance: 'Estimate a coherent one-mirror composition: show one reflected face, one phone and the acting hand only where optically possible; verify target visibility from mirror placement. No inferred pixel coordinates.'
+    };
+  }
+  const lowTarget = activity.zone === 'bed' || activity.zone === 'floor' || activity.zone === 'desk';
+  const target = lowTarget ? 'lower side of frame only if comfortably reachable' : 'beside the shoulder or torso only if comfortably reachable';
+  return {
+    confidence: 'heuristic',
+    face: 'near the central upper field without forced alignment',
+    interactingHand: lowTarget ? 'naturally descending into the lower field' : 'beside the face or torso when the action allows',
+    target,
+    guidance: 'Estimated layout, not measured visibility: face near upper center; free hand ' +
+      (lowTarget ? 'naturally lowers toward the action' : 'stays near its reachable object') +
+      '; action prop may enter the ' + (lowTarget ? 'lower' : 'side') +
+      ' frame if camera clearance allows. Prefer cropping nonessential portions over exceeding arm reach, adding hands or inventing a wider lens. Confirm actual subject bearings before declaring all three visible.'
+  };
+}
+
 /** Conservative design assumptions, NOT observations or verified distances. */
 export function estimateBedroomCapture(activity: BedroomSelfieActivity): {
   evidence: CaptureFrameEvidence; confidence: 'heuristic'; guidance: string;
@@ -342,6 +373,7 @@ export function resolveBedroomSelfieActivity(state: Pick<SceneState,
     return { status: 'blocked', prompt: '', reasons: ['Interactive selfie zone, sub-location or capture mode mismatch'] };
   }
   const estimate = estimateBedroomCapture(activity);
+  const subjectLayout = estimateSelfieSubjectLayout(activity);
   const geometry = state.captureFrameEvidence
     ? evaluateCaptureFeasibility(state.captureFrameEvidence)
     : { status: 'unverified' as const, reasons: ['No capture measurements supplied'] };
@@ -357,6 +389,7 @@ export function resolveBedroomSelfieActivity(state: Pick<SceneState,
     'Contact and body mechanics: ' + activity.contact + '.',
     'Gaze and cervical comfort: ' + activity.gaze + '.',
     'Camera constraints: ' + activity.camera + '.',
+    state.captureFrameEvidence ? '' : 'Automatic subject layout: ' + subjectLayout.guidance,
     'Composition: the face, the free hand performing the action, and its contacted object must occupy a coherent single camera view when visibility is requested. Never widen the front camera frame or move the phone beyond one-arm reach merely to include an object; allow natural partial occlusion rather than fabricating visibility.',
     state.captureFrameEvidence ? '' : 'Heuristic framing: ' + estimate.guidance,
     geometry.status === 'feasible' ? 'Supplied capture measurements place the face, interacting hand and action target inside usable reach and horizontal frame.' : 'Do not assert measured field-of-view or reach clearance without verified measurements.',
