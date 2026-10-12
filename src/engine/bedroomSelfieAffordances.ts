@@ -255,6 +255,40 @@ export function getBedroomSelfieActivities(zone: BedroomSelfieZone): BedroomSelf
   return BEDROOM_INTERACTIVE_SELFIES.filter(activity => activity.zone === zone);
 }
 
+/** Optional user-supplied measurements; absent values are never treated as verified. */
+export interface CaptureFrameEvidence {
+  phoneToFaceCm?: number;
+  usablePhoneArmReachCm?: number;
+  horizontalFovDeg?: number;
+  targetBearingDeg?: number;
+  targetHalfWidthDeg?: number;
+  freeHandTargetDistanceCm?: number;
+  usableFreeHandReachCm?: number;
+}
+export type CaptureFeasibility = { status: 'feasible' | 'blocked' | 'unverified'; reasons: string[] };
+/** Check measurable geometry without assuming that the scene was photographed or measured. */
+export function evaluateCaptureFeasibility(e: CaptureFrameEvidence): CaptureFeasibility {
+  const reasons: string[] = [];
+  const positive = (n: number | undefined) => n !== undefined && Number.isFinite(n) && n > 0;
+  const relevant = Object.values(e).filter(v => v !== undefined);
+  if (relevant.some(v => typeof v !== 'number' || !Number.isFinite(v)))
+    return { status: 'blocked', reasons: ['Invalid non-finite capture measurement'] };
+  const camera = positive(e.phoneToFaceCm) && positive(e.usablePhoneArmReachCm);
+  const field = positive(e.horizontalFovDeg) && e.horizontalFovDeg! <= 180 &&
+    e.targetBearingDeg !== undefined && e.targetHalfWidthDeg !== undefined &&
+    e.targetHalfWidthDeg >= 0 && e.targetHalfWidthDeg <= 90;
+  const hand = positive(e.freeHandTargetDistanceCm) && positive(e.usableFreeHandReachCm);
+  if (camera && e.phoneToFaceCm! > e.usablePhoneArmReachCm!)
+    reasons.push('Capturing phone exceeds measured usable arm reach');
+  if (field && Math.abs(e.targetBearingDeg!) + e.targetHalfWidthDeg! > e.horizontalFovDeg! / 2)
+    reasons.push('Required target falls outside measured horizontal camera field of view');
+  if (hand && e.freeHandTargetDistanceCm! > e.usableFreeHandReachCm!)
+    reasons.push('Action target exceeds measured free-hand reach');
+  if (reasons.length) return { status: 'blocked', reasons };
+  return { status: camera && field && hand ? 'feasible' : 'unverified',
+    reasons: camera && field && hand ? [] : ['Capture geometry has not been fully measured'] };
+}
+
 export type BedroomSelfieDecision =
   | { status: 'inactive'; prompt: ''; reasons: [] }
   | { status: 'blocked'; prompt: ''; reasons: string[] }
@@ -270,6 +304,10 @@ export function resolveBedroomSelfieActivity(state: Pick<SceneState,
       activity.subScene !== state.subScene) {
     return { status: 'blocked', prompt: '', reasons: ['Interactive selfie zone, sub-location or capture mode mismatch'] };
   }
+  const geometry = state.captureFrameEvidence
+    ? evaluateCaptureFeasibility(state.captureFrameEvidence)
+    : { status: 'unverified' as const, reasons: ['No capture measurements supplied'] };
+  if (geometry.status === 'blocked') return { status: 'blocked', prompt: '', reasons: geometry.reasons };
   const phoneRule = activity.captureType === 'front-selfie'
     ? 'The capturing smartphone remains outside the image; exactly one arm operates it while the other hand performs the action.'
     : 'Mirror selfie with exactly one real capturing smartphone and its coherent reflection; no duplicated objects, reversed hands or invented second laptop.';
@@ -281,6 +319,7 @@ export function resolveBedroomSelfieActivity(state: Pick<SceneState,
     'Contact and body mechanics: ' + activity.contact + '.',
     'Gaze and cervical comfort: ' + activity.gaze + '.',
     'Camera constraints: ' + activity.camera + '.',
+    geometry.status === 'feasible' ? 'Supplied capture measurements place the action inside usable reach and horizontal frame.' : 'Do not assert measured field-of-view or reach clearance without verified measurements.',
     'Illumination conditions: ' + activity.lighting + '.',
     phoneRule,
     'Do not add extra limbs, unsupported floating objects, forced glare or a staged symmetrical pose.'
