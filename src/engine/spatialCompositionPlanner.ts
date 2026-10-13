@@ -50,6 +50,7 @@ export function planSpatialComposition(
   physical: SpatialPhysicalInput
 ): SpatialCompositionPlan {
   const backgroundCapacity = physical.backgroundRealism.visibilityClass;
+  const view = physical.backgroundRealism.viewGeometry;
   const tightView = physical.framingClass === 'tight' || backgroundCapacity === 'minimal';
   const extendedView =
     physical.framingClass === 'wide' &&
@@ -88,9 +89,13 @@ export function planSpatialComposition(
   if (hasVisibleBackground) {
     regions.push({
       role: 'near-background',
-      placement: tightView
-        ? 'only narrow physically visible margins beyond the subject'
-        : 'visible space behind and beside the subject',
+      placement: view.wallDominated && !view.streetVisible
+        ? 'the wall, threshold or entrance plane immediately behind the subject, with no impossible view through it'
+        : tightView
+          ? 'only narrow physically visible margins beyond the subject'
+          : view.horizontalBias === 'centered'
+            ? 'narrow scene-appropriate space behind the shoulders, without a fabricated wide panorama'
+            : `the physically open ${view.horizontalBias} side margin behind the subject, with natural cropping opposite`,
       depthOrder: 'behind-subject',
       visibility: tightView ? 'limited' : 'visible',
     });
@@ -98,7 +103,8 @@ export function planSpatialComposition(
 
   if (
     extendedView &&
-    /deep street|medium outdoor/i.test(physical.backgroundDepth)
+    /deep street|medium outdoor/i.test(physical.backgroundDepth) &&
+    (!view.wallDominated || view.streetVisible)
   ) {
     regions.push({
       role: 'far-background',
@@ -134,8 +140,24 @@ export function planSpatialComposition(
 
   if (hasBackgroundActors) {
     instructions.push(
-      'Keep any already resolved secondary people and vehicles at their physically permitted positions and scales; do not add extra ones to fill space.'
+      'Place each already permitted person or vehicle ONLY inside an unobstructed background side margin or visible glazing aperture, at the right scale for its depth; keep heads, feet, tires and shadows on consistent planes. Never add extra actors to fill space.'
     );
+  } else {
+    instructions.push('Do not add background people or vehicles when the resolved camera view leaves no physical sightline for them.');
+  }
+
+  if (view.wallDominated && !view.streetVisible) {
+    instructions.push('This selfie is backed by a wall or doorway: no road traffic, pedestrians or parked cars may appear through the opaque surface.');
+  }
+
+  if (view.verticalBias === 'upperward') {
+    instructions.push('The raised camera sightline naturally crops lower streets, curbs, tires and shoes; do not force them into the picture.');
+  } else if (view.verticalBias === 'groundward') {
+    instructions.push('The lowered sightline may show actual floor or pavement detail, not unrelated high rooftops or far skyline.');
+  }
+
+  if (view.windowVisible) {
+    instructions.push('Only the existing cabin window/windshield opening may transmit small exterior views; preserve trim/glass edges and exposure differences.');
   }
 
   if (hasForegroundObstruction) {
