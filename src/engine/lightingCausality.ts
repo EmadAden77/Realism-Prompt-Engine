@@ -91,7 +91,7 @@ const PHYSICAL_LIGHT_BEHAVIOR: Record<PhysicalLightModel, PhysicalLightBehavior>
   ceiling: {
     origin: 'installed working LED/recessed or high-bay ceiling luminaire',
     direction: 'top-down from the selected ceiling fixture, never arbitrary front studio light',
-    falloff: 'local ceiling source; realistic distance, diffusion, partial fixture overlap and occlusion',
+    falloff: 'room-scale local ceiling source with physically plausible distance falloff, diffusion, partial fixture overlap and occlusion',
     shadows: 'downward shadows in eye sockets, under nose, collar, seats and equipment',
     bounce: ['matte ceiling', 'nearby walls', 'furniture or flooring']
   },
@@ -354,7 +354,7 @@ export function deriveLightingCausality(input: LightingCausalityInput): Lighting
   if (causalPreset) {
     const physics = PHYSICAL_LIGHT_BEHAVIOR[causalPreset.model];
     primarySource = {
-      name: causalPreset.labelAR,
+      name: causalPreset.labelAR + (causalPreset.labelAR.includes('5000K') ? ' (5000K neutral-cool white)' : ''),
       role: 'primary',
       direction: physics.direction,
       distanceBehavior: physics.falloff,
