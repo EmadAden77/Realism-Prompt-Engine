@@ -358,9 +358,21 @@ export const buildSemanticScene = (
   physicalState?: DerivedPhysicalState
 ): SemanticPromptScene => {
   const outfit = OUTFITS.find(o => o.id === state.outfitId);
-  const attire = describeAttireControls(outfit, state);
-  const attireBasePrompt = getAttireAwareOutfitPrompt(outfit, state);
-  const attireBasePhysics = getAttireAwareBasePhysics(outfit, state);
+  // Historical per-piece wardrobe settings are ignored whenever the complete outfit
+  // is locked (the default); the outfit library remains the one canonical source.
+  const outfitControls = state.outfitLocked !== false
+    ? { ...state, outfitWearStyle: 'natural-neat' as const, garmentWearContext: 'neutral' as const,
+        shirtTuck: 'auto' as const, sleeveStyle: 'auto' as const,
+        shirtButtons: 'auto' as const, collarStyle: 'auto' as const,
+        outerwearClosure: 'auto' as const, hoodPosition: 'auto' as const,
+        thobeCollar: 'auto' as const }
+    : state;
+  const attire = describeAttireControls(outfit, outfitControls);
+  const attireBasePrompt = getAttireAwareOutfitPrompt(outfit, outfitControls);
+  const attireBasePhysics = getAttireAwareBasePhysics(outfit, outfitControls);
+  const fixedCompleteOutfit = state.outfitLocked !== false
+    ? 'LOCKED COMPLETE OUTFIT: The selected garments are one indivisible full outfit. Keep every listed piece, its color, fabric, neckline, collar, sleeves, waist arrangement, trouser/shorts type and matching accessories exactly as described in this outfit. No additions, omissions, swaps, recoloring, retucking, opening buttons, restyling, or wardrobe reinterpretations. Crop may conceal pieces without deleting them. Permit only normal gravity folds, contact creases and physically caused illumination differences.'
+    : '';
   const activityDefinition = getActivityDefinition(state.activity);
   const interactiveSelfie = resolveBedroomSelfieActivity(state);
   const hair = HAIRSTYLES.find(h => h.id === state.hairStyle) ?? HAIRSTYLES[0];
@@ -490,7 +502,7 @@ export const buildSemanticScene = (
     captureMechanics,
     hair: resolveReferenceAwareHairPrompt(hair, state.referenceImageId, derived.hairCondition, hairPhysicsPrompt),
     expression: [expressionDetails, gazeInteractionPrompt(state.gazeInteractionId)].filter(Boolean).join(' '),
-    outfit: `${attireBasePrompt}. Wear configuration: ${attire.prompt}`,
+    outfit: `${attireBasePrompt}. ${fixedCompleteOutfit} ${state.outfitLocked === false ? `Wear configuration: ${attire.prompt}` : ''}`,
     outfitPhysics: [...attireBasePhysics, ...derived.fabricBehavior, ...attire.physics].join(', '),
     poseAndContact: `Pose: ${state.pose}. Activity: ${activityDefinition.prompt}. Activity mechanics: ${activityDefinition.mechanics}. Gaze behavior: ${activityDefinition.gaze}. Contact rules: ${derived.contactPhysics.filter(p => !p.includes('arm')).join('. ')}. ${interactiveSelfie.prompt} ${bedroomSeatedGeometry}`,
     visibleEnvironment: visibleEnvironmentText,

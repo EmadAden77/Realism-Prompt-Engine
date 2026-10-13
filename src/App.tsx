@@ -64,7 +64,6 @@ import {
 import { getEligibleSelfieAngles, SelfieAngleAdvice, SelfieAngleMode } from './engine/selfieAngles';
 import {
   getActivityOptions,
-  getOutfitCapabilities,
   getPoseOptions,
   OutfitWearStyle,
   GarmentWearContext,
@@ -126,6 +125,7 @@ interface SceneState {
   cameraAngle: CameraAngle;
   pose: string;
   outfitId: string;
+  outfitLocked: boolean;
   outfitWearStyle: OutfitWearStyle;
   garmentWearContext: GarmentWearContext;
   shirtTuck: ShirtTuck;
@@ -537,6 +537,7 @@ const DEFAULT_STATE: SceneState = {
   cameraAngle: 'eye-level',
   pose: '',
   outfitId: 'mil_admin_tan_shirt',
+  outfitLocked: true,
   outfitWearStyle: 'natural-neat',
   garmentWearContext: 'auto',
   shirtTuck: 'auto',
@@ -719,7 +720,6 @@ export default function PhysFrameApp() {
   const activeFamily = state.sceneFamily ? SCENE_FAMILIES[state.sceneFamily] : null;
   const selectedOutfit = OUTFITS.find(o => o.id === state.outfitId);
   const selectedBedroomSelfie = getBedroomSelfieActivity(state.bedroomSelfieActionId);
-  const outfitCapabilities = getOutfitCapabilities(selectedOutfit);
   const activityOptions = state.sceneFamily ? getActivityOptions(state.sceneFamily, state.subScene) : [];
   const poseOptions = state.sceneFamily ? getPoseOptions(state.sceneFamily, state.subScene) : [];
   const militarySubSceneGroups = state.sceneFamily === 'military-base'
@@ -1366,7 +1366,8 @@ export default function PhysFrameApp() {
       pose: randomPoseOptions[Math.floor(Math.random() * randomPoseOptions.length)] || family.poses[0],
       lightingMode: family.allowedLighting[Math.floor(Math.random() * family.allowedLighting.length)],
       environmentRealism: family.environmentRealism[Math.floor(Math.random() * family.environmentRealism.length)],
-      outfitId: availableOutfits[Math.floor(Math.random() * availableOutfits.length)]?.id || availableOutfits[0]?.id || 'thobe_white_summer',
+      outfitId: state.outfitId,
+      outfitLocked: true,
       timeOfDay: chosenTime,
       captureType: chosenCapture,
       expression: chosenExp,
@@ -1588,7 +1589,7 @@ export default function PhysFrameApp() {
         captureType: 'front-selfie',
         framing: 'chest-up',
         cameraAngle: 'eye-level',
-        outfitId: OUTFITS.find(o => o.category.includes(chosenFamily))?.id || 'thobe_white_summer',
+        outfitId: state.outfitId,
         hairStyle: 'h2',
         expression: 'e1',
         timeOfDay: 'midday',
@@ -1620,7 +1621,8 @@ export default function PhysFrameApp() {
       captureType: directedScene.captureType,
       framing: directedScene.framing,
       cameraAngle: directedScene.cameraAngle,
-      outfitId: directedScene.outfitId,
+      outfitId: state.outfitId,
+      outfitLocked: true,
       hairStyle: directedScene.hairStyle,
       expression: directedScene.expression,
       timeOfDay: directedScene.timeOfDay,
@@ -3205,7 +3207,7 @@ export default function PhysFrameApp() {
                    <p className="text-[10px] text-[var(--text-muted)] mb-1.5">الأطقم الكاملة الأقرب للمكان والنشاط تظهر أولًا، ولا يُغيَّر طقمك تلقائيًا.</p>
                    <select
                      value={state.outfitId}
-                     onChange={e => setState({ ...state, outfitId: e.target.value })}
+                     onChange={e => setState({ ...state, outfitId: e.target.value, outfitLocked: true, outfitWearStyle: 'natural-neat', garmentWearContext: 'neutral', shirtTuck: 'auto', sleeveStyle: 'auto', shirtButtons: 'auto', collarStyle: 'auto', outerwearClosure: 'auto', hoodPosition: 'auto', thobeCollar: 'auto' })}
                      className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[var(--accent)] mb-2"
                    >
                      {!!state.outfitId && !smartOutfitSet.has(state.outfitId) && !showAllSceneOptions && (
@@ -3230,132 +3232,13 @@ export default function PhysFrameApp() {
                      {showAllSceneOptions ? 'إخفاء الأطقم الإضافية' : 'عرض مكتبة الملابس كاملة'}
                    </button>
 
-                   <div className="rounded-xl border border-white/5 bg-black/20 p-3 mb-3">
-                     <div className="flex items-center justify-between mb-2.5">
-                       <div>
-                         <div className="text-[11px] font-bold text-white">طريقة لبس الملابس</div>
-                         <div className="text-[9px] text-[var(--text-muted)] mt-0.5">الخيارات تتغير تلقائيًا حسب نوع الطقم</div>
-                       </div>
-                       <span className="text-[9px] text-[var(--accent)]">{selectedOutfit?.categoryAR || 'الطقم'}</span>
-                     </div>
-
-                     <div className="grid grid-cols-2 gap-2">
-                       <div>
-                         <label className="text-[10px] text-[var(--text-muted)] block mb-1">أسلوب اللبس</label>
-                         <select value={state.outfitWearStyle} onChange={e => setState({ ...state, outfitWearStyle: e.target.value as OutfitWearStyle })} className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white">
-                           <option value="natural-neat">مرتب طبيعي</option>
-                           <option value="very-neat">مرتب جدًا</option>
-                           <option value="casual-relaxed">عفوي</option>
-                           <option value="comfortable">مريح</option>
-                           <option value="formal">رسمي</option>
-                           <option value="home-relaxed">منزلي</option>
-                           <option value="sporty">رياضي</option>
-                         </select>
-                       </div>
-
-                       <div>
-                         <label className="text-[10px] text-[var(--text-muted)] block mb-1">حالة القماش</label>
-                         <select value={state.clothingCondition} onChange={e => setState({ ...state, clothingCondition: e.target.value as ClothingCondition })} className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white">
-                           <option value="crisp">مرتب ونظيف</option>
-                           <option value="worn-all-day">مستخدم طوال اليوم</option>
-                           <option value="vintage-washed">مستهلك طبيعيًا</option>
-                         </select>
-                       </div>
-
-                       <div className="col-span-2">
-                         <label className="text-[10px] text-[var(--text-muted)] block mb-1">أثر النشاط على اللبس</label>
-                         <select value={state.garmentWearContext} onChange={e => setState({ ...state, garmentWearContext: e.target.value as GarmentWearContext })} className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white">
-                           <option value="auto">تلقائي حسب النشاط</option>
-                           <option value="neutral">طبيعي ثابت</option>
-                           <option value="after-sitting">بعد جلوس</option>
-                           <option value="after-walking">بعد مشي</option>
-                           <option value="post-workout">بعد تمرين</option>
-                           <option value="light-breeze">نسيم خفيف</option>
-                           <option value="light-sweat">تعرق خفيف</option>
-                         </select>
-                       </div>
-
-                       {outfitCapabilities.supportsTuck && (
-                         <div>
-                           <label className="text-[10px] text-[var(--text-muted)] block mb-1">موضع القميص</label>
-                           <select value={state.shirtTuck} onChange={e => setState({ ...state, shirtTuck: e.target.value as ShirtTuck })} className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white">
-                             <option value="auto">تلقائي</option>
-                             <option value="tucked">داخل البنطلون</option>
-                             <option value="untucked">خارج البنطلون</option>
-                             <option value="half-tuck">نصف داخل</option>
-                           </select>
-                         </div>
-                       )}
-
-                       {outfitCapabilities.supportsSleeves && (
-                         <div>
-                           <label className="text-[10px] text-[var(--text-muted)] block mb-1">الأكمام</label>
-                           <select value={state.sleeveStyle} onChange={e => setState({ ...state, sleeveStyle: e.target.value as SleeveStyle })} className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white">
-                             <option value="auto">تلقائي</option>
-                             <option value="down">طبيعية للأسفل</option>
-                             <option value="rolled-once">مرفوعة طية واحدة</option>
-                             <option value="rolled-forearm">مرفوعة للساعد</option>
-                           </select>
-                         </div>
-                       )}
-
-                       {outfitCapabilities.supportsShirtButtons && (
-                         <div>
-                           <label className="text-[10px] text-[var(--text-muted)] block mb-1">زراير القميص</label>
-                           <select value={state.shirtButtons} onChange={e => setState({ ...state, shirtButtons: e.target.value as ShirtButtons })} className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white">
-                             <option value="auto">تلقائي حسب الطقم</option>
-                             <option value="fully-buttoned">مغلق بالكامل</option>
-                             <option value="top-one-open">الزر الأول مفتوح</option>
-                             <option value="top-two-open">أول زرين مفتوحين</option>
-                           </select>
-                         </div>
-                       )}
-
-                       {outfitCapabilities.supportsCollar && (
-                         <div>
-                           <label className="text-[10px] text-[var(--text-muted)] block mb-1">الياقة</label>
-                           <select value={state.collarStyle} onChange={e => setState({ ...state, collarStyle: e.target.value as CollarStyle })} className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white">
-                             <option value="auto">تلقائي</option>
-                             <option value="neat">مرتبة</option>
-                             <option value="relaxed">عفوية</option>
-                           </select>
-                         </div>
-                       )}
-
-                       {outfitCapabilities.supportsOuterwearClosure && (
-                         <div>
-                           <label className="text-[10px] text-[var(--text-muted)] block mb-1">الطبقة الخارجية</label>
-                           <select value={state.outerwearClosure} onChange={e => setState({ ...state, outerwearClosure: e.target.value as OuterwearClosure })} className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white">
-                             <option value="auto">تلقائي</option>
-                             <option value="open">مفتوحة</option>
-                             <option value="half-open">نصف مفتوحة</option>
-                             <option value="closed">مغلقة</option>
-                           </select>
-                         </div>
-                       )}
-
-                       {outfitCapabilities.supportsHood && (
-                         <div>
-                           <label className="text-[10px] text-[var(--text-muted)] block mb-1">غطاء الهودي</label>
-                           <select value={state.hoodPosition} onChange={e => setState({ ...state, hoodPosition: e.target.value as HoodPosition })} className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white">
-                             <option value="auto">تلقائي</option>
-                             <option value="down">للخلف</option>
-                             <option value="up">مرفوع على الرأس</option>
-                           </select>
-                         </div>
-                       )}
-
-                       {outfitCapabilities.supportsThobeCollar && (
-                         <div>
-                           <label className="text-[10px] text-[var(--text-muted)] block mb-1">ياقة الثوب</label>
-                           <select value={state.thobeCollar} onChange={e => setState({ ...state, thobeCollar: e.target.value as ThobeCollar })} className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white">
-                             <option value="auto">تلقائي</option>
-                             <option value="closed">مغلقة</option>
-                             <option value="slightly-open">مفتوحة قليلًا</option>
-                           </select>
-                         </div>
-                       )}
-                     </div>
+                   <div className="rounded-xl border border-[var(--accent)]/30 bg-[var(--accent)]/5 p-3 mb-3">
+                     <div className="text-[11px] font-bold text-white">🔒 طقم كامل وثابت</div>
+                     <p className="text-[10px] text-[var(--text-muted)] mt-1 leading-relaxed">
+                       كل اختيار يمثل طقمًا كاملًا. تتغير حركة القماش وثنياته مع الجسم والإضاءة فقط،
+                       ولا تتغير القطع أو الألوان أو طريقة اللبس عند تغيير المشهد.
+                     </p>
+                     <p className="text-[10px] text-[var(--accent)] mt-1">{selectedOutfit?.labelAR || 'اختر طقمًا كاملًا'}</p>
                    </div>
 
                    <div className="grid grid-cols-2 gap-2.5">
