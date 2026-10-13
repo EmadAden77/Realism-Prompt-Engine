@@ -421,9 +421,9 @@ export function deriveBackgroundRealism(
   // Filter physical surfaces BEFORE selecting the limited visible slice.
   const environmentalSurfaces = baseBg.filter(item => {
     if (viewGeometry.wallDominated && !viewGeometry.streetVisible &&
-        /road|street|asphalt|parked|sedan|SUV|vehicle|car\\b|driveway|parking|bay\\b|lane\\b/i.test(item)) return false;
+        /road|street|asphalt|parked|sedan|SUV|vehicle|car\b|driveway|parking|bay\b|lane\b/i.test(item)) return false;
     if (viewGeometry.verticalBias === 'upperward' && viewGeometry.aperture !== 'open' &&
-        /road|street|asphalt|curb|parking|parked|ground|floor|pavement|car\\b/i.test(item)) return false;
+        /road|street|asphalt|curb|parking|parked|ground|floor|pavement|car\b/i.test(item)) return false;
     if (isCarInterior && !viewGeometry.windowVisible &&
         /outside traffic|passing car|street through|parked car outside/i.test(item)) return false;
     return true;
@@ -693,7 +693,7 @@ export function deriveBackgroundRealism(
     }
 
     if (humanDensity === 'moderate') {
-      humanBehavior.push('at most one additional distant person deeper in the scene, visually subordinate and never arranged as a crowd');
+      humanBehavior.push('at most one additional distant person only within the same unobstructed secondary sightline, visually subordinate and never arranged as a crowd');
     }
   }
 
@@ -720,17 +720,24 @@ export function deriveBackgroundRealism(
     } else if (familyId === 'living-room') {
       mildDisorderElements.push('a slightly shifted cushion, small cable, or naturally imperfect furniture alignment without visible mess');
     } else if (familyId === 'military-base') {
-      mildDisorderElements.push('a restrained document stack, cable, chair misalignment, or minor wall scuff appropriate to a functioning workplace');
+      const surfaces = environmentalSurfaces.join(' ').toLowerCase();
+      mildDisorderElements.push(/desk|document|table/.test(surfaces)
+        ? 'one unobtrusive document stack or cable on the actually visible working surface'
+        : 'only slight natural wear on an actually visible wall, floor, doorway or chair edge');
     } else if (familyId === 'gym') {
       mildDisorderElements.push('one ordinary water bottle, towel edge, or subtle equipment wear mark, never staged toward the camera');
     } else if (familyId === 'car') {
-      mildDisorderElements.push('a charging cable, faint dashboard dust, or small everyday cabin-use mark consistent with the visible cabin area');
+      mildDisorderElements.push('very slight natural use marks only on cabin trim that is physically visible at the resolved camera angle');
     } else if (familyId === 'saudi-outdoor') {
-      mildDisorderElements.push('minor curb dust, asphalt patching, paint fading, service hardware, or slight parking misalignment appropriate to the selected location');
+      const surfaces = environmentalSurfaces.join(' ').toLowerCase();
+      mildDisorderElements.push(/asphalt|curb|road|parking|pavement|sidewalk|paving/.test(surfaces)
+        ? 'faint dust and subtle natural wear only on the curb or paved ground actually visible in this frame'
+        : 'minor localized paint variation or service-hardware wear only on the visible facade, gate or wall; no invented street litter');
     }
 
-    if (disorderLevel === 'moderate' && framingClass === 'wide') {
-      mildDisorderElements.push('one additional small place-appropriate imperfection deeper in frame, visually secondary and never chaotic');
+    if (disorderLevel === 'moderate' && framingClass === 'wide' &&
+        viewGeometry.aperture === 'open' && !viewGeometry.wallDominated) {
+      mildDisorderElements.push('at most one extra tiny imperfection on an already visible background surface, never random litter or staged chaos');
     }
   }
 
@@ -759,8 +766,7 @@ export function deriveBackgroundRealism(
   const depthLayers: string[] = [];
   if (viewGeometry.wallDominated && !viewGeometry.streetVisible) {
     depthLayers.push('architectural near plane only: wall, threshold or gate; street depth is occluded');
-  }
-  if (visibilityClass === 'minimal') {
+  } else if (visibilityClass === 'minimal') {
     depthLayers.push('near layer only: the nearest physically visible surface immediately behind the subject');
   } else if (visibilityClass === 'limited') {
     depthLayers.push('near layer: one immediate architectural or furnishing cue');
