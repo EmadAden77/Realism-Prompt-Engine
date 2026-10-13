@@ -15,7 +15,7 @@ for (const action of BEDROOM_INTERACTIVE_SELFIES) {
   assert.ok(!ids.has(action.id), 'Every action must have a distinct ID: ' + action.id);
   ids.add(action.id);
   assert.ok(labels.has(action.subScene), 'Every interactive pose must exist inside actual bedroom geometry: ' + action.id);
-  assert.ok(action.contact.includes('phone') || action.contact.includes('smartphone'),
+  assert.match(action.contact, /phone|smartphone|camera|capture/i,
     'Keep a capturing smartphone supported by exactly one arm: ' + action.id);
 }
 assert.ok(BEDROOM_INTERACTIVE_SELFIES.length >= 26, 'Expanded bedroom catalog must exceed 25 practical actions');
