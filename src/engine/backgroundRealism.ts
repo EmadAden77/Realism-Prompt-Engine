@@ -44,6 +44,10 @@ export interface BackgroundSceneContext {
   timeOfDay: 'morning' | 'midday' | 'afternoon' | 'sunset' | 'night';
   framingClass: 'tight' | 'medium' | 'wide';
   cameraAngle: 'eye-level' | 'slightly-high' | 'slightly-low' | 'slightly-off-center';
+  /** Resolved camera-to-face geometry, rather than the UI angle label alone. */
+  cameraPitchDeg?: number;
+  cameraYawDeg?: number;
+  cameraDistanceCm?: number;
   captureType: 'front-selfie' | 'mirror-selfie' | 'third-person-candid';
   activityDensity: 'none' | 'minimal' | 'light' | 'moderate';
   isOutdoor: boolean;
@@ -62,7 +66,20 @@ export interface BackgroundSceneContext {
   microLoc?: MicroLocation;
 }
 
+export interface BackgroundViewGeometry {
+  /** Qualitative projection budget, not an invented pixel-accurate 3D measurement. */
+  aperture: 'narrow' | 'partial' | 'open';
+  verticalBias: 'groundward' | 'level' | 'upperward';
+  horizontalBias: 'centered' | 'left' | 'right';
+  wallDominated: boolean;
+  streetVisible: boolean;
+  windowVisible: boolean;
+  peripheralActorsAllowed: boolean;
+  placementRules: string[];
+}
+
 export interface BackgroundRealismState {
+  viewGeometry: BackgroundViewGeometry;
   visibilityClass: BackgroundVisibilityClass;
   fovAllowsBackgroundLife: boolean;
   cappedByFraming: boolean;
@@ -235,6 +252,100 @@ export function deriveAngleIntentFromBackground(
   };
 }
 
+/**
+ * A conservative projection of what can exist behind a held phone.
+ * Camera yaw is relative to the face, not the world's absolute compass bearing:
+ * a side-angled selfie opens a margin but cannot see THROUGH a wall or roof.
+ */
+function deriveBackgroundViewGeometry(
+  context: BackgroundSceneContext,
+  surfaces: string[]
+): BackgroundViewGeometry {
+  const pitchDeg = context.cameraPitchDeg ??
+    (context.cameraAngle === 'slightly-high' ? -14 :
+      context.cameraAngle === 'slightly-low' ? 14 : 0);
+  const yawDeg = context.cameraYawDeg ??
+    (context.cameraAngle === 'slightly-off-center' ? 18 : 0);
+  const distanceCm = context.cameraDistanceCm ??
+    (context.framingClass === 'tight' ? 42 : context.framingClass === 'medium' ? 52 : 60);
+  const yawAbs = Math.abs(yawDeg);
+  const faceClose = context.captureType === 'front-selfie' && distanceCm < 47;
+  const narrow = context.framingClass === 'tight' ||
+    (context.framingClass === 'medium' && faceClose && yawAbs < 10);
+  const aperture: BackgroundViewGeometry['aperture'] =
+    narrow ? 'narrow' : context.framingClass === 'wide' && !faceClose
+      ? 'open' : 'partial';
+  const verticalBias: BackgroundViewGeometry['verticalBias'] =
+    pitchDeg <= -11 ? 'groundward' : pitchDeg >= 11 ? 'upperward' : 'level';
+  const horizontalBias: BackgroundViewGeometry['horizontalBias'] =
+    yawDeg <= -7 ? 'left' : yawDeg >= 7 ? 'right' : 'centered';
+
+  const isWallBackedExterior = context.familyId === 'saudi-outdoor' &&
+    containsAny(context.subScene, ['سور', 'جدار', 'بوابة', 'مدخل فيلا', 'أمام باب']);
+  const isArchitecturalEntrance = context.familyId === 'military-base' &&
+    context.microLoc?.zone === 'entrance' && context.isOutdoor;
+  const wallDominated = isWallBackedExterior || isArchitecturalEntrance;
+  // A wall-backed front selfie needs both spare space and a lateral angle to
+  // expose a street. Camera yaw alone cannot assert an unseen street exists.
+  const sideOpening = aperture === 'open' && yawAbs >= 9;
+  const roadEvidence = surfaces.some(item =>
+    /road|street|asphalt|curb|parking|parked|vehicle|sedan|SUV|car\b|driveway|bay\b|lane\b|pavement|sidewalk/i.test(item)
+  ) || containsAny(context.subScene, ['شارع', 'مواقف', 'موقف', 'رصيف', 'طريق']);
+  const blockedByPitch = verticalBias === 'upperward' && aperture !== 'open';
+  const streetVisible = Boolean(
+    context.isOutdoor && roadEvidence && aperture !== 'narrow' &&
+    !blockedByPitch && (!wallDominated || sideOpening)
+  );
+  const glazingEvidence = surfaces.some(item =>
+    /side window|windshield|window glass|car window|rear windshield|side mirror/i.test(item)
+  );
+  const windowVisible = context.familyId === 'car' && !context.isOutdoor &&
+    glazingEvidence && aperture !== 'narrow' &&
+    verticalBias !== 'upperward';
+  const peripheralActorsAllowed = aperture !== 'narrow' &&
+    !(wallDominated && !sideOpening) && !blockedByPitch;
+
+  const placementRules = [
+    aperture === 'narrow'
+      ? 'No staged activity in a narrow selfie margin: show only the closest background plane.'
+      : aperture === 'partial'
+        ? 'Background occupies a single naturally open side or narrow area behind the shoulders, not the whole image.'
+        : 'Background depth may extend into the free side of frame, but only behind the subject and existing architecture.',
+    horizontalBias === 'centered'
+      ? 'Keep scene geometry aligned behind the head without implying a large lateral panorama.'
+      : `A slight ${horizontalBias}ward camera offset reveals background only along the unblocked side margin; keep the opposite side naturally cropped.`,
+    verticalBias === 'upperward'
+      ? 'Camera looks slightly upward: favor upper walls or ceiling/sky where supported; do not force curb-level cars, feet, or floor objects into frame.'
+      : verticalBias === 'groundward'
+        ? 'Camera tilts slightly downward: ground, thresholds and near pavement can appear, but distant skyline/rooftops must not be invented.'
+        : 'Camera stays near level: maintain ordinary eye-height horizon and parallel architectural vanishing lines.',
+    'Subject, doorway/wall edges, people and car silhouettes must share one vanishing geometry, consistent depth, ground contact, occlusion and light direction.'
+  ];
+
+  if (wallDominated && !streetVisible) {
+    placementRules.push('The entrance or boundary wall fills the background: the street, parked cars, and passers-by remain outside the unobstructed camera rays.');
+  }
+  if (context.familyId === 'car' && !context.isOutdoor) {
+    placementRules.push(windowVisible
+      ? 'Any exterior object is a small, appropriately clipped view THROUGH an already visible side window or windshield, never over the cabin trim.'
+      : 'No exterior people, cars or street reflections as visible objects without an actual open glazing sightline.');
+  }
+  if (context.captureType === 'mirror-selfie') {
+    placementRules.push('Background exists only within the same mirror optical path and behind the reflected subject; nothing is independently visible behind the phone outside the mirror.');
+  }
+
+  return {
+    aperture,
+    verticalBias,
+    horizontalBias,
+    wallDominated,
+    streetVisible,
+    windowVisible,
+    peripheralActorsAllowed,
+    placementRules
+  };
+}
+
 export function deriveBackgroundRealism(
   context: BackgroundSceneContext
 ): BackgroundRealismState {
@@ -265,6 +376,7 @@ export function deriveBackgroundRealism(
 
   const baseBg = microLoc?.backgroundElements ?? [];
   const activityText = microLoc?.activity ?? '';
+  const viewGeometry = deriveBackgroundViewGeometry(context, baseBg);
 
   const isPrivateInterior = familyId === 'bedroom' || (familyId === 'living-room' && !isOutdoor);
   const isPrivateHomeYard = familyId === 'living-room' && isOutdoor;
@@ -305,7 +417,17 @@ export function deriveBackgroundRealism(
     visibilityClass === 'limited' ? 2 :
     visibilityClass === 'moderate' ? 3 : 4;
 
-  const environmentalSurfaces = baseBg.slice(0, surfaceLimit);
+  // Micro-location dictionaries can mention objects that fall outside the lens.
+  // Filter physical surfaces BEFORE selecting the limited visible slice.
+  const environmentalSurfaces = baseBg.filter(item => {
+    if (viewGeometry.wallDominated && !viewGeometry.streetVisible &&
+        /road|street|asphalt|parked|sedan|SUV|vehicle|car\b|driveway|parking|bay\b|lane\b/i.test(item)) return false;
+    if (viewGeometry.verticalBias === 'upperward' && viewGeometry.aperture !== 'open' &&
+        /road|street|asphalt|curb|parking|parked|ground|floor|pavement|car\b/i.test(item)) return false;
+    if (isCarInterior && !viewGeometry.windowVisible &&
+        /windshield view|side window view|outside traffic|passing car|street through|parked car outside/i.test(item)) return false;
+    return true;
+  }).slice(0, surfaceLimit);
 
   const publicScene =
     (!isPrivateHomeSpace && isOutdoor) ||
@@ -355,6 +477,21 @@ export function deriveBackgroundRealism(
           ? 'moderate'
           : 'light';
 
+  // A face-forward entrance/wall selfie cannot display background pedestrians
+  // on a street hidden behind the facade, even with explicit density=high.
+  if (viewGeometry.aperture === 'narrow' && !isPrivateHomeSpace) {
+    autoHumanDensity = 'none';
+    physicalHumanMax = 'none';
+  }
+  if (viewGeometry.wallDominated && !viewGeometry.peripheralActorsAllowed) {
+    autoHumanDensity = 'none';
+    physicalHumanMax = isPrivateHomeSpace ? physicalHumanMax : 'none';
+  }
+  if (viewGeometry.verticalBias === 'upperward' && viewGeometry.aperture !== 'open' && isOutdoor) {
+    autoHumanDensity = 'none';
+    physicalHumanMax = 'none';
+  }
+
   if (isPassage && familyId === 'saudi-outdoor') {
     autoHumanDensity = capDensity(autoHumanDensity, 'sparse');
     physicalHumanMax = capDensity(physicalHumanMax, 'sparse');
@@ -384,14 +521,19 @@ export function deriveBackgroundRealism(
   if (framingClass !== 'tight') {
     if (isCarInterior) {
       const exteriorWindowCue = baseBg.some(item => /window|windshield|street|parked car|side mirror/i.test(item));
-      if (exteriorWindowCue) {
+      if (exteriorWindowCue && viewGeometry.windowVisible) {
         autoVehicleDensity = 'sparse';
         physicalVehicleMax = 'sparse';
       }
-    } else if (isOutdoor && vehicleCue) {
+    } else if (isOutdoor && vehicleCue && viewGeometry.streetVisible) {
       autoVehicleDensity = activityDensity === 'moderate' && framingClass === 'wide' ? 'light' : 'sparse';
       physicalVehicleMax = framingClass === 'wide' ? 'light' : 'sparse';
     }
+  }
+
+  if (!viewGeometry.streetVisible && !viewGeometry.windowVisible) {
+    autoVehicleDensity = 'none';
+    physicalVehicleMax = 'none';
   }
 
   if (microLoc?.vehicleDensityCap) {
@@ -555,7 +697,7 @@ export function deriveBackgroundRealism(
     }
 
     if (humanDensity === 'moderate') {
-      humanBehavior.push('at most one additional distant person deeper in the scene, visually subordinate and never arranged as a crowd');
+      humanBehavior.push('at most one additional distant person only within the same unobstructed secondary sightline, visually subordinate and never arranged as a crowd');
     }
   }
 
@@ -582,17 +724,26 @@ export function deriveBackgroundRealism(
     } else if (familyId === 'living-room') {
       mildDisorderElements.push('a slightly shifted cushion, small cable, or naturally imperfect furniture alignment without visible mess');
     } else if (familyId === 'military-base') {
-      mildDisorderElements.push('a restrained document stack, cable, chair misalignment, or minor wall scuff appropriate to a functioning workplace');
+      const surfaces = environmentalSurfaces.join(' ').toLowerCase();
+      mildDisorderElements.push(/desk|document|table/.test(surfaces)
+        ? 'one unobtrusive document stack or cable on the actually visible working surface'
+        : 'only slight natural wear on an actually visible wall, floor, doorway or chair edge');
     } else if (familyId === 'gym') {
       mildDisorderElements.push('one ordinary water bottle, towel edge, or subtle equipment wear mark, never staged toward the camera');
     } else if (familyId === 'car') {
-      mildDisorderElements.push('a charging cable, faint dashboard dust, or small everyday cabin-use mark consistent with the visible cabin area');
+      mildDisorderElements.push('very slight natural use marks only on cabin trim that is physically visible at the resolved camera angle');
     } else if (familyId === 'saudi-outdoor') {
-      mildDisorderElements.push('minor curb dust, asphalt patching, paint fading, service hardware, or slight parking misalignment appropriate to the selected location');
+      const surfaces = environmentalSurfaces.join(' ').toLowerCase();
+      mildDisorderElements.push(viewGeometry.wallDominated && !viewGeometry.streetVisible
+        ? 'minor localized wear on the visible wall or entrance gate only; no roadway clutter'
+        : /asphalt|curb|road|parking|pavement|sidewalk|paving/.test(surfaces)
+          ? 'faint dust and subtle natural wear only on the curb or paved ground actually visible in this frame'
+          : 'minor localized paint variation or service-hardware wear only on the visible facade, gate or wall; no invented street litter');
     }
 
-    if (disorderLevel === 'moderate' && framingClass === 'wide') {
-      mildDisorderElements.push('one additional small place-appropriate imperfection deeper in frame, visually secondary and never chaotic');
+    if (disorderLevel === 'moderate' && framingClass === 'wide' &&
+        viewGeometry.aperture === 'open' && !viewGeometry.wallDominated) {
+      mildDisorderElements.push('at most one extra tiny imperfection on an already visible background surface, never random litter or staged chaos');
     }
   }
 
@@ -619,7 +770,9 @@ export function deriveBackgroundRealism(
   }
 
   const depthLayers: string[] = [];
-  if (visibilityClass === 'minimal') {
+  if (viewGeometry.wallDominated && !viewGeometry.streetVisible) {
+    depthLayers.push('architectural near plane only: wall, threshold or gate; street depth is occluded');
+  } else if (visibilityClass === 'minimal') {
     depthLayers.push('near layer only: the nearest physically visible surface immediately behind the subject');
   } else if (visibilityClass === 'limited') {
     depthLayers.push('near layer: one immediate architectural or furnishing cue');
@@ -635,6 +788,7 @@ export function deriveBackgroundRealism(
   }
 
   const occlusionRules = [
+    ...viewGeometry.placementRules,
     'background elements must be naturally hidden by the subject, foreground edges, furniture, vehicles, walls, or architectural planes when geometry requires it',
     'people and vehicles may be partially cropped or occluded; do not force full-body or full-vehicle visibility',
     isCarInterior
@@ -665,7 +819,9 @@ export function deriveBackgroundRealism(
     densityRank[densityFromControl(backgroundVehicles, autoVehicleDensity)] > densityRank[physicalVehicleMax] ||
     (backgroundDisorder !== 'auto' && disorderRank[disorderFromControl(backgroundDisorder, defaultDisorder)] > disorderRank[physicalDisorderMax]) ||
     presenceOrder[requestedPresenceLevel] > presenceOrder[presenceCap] ||
-    (backgroundCompositionGoal === 'background-priority' && framingClass === 'tight');
+    (backgroundCompositionGoal === 'background-priority' && framingClass === 'tight') ||
+    ((!viewGeometry.streetVisible && !viewGeometry.windowVisible) && backgroundVehicles !== 'auto' && backgroundVehicles !== 'none') ||
+    (!viewGeometry.peripheralActorsAllowed && backgroundHumans !== 'auto' && backgroundHumans !== 'none' && !isPrivateHomeSpace);
 
   const decisionReasons: string[] = [];
   if (framingClass === 'tight') {
@@ -709,6 +865,7 @@ export function deriveBackgroundRealism(
   }
 
   const realismGuards = [
+    ...viewGeometry.placementRules,
     'background realism is conditional on camera position, selfie distance, pitch, yaw, framing, and actual field of view',
     'user background controls have priority, but impossible density is automatically capped by framing and scene geometry',
     'Gemini background advice is advisory only and can never override physical FOV, lighting, occlusion, or private-space constraints',
@@ -728,6 +885,7 @@ export function deriveBackgroundRealism(
   }
 
   return {
+    viewGeometry,
     visibilityClass,
     fovAllowsBackgroundLife,
     cappedByFraming,

@@ -105,6 +105,7 @@ export function deriveSaudiStreetRealism(
   }
 
   const background = physical?.backgroundRealism;
+  const view = background?.viewGeometry;
   const visibleEnvironment = physical
     ? Boolean(physical.visibleEnvironment?.trim())
     : true;
@@ -154,7 +155,9 @@ export function deriveSaudiStreetRealism(
 
   return {
     active: true,
-    surface: frameAllowsContext ? chooseSurface(state.subScene) : undefined,
+    surface: frameAllowsContext && (!view || (view.verticalBias !== 'upperward' && (!view.wallDominated || view.streetVisible)))
+      ? chooseSurface(state.subScene)
+      : undefined,
     architecture: architectureVisible ? chooseArchitecture(state.subScene) : undefined,
     disorder: frameAllowsContext && allowsDisorder
       ? [ruleText('ss_gold_chaos'), chooseDisorder(state.subScene)]
@@ -176,13 +179,15 @@ export function deriveSaudiStreetRealism(
     peopleClothing: frameAllowsContext && allowsHumans
       ? choosePeopleClothing(state.subScene)
       : undefined,
-    sky: frameAllowsContext && state.timeOfDay === 'night'
+    sky: frameAllowsContext && state.timeOfDay === 'night' &&
+      (!view || (!view.wallDominated && (view.aperture === 'open' || view.verticalBias === 'upperward')))
       ? ruleText('ss_gold_sky')
       : undefined,
     secondaryLight: frameAllowsContext && multipleLights
       ? ruleText('ss_gold_secondary_light')
       : undefined,
-    depth: frameAllowsContext && state.captureType === 'front-selfie'
+    depth: frameAllowsContext && state.captureType === 'front-selfie' &&
+      (!view || !view.wallDominated || view.streetVisible)
       ? ruleText('ss_gold_depth')
       : undefined,
     guards,

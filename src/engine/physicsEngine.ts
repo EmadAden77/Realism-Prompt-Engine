@@ -998,6 +998,11 @@ function calculateDetailedPhysicalState(
     timeOfDay: state.timeOfDay,
     framingClass,
     cameraAngle: effectiveCameraAngle,
+    cameraPitchDeg: selfieAngle?.pitchDeg ??
+      (effectiveCameraAngle === 'slightly-high' ? -14 : effectiveCameraAngle === 'slightly-low' ? 14 :
+        effectiveCameraAngle === 'slightly-off-center' ? -5 : 0),
+    cameraYawDeg: selfieAngle?.yawDeg ?? (effectiveCameraAngle === 'slightly-off-center' ? 18 : 0),
+    cameraDistanceCm: distanceCm,
     captureType: state.captureType,
     activityDensity,
     isOutdoor,
@@ -1018,10 +1023,11 @@ function calculateDetailedPhysicalState(
 
   let visibleEnvironment = backgroundRealism.environmentalSurfaces.join(', ');
   if (!visibleEnvironment) {
-    visibleEnvironment = microLoc?.environmentPrompt
-      || (isOutdoor
-        ? 'ordinary Saudi exterior surface physically visible within the selfie field of view'
-        : 'ordinary interior surface physically visible immediately behind the subject');
+    // A location description is not proof that every listed object is visible.
+    // Never restore an off-frame road, car or crowd through the fallback text.
+    visibleEnvironment = isOutdoor
+      ? 'only the nearest place-appropriate wall, doorway or ground plane actually visible behind the subject'
+      : 'only the nearest room or cabin surface actually visible behind the subject';
   }
 
   // Fixed-home environments own their visible furniture/surface facts.
