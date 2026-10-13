@@ -479,6 +479,10 @@ export function deriveBackgroundRealism(
 
   // A face-forward entrance/wall selfie cannot display background pedestrians
   // on a street hidden behind the facade, even with explicit density=high.
+  if (viewGeometry.aperture === 'narrow' && !isPrivateHomeSpace) {
+    autoHumanDensity = 'none';
+    physicalHumanMax = 'none';
+  }
   if (viewGeometry.wallDominated && !viewGeometry.peripheralActorsAllowed) {
     autoHumanDensity = 'none';
     physicalHumanMax = isPrivateHomeSpace ? physicalHumanMax : 'none';
@@ -730,9 +734,11 @@ export function deriveBackgroundRealism(
       mildDisorderElements.push('very slight natural use marks only on cabin trim that is physically visible at the resolved camera angle');
     } else if (familyId === 'saudi-outdoor') {
       const surfaces = environmentalSurfaces.join(' ').toLowerCase();
-      mildDisorderElements.push(/asphalt|curb|road|parking|pavement|sidewalk|paving/.test(surfaces)
-        ? 'faint dust and subtle natural wear only on the curb or paved ground actually visible in this frame'
-        : 'minor localized paint variation or service-hardware wear only on the visible facade, gate or wall; no invented street litter');
+      mildDisorderElements.push(viewGeometry.wallDominated && !viewGeometry.streetVisible
+        ? 'minor localized wear on the visible wall or entrance gate only; no roadway clutter'
+        : /asphalt|curb|road|parking|pavement|sidewalk|paving/.test(surfaces)
+          ? 'faint dust and subtle natural wear only on the curb or paved ground actually visible in this frame'
+          : 'minor localized paint variation or service-hardware wear only on the visible facade, gate or wall; no invented street litter');
     }
 
     if (disorderLevel === 'moderate' && framingClass === 'wide' &&
