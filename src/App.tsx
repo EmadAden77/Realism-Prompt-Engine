@@ -1051,6 +1051,39 @@ export default function PhysFrameApp() {
     if (!state.sceneFamily) return;
     const familyId = state.sceneFamily;
     const family = SCENE_FAMILIES[familyId];
+    if (familyId === 'bedroom') {
+      // A bedroom moment must be a single supported human action, not three random
+      // independently selected activity/pose/location strings that conflict.
+      const applicable = BEDROOM_REALISM_PRESETS.filter(preset =>
+        preset.timeOfDay === state.timeOfDay ||
+        (state.timeOfDay === 'sunset' && preset.timeOfDay === 'night') ||
+        (state.timeOfDay === 'midday' && preset.timeOfDay === 'afternoon')
+      );
+      const preferred = applicable.length ? applicable : BEDROOM_REALISM_PRESETS;
+      const pool = preferred.filter(preset => bedroomActionForPreset(preset.id)?.id !== state.bedroomSelfieActionId);
+      const next = (pool.length ? pool : preferred)[Math.floor(Math.random() * (pool.length || preferred.length))];
+      const action = bedroomActionForPreset(next.id);
+      if (action) {
+        const lightingMode = isLightingCompatible(next.lightingMode, state.timeOfDay)
+          ? next.lightingMode : 'إضاءة سقف محايدة 4000K';
+        setState(prev => ({
+          ...prev,
+          sceneFamily: 'bedroom',
+          subScene: action.subScene, activity: action.labelAR, pose: action.poseAR,
+          captureType: action.captureType, bedroomSelfieActionId: action.id,
+          lightingMode, bedroomBedding: next.bedding, bedroomComposition: next.composition,
+          groupSelfieEnabled: false,
+          environmentRealism: next.bedding === 'fresh' ? 'مرتبة' : 'مستخدمة يوميًا',
+          selfieAngleAdvice: undefined, backgroundGeminiAdvice: undefined
+          // Never change user's time, selected clothing, face reference or hair.
+        }));
+        setBedroomSelfieZone(action.zone);
+        setUseEnhancedPrompt(false);
+        setEnhancedPrompts({});
+        showToast('🛏️ تم توليد مشهد واقعي في غرفة النوم يناسب وقتك وطقمك');
+        return;
+      }
+    }
     const options = family.subScenes.filter(Boolean);
     if (!options.length) return;
     const night = state.timeOfDay === 'night';
