@@ -317,7 +317,7 @@ export const BEDROOM_INTERACTIVE_SELFIES: readonly BedroomSelfieActivity[] = [
     "labelAR": "سيلفي جلسة مائلة عند طرف السرير",
     "poseAR": "جالس على حافة السرير",
     "prop": "bed edge and nearby nightstand visible only from relevant camera side",
-    "contact": "slight lateral lean supported by mattress and one planted foot; selfie arm extended from corresponding shoulder, other hand naturally rests on knee",
+    "contact": "slight lateral lean supported by mattress and one planted foot; selfie arm holds the one capturing smartphone extended from corresponding shoulder, other hand naturally rests on knee",
     "gaze": "calm eye contact, eyelids natural",
     "camera": "slight handheld tilt, visible mattress compression not fake edge-floating posture",
     "lighting": "existing ceiling or bedside light casts coherent wall and fabric shadows",
