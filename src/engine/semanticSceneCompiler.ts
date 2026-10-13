@@ -1,4 +1,5 @@
 import { resolveBedroomSelfieActivity } from './bedroomSelfieAffordances';
+import { buildBedroomRealismPrompt } from './bedroomRealismStudio';
 import { getMicroLocation } from '../data/microLocations';
 import { OUTFITS } from '../data/clothingOutfits';
 import {
@@ -473,6 +474,8 @@ export const buildSemanticScene = (
     }
   }
 
+  const bedroomArchitecture = buildBedroomRealismPrompt(state);
+  if (bedroomArchitecture) visibleEnvironmentText += ` ${bedroomArchitecture}`;
   visibleEnvironmentText += ` Authentic everyday Saudi life, strictly NO iconic landmarks or tourist stereotypes.`;
 
   const styleConstraintsList = [...derived.realismConstraints];
