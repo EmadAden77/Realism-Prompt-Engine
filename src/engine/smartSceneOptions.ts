@@ -94,7 +94,7 @@ export function buildSmartSceneOptions(input: SmartOptionInput): SmartOptionResu
 
   const compatibleLighting = input.allowedLighting.filter(light => isLightingCompatible(light, timeOfDay));
   const recommendedLighting = compatibleLighting.slice(0, 4);
-  const availableGaze = new Set(GAZE_INTERACTIONS.map(g => g.id));
+  const availableGaze = new Set<string>(GAZE_INTERACTIONS.map(g => g.id));
   const recommendedGazeIds = unique(gazeSuggestions(activity, captureType, subScene).filter(id => availableGaze.has(id)));
 
   let maxHuman: 'none' | 'sparse' | 'light' | 'moderate' = loc?.humanDensityCap ?? 'moderate';
