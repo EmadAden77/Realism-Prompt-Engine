@@ -34,6 +34,7 @@ import {
   Moon
 } from 'lucide-react';
 import { MICRO_LOCATIONS, getMicroLocation, MicroLocation } from './data/microLocations';
+import { LIGHTING_CATALOG, compatiblePhysicalLighting, getPhysicalLightingOption } from './data/physicalLighting';
 import { OUTFITS, OutfitItem } from './data/clothingOutfits';
 import { resolveScene } from './engine/physicsEngine';
 import {
@@ -313,7 +314,7 @@ const SCENE_FAMILIES: Record<SceneFamilyId, {
     subScenes: MICRO_LOCATIONS['military-base'].map(m => m.labelAR),
     activities: getActivityOptions('military-base' as SceneFamilyId).map(item => item.labelAR),
     poses: getPoseOptions('military-base' as SceneFamilyId),
-    allowedLighting: ['إضاءة مكتب فلورسنت', 'ضوء نهاري من النافذة', 'إضاءة ممرات متوازية', 'شمس الظهر'],
+    allowedLighting: LIGHTING_CATALOG['military-base'].map(option => option.labelAR),
     environmentRealism: ['رسمية ومنظمة', 'نشطة (عمل يومي)']
   },
   'saudi-outdoor': {
@@ -321,7 +322,7 @@ const SCENE_FAMILIES: Record<SceneFamilyId, {
     subScenes: MICRO_LOCATIONS['saudi-outdoor'].map(m => m.labelAR),
     activities: getActivityOptions('saudi-outdoor' as SceneFamilyId).map(item => item.labelAR),
     poses: getPoseOptions('saudi-outdoor' as SceneFamilyId),
-    allowedLighting: ['ضوء نهاري طبيعي', 'شمس الظهر', 'ساعة ذهبية (شروق/غروب)', 'إنارة شارع دافئة', 'إنارة نيون تجارية متناثرة'],
+    allowedLighting: LIGHTING_CATALOG['saudi-outdoor'].map(option => option.labelAR),
     environmentRealism: ['هادئ', 'طبيعي', 'نشط']
   },
   'car': {
@@ -329,7 +330,7 @@ const SCENE_FAMILIES: Record<SceneFamilyId, {
     subScenes: MICRO_LOCATIONS['car'].map(m => m.labelAR),
     activities: getActivityOptions('car' as SceneFamilyId).map(item => item.labelAR),
     poses: getPoseOptions('car' as SceneFamilyId),
-    allowedLighting: ['ضوء نهاري طبيعي', 'شمس الظهر', 'إضاءة داخل السيارة', 'إضاءة الشارع عبر زجاج السيارة', 'إضاءة شاشة الهاتف فقط'],
+    allowedLighting: LIGHTING_CATALOG['car'].map(option => option.labelAR),
     environmentRealism: ['مرتبة', 'طبيعية', 'مستخدمة يوميًا']
   },
   'living-room': {
@@ -337,7 +338,7 @@ const SCENE_FAMILIES: Record<SceneFamilyId, {
     subScenes: MICRO_LOCATIONS['living-room'].map(m => m.labelAR),
     activities: getActivityOptions('living-room' as SceneFamilyId).map(item => item.labelAR),
     poses: getPoseOptions('living-room' as SceneFamilyId),
-    allowedLighting: ['ضوء نهاري طبيعي', 'إضاءة سقف دافئة 3000K', 'إضاءة سقف محايدة 4000K', 'إضاءة سقف أبيض 5000K', 'إضاءة سقف باردة 6500K', 'فلاش الشاشة الأمامية فقط', 'إضاءة سقف أبيض 5000K + فلاش الشاشة الأمامية', 'إنارة ليلية مختلطة'],
+    allowedLighting: LIGHTING_CATALOG['living-room'].map(option => option.labelAR),
     environmentRealism: ['مرتبة', 'طبيعية', 'مستخدمة يوميًا']
   },
   'bedroom': {
@@ -345,7 +346,7 @@ const SCENE_FAMILIES: Record<SceneFamilyId, {
     subScenes: MICRO_LOCATIONS['bedroom'].map(m => m.labelAR),
     activities: getActivityOptions('bedroom' as SceneFamilyId).map(item => item.labelAR),
     poses: getPoseOptions('bedroom' as SceneFamilyId),
-    allowedLighting: ['ضوء نهاري طبيعي', 'إضاءة سقف دافئة 3000K', 'إضاءة سقف محايدة 4000K', 'إضاءة سقف أبيض 5000K', 'إضاءة سقف باردة 6500K', 'فلاش الشاشة الأمامية فقط', 'إضاءة سقف أبيض 5000K + فلاش الشاشة الأمامية', 'إضاءة أباجورة دافئة'],
+    allowedLighting: LIGHTING_CATALOG['bedroom'].map(option => option.labelAR),
     environmentRealism: ['مرتبة', 'طبيعية', 'مستخدمة يوميًا']
   },
   'gym': {
@@ -353,7 +354,7 @@ const SCENE_FAMILIES: Record<SceneFamilyId, {
     subScenes: MICRO_LOCATIONS['gym'].map(m => m.labelAR),
     activities: getActivityOptions('gym' as SceneFamilyId).map(item => item.labelAR),
     poses: getPoseOptions('gym' as SceneFamilyId),
-    allowedLighting: ['إضاءة النادي الرياضي', 'ضوء نهاري طبيعي'],
+    allowedLighting: LIGHTING_CATALOG['gym'].map(option => option.labelAR),
     environmentRealism: ['هادئ', 'طبيعي', 'نشط']
   }
 };
@@ -1102,9 +1103,8 @@ export default function PhysFrameApp() {
     const poses = getPoseOptions(familyId, chosen);
     const activity = activities[Math.floor(Math.random() * activities.length)]?.labelAR || family.activities[0] || state.activity;
     const pose = poses[Math.floor(Math.random() * poses.length)] || family.poses[0] || state.pose;
-    const lightingChoices = family.allowedLighting.filter(light => night
-      ? !/شمس|نهار|ذهبية/.test(light)
-      : !/ليل|شارع دافئة|نيون|الشاشة الأمامية فقط|أباجورة/.test(light));
+    const lightingChoices = compatiblePhysicalLighting(familyId, state.timeOfDay, getMicroLocation(familyId, chosen)?.isOutdoor)
+      .map(option => option.labelAR);
     const lightingMode = (lightingChoices.length ? lightingChoices : family.allowedLighting)[
       Math.floor(Math.random() * (lightingChoices.length || family.allowedLighting.length))
     ] || state.lightingMode;
@@ -1364,7 +1364,10 @@ export default function PhysFrameApp() {
       subScene: randomSubScene,
       activity: randomActivityOptions[Math.floor(Math.random() * randomActivityOptions.length)]?.labelAR || family.activities[0],
       pose: randomPoseOptions[Math.floor(Math.random() * randomPoseOptions.length)] || family.poses[0],
-      lightingMode: family.allowedLighting[Math.floor(Math.random() * family.allowedLighting.length)],
+      lightingMode: (() => {
+        const compatible = compatiblePhysicalLighting(randomFamilyId, chosenTime, getMicroLocation(randomFamilyId, randomSubScene)?.isOutdoor);
+        return compatible[Math.floor(Math.random() * compatible.length)]?.labelAR || family.allowedLighting[0];
+      })(),
       environmentRealism: family.environmentRealism[Math.floor(Math.random() * family.environmentRealism.length)],
       outfitId: state.outfitId,
       outfitLocked: true,
@@ -3349,7 +3352,7 @@ export default function PhysFrameApp() {
                             });
                             return {
                               ...prev, timeOfDay: time,
-                              lightingMode: allowedLighting.includes(prev.lightingMode) && isLightingCompatible(prev.lightingMode, time)
+                              lightingMode: allowedLighting.includes(prev.lightingMode) && isLightingCompatible(prev.lightingMode, time, prev.sceneFamily, getMicroLocation(prev.sceneFamily, prev.subScene)?.isOutdoor)
                                 ? prev.lightingMode : dependent.lightingMode,
                               selfieAngleAdvice: undefined, backgroundGeminiAdvice: undefined
                             };
@@ -3363,12 +3366,16 @@ export default function PhysFrameApp() {
 
                    <div className="flex flex-wrap gap-1.5">
                       {activeFamily?.allowedLighting
-                        .filter(l => showAllSceneOptions || smartSceneOptions?.compatibleLighting.includes(l) || state.lightingMode === l)
                         .map(l => {
-                          const compatible = isLightingCompatible(l, state.timeOfDay);
+                          const compatible = state.sceneFamily
+                            ? isLightingCompatible(l, state.timeOfDay, state.sceneFamily, getMicroLocation(state.sceneFamily, state.subScene)?.isOutdoor)
+                            : false;
                           return (
                             <button key={l} type="button"
-                              title={compatible ? 'إضاءة متوافقة مع الوقت' : 'هذه الإضاءة لا تتوافق عادةً مع الوقت الحالي'}
+                              disabled={!compatible}
+                              title={compatible
+                                ? getPhysicalLightingOption(state.sceneFamily!, l)?.detail || 'إضاءة متوافقة'
+                                : 'غير متوافقة مع الوقت الحالي أو هندسة الموقع'}
                               onClick={() => setState({ ...state, lightingMode: l })}
                               className={`px-2.5 py-1.5 rounded-lg text-[11px] border transition-colors ${state.lightingMode === l ? 'bg-white/10 border-white/30 text-white font-medium' : 'border-[var(--border)] text-[var(--text-muted)] hover:bg-white/5'} ${!compatible ? 'opacity-60' : ''}`}
                             >

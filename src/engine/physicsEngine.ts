@@ -5,6 +5,7 @@
 // ============================================================================
 
 import { MICRO_LOCATIONS, getMicroLocation, MicroLocation, SceneFamilyId } from '../data/microLocations';
+import { getPhysicalLightingOption, isPhysicalLightingCompatible, compatiblePhysicalLighting } from '../data/physicalLighting';
 import { compileHomeYardEnvironment, resolveHomeYardVisibility } from './homeYard';
 import { OUTFITS, OutfitItem } from '../data/clothingOutfits';
 import {
@@ -528,6 +529,21 @@ export function resolveScene(rawState: SceneState): ResolvedScene {
         autoResolvedBy: 'Adjusted to seated on bed edge or standing.'
       });
       s.pose = 'جالس على حافة السرير';
+    }
+  }
+
+  // Resolve catalog modes against the actual micro-location BEFORE legacy heuristics.
+  const requestedPhysicalLighting = getPhysicalLightingOption(familyId, s.lightingMode);
+  if (requestedPhysicalLighting && !isPhysicalLightingCompatible(requestedPhysicalLighting, s.timeOfDay, isOutdoor)) {
+    const replacement = compatiblePhysicalLighting(familyId, s.timeOfDay, isOutdoor)[0];
+    if (replacement) {
+      issues.push({
+        type: 'contradiction',
+        field: 'lightingMode',
+        description: 'Lighting mode is incompatible with the selected clock or the actual indoor/outdoor micro-location.',
+        autoResolvedBy: 'Selected the first valid real-world lighting preset for this place and time.'
+      });
+      s.lightingMode = replacement.labelAR;
     }
   }
 
