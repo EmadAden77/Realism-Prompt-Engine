@@ -92,7 +92,11 @@ import {
   type HomeBackgroundPeopleMode,
 } from './engine/homeBackgroundPeople';
 import { HOME_SECTION_LABEL_AR } from './engine/homeYard';
-import { BEDROOM_SELFIE_ZONE_LABELS, getBedroomSelfieActivities, getBedroomSelfieActivity, type BedroomSelfieZone } from './engine/bedroomSelfieAffordances';
+import { BEDROOM_SELFIE_ZONE_LABELS, getBedroomSelfieActivity, type BedroomSelfieZone } from './engine/bedroomSelfieAffordances';
+import {
+  BEDROOM_REALISM_PRESETS, BEDROOM_BEDDING_OPTIONS, BEDROOM_COMPOSITION_OPTIONS,
+  bedroomActionForPreset, getBedroomRecommendedActivities, type BedroomPreset
+} from './engine/bedroomRealismStudio';
 
 // --- TYPES ---
 type CaptureType = 'front-selfie' | 'mirror-selfie' | 'third-person-candid';
@@ -570,7 +574,9 @@ const DEFAULT_STATE: SceneState = {
   cameraAngleMode: 'gemini-smart',
   groupSelfieEnabled: false,
   groupSelfieSize: 2,
-  groupSelfieRelationship: 'auto'
+  groupSelfieRelationship: 'auto',
+  bedroomBedding: 'everyday',
+  bedroomComposition: 'natural'
 };
 
 export default function PhysFrameApp() {
@@ -580,7 +586,8 @@ export default function PhysFrameApp() {
   const latestSceneRef = useRef(state);
   latestSceneRef.current = state;
   const faceAnalysisRequestIdRef = useRef(0);
-  const [bedroomSelfieZone, setBedroomSelfieZone] = useState<BedroomSelfieZone>('desk');
+  const [bedroomSelfieZone, setBedroomSelfieZone] = useState<BedroomSelfieZone>('bed');
+  const [showAllBedroomActivities, setShowAllBedroomActivities] = useState(false);
   const [showPromptSheet, setShowPromptSheet] = useState(false);
   const [activeTab, setActiveTab] = useState<'chatgpt' | 'gemini' | 'negative'>('chatgpt');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -992,6 +999,32 @@ export default function PhysFrameApp() {
         selfieAngleAdvice: undefined, backgroundGeminiAdvice: undefined };
     });
     setUseEnhancedPrompt(false);
+  };
+
+  const applyBedroomPreset = (preset: BedroomPreset) => {
+    const action = bedroomActionForPreset(preset.id);
+    if (!action) return;
+    setState(prev => ({
+      ...prev,
+      sceneFamily: 'bedroom',
+      subScene: action.subScene,
+      activity: action.labelAR,
+      pose: action.poseAR,
+      captureType: action.captureType,
+      bedroomSelfieActionId: action.id,
+      timeOfDay: preset.timeOfDay,
+      lightingMode: preset.lightingMode,
+      bedroomBedding: preset.bedding,
+      bedroomComposition: preset.composition,
+      environmentRealism: preset.bedding === 'fresh' ? 'مرتبة' : 'مستخدمة يوميًا',
+      groupSelfieEnabled: false,
+      selfieAngleAdvice: undefined,
+      backgroundGeminiAdvice: undefined
+    }));
+    setBedroomSelfieZone(action.zone);
+    setUseEnhancedPrompt(false);
+    setEnhancedPrompts({});
+    showToast('🛏️ مشهد غرفة النوم جاهز: ' + preset.labelAR);
   };
 
   const applySmartSceneChoices = () => {
