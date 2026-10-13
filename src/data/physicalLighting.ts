@@ -101,11 +101,18 @@ const PHYSICAL_LIGHTING_LIBRARY = {
 } as const satisfies Record<SceneFamilyId, readonly LightingRow[]>;
 
 // Materialize records with one coherent representation across UI, validation and prompt physics.
-export const LIGHTING_CATALOG: Record<SceneFamilyId, readonly PhysicalLightingOption[]> =
-  Object.fromEntries(Object.entries(PHYSICAL_LIGHTING_LIBRARY).map(([familyId, rows]) => [
-    familyId,
-    rows.map(([labelAR, model, time, space, detail]) => ({ familyId, labelAR, model, time, space, detail }))
-  ])) as Record<SceneFamilyId, readonly PhysicalLightingOption[]>;
+const materialize = (familyId: SceneFamilyId): readonly PhysicalLightingOption[] =>
+  PHYSICAL_LIGHTING_LIBRARY[familyId].map(([labelAR, model, time, space, detail]) =>
+    ({ familyId, labelAR, model, time, space, detail }));
+
+export const LIGHTING_CATALOG: Record<SceneFamilyId, readonly PhysicalLightingOption[]> = {
+  'military-base': materialize('military-base'),
+  'saudi-outdoor': materialize('saudi-outdoor'),
+  car: materialize('car'),
+  'living-room': materialize('living-room'),
+  bedroom: materialize('bedroom'),
+  gym: materialize('gym')
+};
 
 export function getPhysicalLightingOption(familyId: SceneFamilyId, label: string): PhysicalLightingOption | undefined {
   return LIGHTING_CATALOG[familyId].find(option => option.labelAR === label);
