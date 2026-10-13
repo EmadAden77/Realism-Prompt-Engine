@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Sparkles,
   Camera,
@@ -206,6 +206,7 @@ interface RealismAuditResult {
   localScore?: number;
   geminiScore?: number;
   scoreMode?: 'local' | 'composite';
+  source?: 'gemini' | 'local';
 }
 
 interface DirectedSceneResult {
@@ -232,6 +233,7 @@ interface DirectedSceneResult {
   glassesMode?: GlassesMode;
   storyAR: string;
   directorNoteAR: string;
+  source?: 'gemini' | 'local';
 }
 
 // --- STORAGE HELPERS (INDEXED DB FOR IMAGES) ---
@@ -516,7 +518,7 @@ const BACKGROUND_GOAL_LABELS: Record<string, string> = {
 
 // --- DEFAULT STATE ---
 const DEFAULT_STATE: SceneState = {
-  referenceImageId: '1000236308.png',
+  referenceImageId: null,
   sceneFamily: null,
   subScene: '',
   activity: '',
@@ -569,6 +571,10 @@ const DEFAULT_STATE: SceneState = {
 
 export default function PhysFrameApp() {
   const [state, setState] = useState<SceneState>(DEFAULT_STATE);
+  // Async Gemini responses must never overwrite results for a newer scene.
+  const latestSceneRef = useRef(state);
+  latestSceneRef.current = state;
+  const faceAnalysisRequestIdRef = useRef(0);
   const [bedroomSelfieZone, setBedroomSelfieZone] = useState<BedroomSelfieZone>('desk');
   const [showPromptSheet, setShowPromptSheet] = useState(false);
   const [activeTab, setActiveTab] = useState<'chatgpt' | 'gemini' | 'negative'>('chatgpt');
@@ -601,6 +607,7 @@ export default function PhysFrameApp() {
   const [isEnhancingPrompt, setIsEnhancingPrompt] = useState(false);
   const [enhancedPrompts, setEnhancedPrompts] = useState<{ chatgpt?: string; gemini?: string }>({});
   const [useEnhancedPrompt, setUseEnhancedPrompt] = useState(false);
+  const enhancedPromptBasesRef = useRef<{ chatgpt?: string; gemini?: string }>({});
 
   const [isBackgroundReasoning, setIsBackgroundReasoning] = useState(false);
   const [backgroundReasoningError, setBackgroundReasoningError] = useState<string | null>(null);
@@ -672,9 +679,14 @@ export default function PhysFrameApp() {
         if (savedAnalysis) setFaceAnalysis(JSON.parse(savedAnalysis));
 
         const blob = await loadImageFromDB();
+        // IndexedDB, not stale localStorage or a bundled file name, is authoritative.
+        setState(prev => ({ ...prev, referenceImageId: blob ? 'local-reference' : null }));
         if (blob) {
           setImageUrl(URL.createObjectURL(blob));
           setHasReference(true);
+        } else {
+          setFaceAnalysis(null);
+          localStorage.removeItem('physframe_face_analysis');
         }
       } catch (e) {
         console.error('Failed to load local data', e);
@@ -711,7 +723,14 @@ export default function PhysFrameApp() {
     : [];
   const backgroundReasoningKey = buildBackgroundReasoningKey(state);
   const selfieAngleReasoningKey = buildSelfieAngleReasoningKey(state);
-  const currentResolvedPreview = state.sceneFamily ? resolveScene(state as any) : null;
+  const currentResolvedPreview = useMemo(
+    () => state.sceneFamily ? resolveScene(state as any) : null,
+    [state]
+  );
+  const currentPromptPipeline = useMemo(
+    () => state.sceneFamily ? compileUnifiedPromptPipeline(state as any) : null,
+    [state]
+  );
   const backgroundDecision = currentResolvedPreview?.physicalState.backgroundRealism ?? null;
   const selfieAngleDecision = currentResolvedPreview?.physicalState.selfieAngle ?? null;
   const currentMicroLocation = state.sceneFamily ? getMicroLocation(state.sceneFamily, state.subScene) : undefined;
@@ -1248,7 +1267,12 @@ export default function PhysFrameApp() {
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Invalidate an earlier upload's analysis before replacing the reference.
+      faceAnalysisRequestIdRef.current += 1;
       await saveImageToDB(file);
+      setFaceAnalysis(null);
+      localStorage.removeItem('physframe_face_analysis');
+      setState(prev => ({ ...prev, referenceImageId: 'local-reference' }));
       if (imageUrl && imageUrl.startsWith('blob:')) URL.revokeObjectURL(imageUrl);
       const newUrl = URL.createObjectURL(file);
       setImageUrl(newUrl);
@@ -1261,7 +1285,10 @@ export default function PhysFrameApp() {
   };
 
   const handleImageDelete = async () => {
+    faceAnalysisRequestIdRef.current += 1;
     await deleteImageFromDB();
+    setIsAnalyzingFace(false);
+    setState(prev => ({ ...prev, referenceImageId: null }));
     if (imageUrl && imageUrl.startsWith('blob:')) URL.revokeObjectURL(imageUrl);
     setImageUrl(null);
     setHasReference(false);
@@ -1345,6 +1372,7 @@ export default function PhysFrameApp() {
 
   // Gemini Intelligence: Analyze Face
   const analyzeFaceFromBlob = async (blob: Blob) => {
+    const requestId = ++faceAnalysisRequestIdRef.current;
     try {
       setIsAnalyzingFace(true);
       const analysisBlob = await prepareImageForGemini(blob);
@@ -1368,6 +1396,7 @@ export default function PhysFrameApp() {
       }
 
       const data: FaceAnalysisResult = await res.json();
+      if (requestId !== faceAnalysisRequestIdRef.current) return;
       setFaceAnalysis(data);
       localStorage.setItem('physframe_face_analysis', JSON.stringify(data));
       setShowFaceAnalysisModal(true);
@@ -1378,10 +1407,11 @@ export default function PhysFrameApp() {
       }
       showToast('تم فحص ملامح الهوية بنجاح بواسطة Gemini');
     } catch (err: any) {
+      if (requestId !== faceAnalysisRequestIdRef.current) return;
       console.error(err);
       showToast(err.message || 'حدث خطأ أثناء فحص الصورة');
     } finally {
-      setIsAnalyzingFace(false);
+      if (requestId === faceAnalysisRequestIdRef.current) setIsAnalyzingFace(false);
     }
   };
 
@@ -1414,6 +1444,7 @@ export default function PhysFrameApp() {
       }
       const data: DirectedSceneResult = await res.json();
       setDirectedScene(data);
+      if (data.source === 'local') showToast('Gemini غير متاح؛ تم إعداد مشهد محلي بديل');
     } catch (err: any) {
       console.warn('Direct scene error, falling back locally:', err);
       // Fallback locally to generate a smart directed scene tailored to the user's vibe
@@ -1449,7 +1480,7 @@ export default function PhysFrameApp() {
         directorNoteAR: 'تم تنسيق زاوية الكاميرا وتجاعيد الملابس الطبيعية لمنع أي مظهر رقمي اصطناعي.'
       };
       setDirectedScene(fallbackData);
-      showToast('تم ابتكار سيناريو واقعي متناسق بنجاح');
+      showToast('Gemini غير متاح؛ تم إعداد مشهد محلي بديل');
     } finally {
       setIsDirectingScene(false);
     }
@@ -1549,7 +1580,12 @@ export default function PhysFrameApp() {
 
         const data: RealismAuditResult = await res.json();
 
-        const geminiScore = Number(data.realismScore);
+        if (latestSceneRef.current !== state) return;
+        if (data.source !== 'gemini' || typeof data.realismScore !== 'number' ||
+            !Number.isFinite(data.realismScore) || data.realismScore < 0 || data.realismScore > 100) {
+          throw new Error('استجابة Gemini للتدقيق غير صالحة؛ تم الاحتفاظ بالتقييم المحلي.');
+        }
+        const geminiScore = data.realismScore;
         const overallScore = combineRealismScores(physicalConsistencyScore, geminiScore);
 
         setAuditResult({
@@ -1561,9 +1597,6 @@ export default function PhysFrameApp() {
           scoreMode: 'composite'
         });
 
-        if (data.verdictAR?.includes('تعذر تدقيق Gemini')) {
-          setAuditError('تعذر اتصال Gemini؛ تم عرض نتيجة الاتساق الفيزيائي المحلي.');
-        }
       } catch (geminiErr: any) {
         console.error('Gemini audit failed:', geminiErr);
         setAuditError(geminiErr?.message || 'تعذر تدقيق Gemini؛ تم عرض نتيجة الاتساق الفيزيائي المحلي.');
@@ -1609,14 +1642,10 @@ export default function PhysFrameApp() {
       const conflictReport = finalPipeline.diagnostics.conflictReport;
       const cleanPromptText = finalPipeline.platforms.gemini.prompt;
 
-      // Update enhanced prompt cache if active
-      if (useEnhancedPrompt) {
-        setEnhancedPrompts(prev => ({
-          ...prev,
-          gemini: cleanPromptText,
-          chatgpt: finalPipeline.platforms.chatgpt.prompt
-        }));
-      }
+      // Auto-fix changes the canonical scene; no cached enhancement survives it.
+      enhancedPromptBasesRef.current = {};
+      setEnhancedPrompts({});
+      setUseEnhancedPrompt(false);
 
       // 4. Auto-Fix succeeds locally and immediately. Gemini must never block correction.
       const physicalConsistencyScore = calculatePhysicalConsistencyScore(
@@ -1663,9 +1692,14 @@ export default function PhysFrameApp() {
         .then(async res => {
           if (!res.ok) throw new Error(`Gemini audit HTTP ${res.status}`);
           const updatedAudit: RealismAuditResult = await res.json();
-          if (updatedAudit.verdictAR?.includes('تعذر تدقيق Gemini')) return;
+          if (latestSceneRef.current !== finalState &&
+              JSON.stringify(latestSceneRef.current) !== JSON.stringify(finalState)) return;
+          if (updatedAudit.source !== 'gemini' ||
+              typeof updatedAudit.realismScore !== 'number' ||
+              !Number.isFinite(updatedAudit.realismScore) ||
+              updatedAudit.realismScore < 0 || updatedAudit.realismScore > 100) return;
 
-          const geminiScore = Number(updatedAudit.realismScore);
+          const geminiScore = updatedAudit.realismScore;
           setAuditResult({
             ...localFixedAudit,
             ...updatedAudit,
@@ -1714,12 +1748,22 @@ export default function PhysFrameApp() {
 
       if (!res.ok) throw new Error('فشل تعزيز البرومبت');
       const data = await res.json();
-      const enhancedCandidate = data.enhancedPrompt || base;
+      if (data.source !== 'gemini' || typeof data.enhancedPrompt !== 'string' || !data.enhancedPrompt.trim()) {
+        throw new Error('لم يُرجع Gemini برومبت محسنًا صالحًا.');
+      }
+      // Requests are asynchronous; never apply enhancement to another scene.
+      const latest = compileUnifiedPromptPipeline(latestSceneRef.current as any);
+      if (latest.platforms[targetEngine].prompt !== base) {
+        showToast('تغير المشهد أثناء التعزيز؛ أعد التعزيز للإعدادات الحالية');
+        return;
+      }
+      const enhancedCandidate = data.enhancedPrompt;
       const enhancedValidated = validateExternalPromptCandidate(
         enhancePipeline,
         targetEngine,
         enhancedCandidate
       );
+      enhancedPromptBasesRef.current[targetEngine] = base;
       setEnhancedPrompts(prev => ({ ...prev, [targetEngine]: enhancedValidated.prompt }));
       setUseEnhancedPrompt(true);
       showToast('تم تعزيز البرومبت بميكرو-فيزياء العدسة ومسام البشرة');
@@ -1759,20 +1803,26 @@ export default function PhysFrameApp() {
 
   let chatGPTPrompt = "", geminiPrompt = "", negativePrompt = "";
   let angleExportReady = false;
-  if (state.sceneFamily) {
-    // Single authoritative engine path:
-    // SceneState -> Manifest -> Semantic -> Neutral -> Negative -> Platform -> Validation
-    const pipeline = compileUnifiedPromptPipeline(state as any);
+  if (currentPromptPipeline) {
+    // Memoized authoritative engine path; modal changes cannot recompute scene physics.
+    const pipeline = currentPromptPipeline;
     angleExportReady = pipeline.diagnostics.anglePromptReady && verifyCausalFingerprint(pipeline);
     chatGPTPrompt = pipeline.platforms.chatgpt.prompt;
     geminiPrompt = pipeline.platforms.gemini.prompt;
     negativePrompt = pipeline.platforms.chatgpt.negativePrompt || pipeline.negative.text;
   }
 
+  const currentEnhancedChatGPT = useEnhancedPrompt &&
+    enhancedPromptBasesRef.current.chatgpt === chatGPTPrompt ? enhancedPrompts.chatgpt : undefined;
+  const currentEnhancedGemini = useEnhancedPrompt &&
+    enhancedPromptBasesRef.current.gemini === geminiPrompt ? enhancedPrompts.gemini : undefined;
+  const hasCurrentEnhancement = activeTab === 'chatgpt'
+    ? Boolean(currentEnhancedChatGPT)
+    : activeTab === 'gemini' ? Boolean(currentEnhancedGemini) : false;
   const currentDisplayPrompt = !angleExportReady ? '' : activeTab === 'chatgpt'
-    ? (useEnhancedPrompt && enhancedPrompts.chatgpt ? enhancedPrompts.chatgpt : chatGPTPrompt)
+    ? (currentEnhancedChatGPT || chatGPTPrompt)
     : activeTab === 'gemini'
-    ? (useEnhancedPrompt && enhancedPrompts.gemini ? enhancedPrompts.gemini : geminiPrompt)
+    ? (currentEnhancedGemini || geminiPrompt)
     : negativePrompt;
 
   return (
@@ -3679,7 +3729,7 @@ export default function PhysFrameApp() {
                  <div className="px-4 py-2.5 bg-[#141618] border-b border-white/5 flex items-center justify-between">
                    <div className="flex items-center gap-2">
                      <span className="text-[11px] text-[var(--text-muted)]">معالجة الدقة الفائقة:</span>
-                     {useEnhancedPrompt && (
+                     {hasCurrentEnhancement && (
                        <span className="text-[10px] bg-[var(--accent)]/15 text-[var(--accent)] px-2 py-0.5 rounded-full font-bold">
                          مفعّل بـ Gemini ✨
                        </span>
