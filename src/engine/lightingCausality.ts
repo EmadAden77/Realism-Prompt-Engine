@@ -354,7 +354,7 @@ export function deriveLightingCausality(input: LightingCausalityInput): Lighting
   if (causalPreset) {
     const physics = PHYSICAL_LIGHT_BEHAVIOR[causalPreset.model];
     primarySource = {
-      name: causalPreset.labelAR + (causalPreset.model === 'fluorescent' ? ' (real overhead fluorescent fixture)' : causalPreset.labelAR.includes('5000K') ? ' (5000K neutral-cool white)' : ''),
+      name: causalPreset.labelAR + (causalPreset.model === 'fluorescent' ? ' (real overhead fluorescent fixture)' : causalPreset.model === 'vehicle-day' ? ' (daylight through vehicle glazing)' : causalPreset.labelAR.includes('5000K') ? ' (5000K neutral-cool white)' : ''),
       role: 'primary',
       direction: physics.direction,
       distanceBehavior: physics.falloff,
