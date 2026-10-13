@@ -9,7 +9,7 @@ export type PhysicalLightModel =
   | 'sun-hard' | 'sun-low' | 'sky-shade' | 'wall-bounce'
   | 'window' | 'ceiling' | 'fluorescent' | 'local-lamp'
   | 'outdoor-practical' | 'shop-spill'
-  | 'vehicle-day' | 'vehicle-exterior' | 'vehicle-dashboard';
+  | 'vehicle-day' | 'vehicle-exterior' | 'vehicle-dashboard' | 'phone-screen';
 
 export type LightingClock = 'morning' | 'midday' | 'afternoon' | 'sunset' | 'night';
 export type LightingSpace = 'indoor' | 'outdoor' | 'either';
@@ -60,7 +60,8 @@ const PHYSICAL_LIGHTING_LIBRARY = {
     ['إضاءة داخل السيارة', 'vehicle-dashboard', 'night', 'indoor', 'Dashboard and instrument illumination stays weak and local to cabin surfaces.'],
     ['وهج شاشة العدادات الخافت', 'vehicle-dashboard', 'night', 'indoor', 'Instrument cluster is a weak, low frontal source, not broad studio fill.'],
     ['ظل نهاري بجانب السيارة من الخارج', 'sky-shade', 'day', 'outdoor', 'Subject physically outside near a parked vehicle, lit by sky in real shade.'],
-    ['إنارة موقف ليلي بجانب السيارة', 'outdoor-practical', 'night', 'outdoor', 'Subject outside by parked vehicle, illuminated by actual parking fixture.']
+    ['إنارة موقف ليلي بجانب السيارة', 'outdoor-practical', 'night', 'outdoor', 'Subject outside by parked vehicle, illuminated by actual parking fixture.'],
+    ['إضاءة شاشة الهاتف فقط', 'phone-screen', 'night', 'indoor', 'Only the active smartphone screen illuminates the face and nearest fingers at selfie distance. All ceiling, bedside, dashboard and exterior lights stay off; background is very dark, with weak nearby fabric bounce and rapid falloff, not a bright room.']
   ],
   'living-room': [
     ['ضوء نافذة الصالة النهاري', 'window', 'day', 'indoor', 'Window daylight falls directionally on sofa and subject.'],
@@ -72,7 +73,8 @@ const PHYSICAL_LIGHTING_LIBRARY = {
     ['إنارة جدارية دافئة', 'local-lamp', 'any', 'indoor', 'Wall sconce produces localized falloff and wall bounce.'],
     ['إنارة سقفية غير مباشرة', 'ceiling', 'any', 'indoor', 'Existing coving or diffused ceiling light, no floating strip without installed fixture.'],
     ['وهج تلفاز منخفض ليلاً', 'local-lamp', 'night', 'indoor', 'Subtle changing TV luminance only on nearby skin and upholstery; room stays dim.'],
-    ['إنارة ليلية مختلطة', 'ceiling', 'night', 'indoor', 'A real ceiling fixture with weaker adjacent domestic lamp; no unexplained colored rim.']
+    ['إنارة ليلية مختلطة', 'ceiling', 'night', 'indoor', 'A real ceiling fixture with weaker adjacent domestic lamp; no unexplained colored rim.'],
+    ['إضاءة شاشة الهاتف فقط', 'phone-screen', 'night', 'indoor', 'Only the active smartphone screen illuminates the face and nearest fingers at selfie distance. All ceiling, bedside, dashboard and exterior lights stay off; background is very dark, with weak nearby fabric bounce and rapid falloff, not a bright room.']
   ],
   'bedroom': [
     ['ضوء نافذة غرفة النوم', 'window', 'day', 'indoor', 'Daylight enters a real bedroom window, partly softened by curtains if present.'],
@@ -84,7 +86,8 @@ const PHYSICAL_LIGHTING_LIBRARY = {
     ['إضاءة أباجورة دافئة', 'local-lamp', 'any', 'indoor', 'Bedside shade creates warm local pool and rapid falloff across mattress.'],
     ['مصباح قراءة قرب السرير', 'local-lamp', 'any', 'indoor', 'Real reading lamp angled downward over pillow and hands.'],
     ['إنارة ممر متسربة من باب الغرفة', 'local-lamp', 'night', 'indoor', 'Light spills through a genuinely open bedroom door, sharply bounded by jamb.'],
-    ['سقف غرفة النوم مع أباجورة جانبية', 'ceiling', 'night', 'indoor', 'Existing ceiling luminaire leads while a weaker bedside practical adds local warm fill.']
+    ['سقف غرفة النوم مع أباجورة جانبية', 'ceiling', 'night', 'indoor', 'Existing ceiling luminaire leads while a weaker bedside practical adds local warm fill.'],
+    ['إضاءة شاشة الهاتف فقط', 'phone-screen', 'night', 'indoor', 'Only the active smartphone screen illuminates the face and nearest fingers at selfie distance. All ceiling, bedside, dashboard and exterior lights stay off; background is very dark, with weak nearby fabric bounce and rapid falloff, not a bright room.']
   ],
   gym: [
     ['ضوء نهاري طبيعي', 'window', 'day', 'indoor', 'Daylight enters from an actual gym exterior opening, not a synthetic softbox.'],
