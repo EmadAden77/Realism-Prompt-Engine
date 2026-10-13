@@ -97,7 +97,7 @@ const PHYSICAL_LIGHT_BEHAVIOR: Record<PhysicalLightModel, PhysicalLightBehavior>
   },
   fluorescent: {
     origin: 'installed real fluorescent tube or linear office luminaire',
-    direction: 'elongated top-down lighting along the actual ceiling row',
+    direction: 'downward elongated illumination along the actual installed ceiling row',
     falloff: 'room-scale linear fixture with plausible spacing and overlap',
     shadows: 'soft directional overhead shadows with subtle row-to-row brightness variation',
     bounce: ['ordinary room ceiling', 'painted walls', 'floor']
@@ -354,7 +354,7 @@ export function deriveLightingCausality(input: LightingCausalityInput): Lighting
   if (causalPreset) {
     const physics = PHYSICAL_LIGHT_BEHAVIOR[causalPreset.model];
     primarySource = {
-      name: causalPreset.labelAR + (causalPreset.labelAR.includes('5000K') ? ' (5000K neutral-cool white)' : ''),
+      name: causalPreset.labelAR + (causalPreset.model === 'fluorescent' ? ' (real overhead fluorescent fixture)' : causalPreset.labelAR.includes('5000K') ? ' (5000K neutral-cool white)' : ''),
       role: 'primary',
       direction: physics.direction,
       distanceBehavior: physics.falloff,
