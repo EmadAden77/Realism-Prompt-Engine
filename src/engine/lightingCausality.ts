@@ -137,6 +137,13 @@ const PHYSICAL_LIGHT_BEHAVIOR: Record<PhysicalLightModel, PhysicalLightBehavior>
     shadows: 'uneven night side illumination, no mysteriously bright cabin or backlight',
     bounce: ['instrument panel', 'door trim', 'seat upholstery']
   },
+  'phone-screen': {
+    origin: 'the smartphone display itself, facing the subject beside the front selfie camera; no LED flash',
+    direction: 'soft near-axis front illumination from the phone held at natural selfie distance',
+    falloff: 'rapid near-field falloff across face, neck and hands; almost no exposure on distant room or cabin',
+    shadows: 'gentle frontal face shadows with realistic nose and chin occlusion, dark sides and an unlit background',
+    bounce: ['faint reflected screen glow from nearby clothing, hands or bedding only']
+  },
   'vehicle-dashboard': {
     origin: 'instrument cluster, small cabin light or infotainment screen actually switched on',
     direction: 'weak near-field forward/upward spread from genuine low-mounted displays',
