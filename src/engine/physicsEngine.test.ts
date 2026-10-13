@@ -1027,6 +1027,84 @@ assert(
 
 console.log('  ✓ Background Realism → Selfie Angle Link V2 regression suite passed!\n');
 
+
+console.log('▶ Test 45: A front-facing residential boundary wall occludes the road and its actors');
+const facadeLockedState: SceneState = {
+  ...streetWideState,
+  subScene: 'أمام سور منزل',
+  cameraAngle: 'eye-level',
+  backgroundMode: 'active',
+  backgroundHumans: 'high',
+  backgroundVehicles: 'high',
+  backgroundDisorder: 'moderate',
+  cameraAngleMode: 'manual'
+};
+const facadeLocked = resolveScene(facadeLockedState);
+const wallView = facadeLocked.physicalState.backgroundRealism;
+assert(wallView.viewGeometry.wallDominated, 'Wall-facing residential selfie must retain its opaque near plane');
+assert(!wallView.viewGeometry.streetVisible, 'Centered wall selfie cannot reveal an occluded side road');
+assert(wallView.humanDensity === 'none' && wallView.vehicleDensity === 'none',
+  'Requested people and cars must not be placed behind an opaque wall');
+assert(wallView.cappedByFraming, 'Geometry-based density reduction should be traceable');
+assert(!/asphalt|parked sedan|road lane/i.test(facadeLocked.physicalState.visibleEnvironment),
+  'Wall-facing view must not pull street objects back into the environment description');
+assert(!/asphalt|curb/i.test(facadeLocked.physicalState.disorderBehavior),
+  'Wall-facing disorder must describe the visible wall, not an off-screen street');
+
+console.log('▶ Test 46: Turning the selfie sideways reveals a physically plausible street margin');
+const facadeSideView = resolveScene({
+  ...facadeLockedState,
+  cameraAngle: 'slightly-off-center',
+  backgroundMode: 'auto',
+  backgroundHumans: 'auto',
+  backgroundVehicles: 'auto',
+});
+assert(facadeSideView.physicalState.backgroundRealism.viewGeometry.streetVisible,
+  'A wide off-axis selfie at the wall may expose the adjacent street');
+assert(facadeSideView.physicalState.backgroundRealism.allowsVehicles,
+  'Vehicles should be eligible when a street sightline actually exists');
+
+console.log('▶ Test 47: An upward chest-up selfie cannot pull distant cars up from the ground');
+const upwardView = resolveScene({
+  ...cafeMediumState,
+  cameraAngle: 'slightly-low',
+  backgroundHumans: 'high',
+  backgroundVehicles: 'high',
+  backgroundMode: 'active'
+});
+assert(upwardView.physicalState.backgroundRealism.viewGeometry.verticalBias === 'upperward',
+  'Camera pitch must be used by background projection');
+assert(!upwardView.physicalState.backgroundRealism.allowsVehicles &&
+  !upwardView.physicalState.backgroundRealism.allowsHumans,
+  'Steep upward narrow view must drop unsupported people and cars');
+
+console.log('▶ Test 48: Vehicle-cabin exterior is conditional on a visible glass opening');
+const carUpwardView = resolveScene({
+  ...carMediumState,
+  cameraAngle: 'slightly-low',
+  backgroundVehicles: 'high',
+  backgroundMode: 'active'
+});
+assert(!carUpwardView.physicalState.backgroundRealism.viewGeometry.windowVisible,
+  'A raised cabin camera sightline cannot assume the windshield is in view');
+assert(!carUpwardView.physicalState.backgroundRealism.allowsVehicles,
+  'No external vehicles should appear without a visible window');
+assert(carUpwardView.physicalState.visibleEnvironment.length > 0,
+  'Hiding exterior traffic must preserve the actual visible cabin interior');
+
+console.log('▶ Test 49: Explicit background-off setting remains authoritative');
+const quietAfterProjection = resolveScene({
+  ...streetWideState,
+  backgroundMode: 'off',
+  backgroundHumans: 'high',
+  backgroundVehicles: 'high'
+});
+assert(!quietAfterProjection.physicalState.backgroundRealism.allowsHumans &&
+  !quietAfterProjection.physicalState.backgroundRealism.allowsVehicles,
+  'Off means no incidental people or vehicles regardless of frame size');
+
+console.log('  ✓ Camera-ray background tests passed!\\n');
+
 console.log('🎉 ALL AUTOMATED VALIDATION TESTS PASSED PERFECTLY!\n');
 
 console.log('▶ Mirror optical path regression');
