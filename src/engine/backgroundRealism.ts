@@ -425,7 +425,7 @@ export function deriveBackgroundRealism(
     if (viewGeometry.verticalBias === 'upperward' && viewGeometry.aperture !== 'open' &&
         /road|street|asphalt|curb|parking|parked|ground|floor|pavement|car\b/i.test(item)) return false;
     if (isCarInterior && !viewGeometry.windowVisible &&
-        /outside traffic|passing car|street through|parked car outside/i.test(item)) return false;
+        /windshield view|side window view|outside traffic|passing car|street through|parked car outside/i.test(item)) return false;
     return true;
   }).slice(0, surfaceLimit);
 
