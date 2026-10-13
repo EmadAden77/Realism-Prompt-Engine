@@ -206,6 +206,7 @@ interface RealismAuditResult {
   localScore?: number;
   geminiScore?: number;
   scoreMode?: 'local' | 'composite';
+  source?: 'gemini' | 'local';
 }
 
 interface DirectedSceneResult {
