@@ -1,6 +1,7 @@
 import { getMicroLocation, type SceneFamilyId } from '../data/microLocations';
 import { OUTFITS, type OutfitItem } from '../data/clothingOutfits';
 import { GAZE_INTERACTIONS } from '../data/gazeInteractions';
+import { getPhysicalLightingOption, isPhysicalLightingCompatible } from '../data/physicalLighting';
 import { getActivityOptions, getPoseOptions, getSceneRecommendations } from './activityAttire';
 import type { BackgroundViewGeometry } from './backgroundRealism';
 
@@ -38,7 +39,11 @@ const DENSITIES: EntityDensityOption[] = ['auto', 'none', 'sparse', 'light', 'mo
 const DISORDER: DisorderOption[] = ['auto', 'very-clean', 'natural', 'lived-in', 'light', 'moderate'];
 
 /** Classify the literal lighting library, not guesses about a future image. */
-export function isLightingCompatible(light: string, time: SceneClock): boolean {
+export function isLightingCompatible(
+  light: string, time: SceneClock, familyId?: SceneFamilyId, isOutdoor?: boolean
+): boolean {
+  const preset = familyId ? getPhysicalLightingOption(familyId, light) : undefined;
+  if (preset) return isPhysicalLightingCompatible(preset, time, isOutdoor);
   if (/ضوء نهاري|شمس الظهر/.test(light)) return time !== 'night' && time !== 'sunset';
   if (/ساعة ذهبية|شروق\/غروب/.test(light)) return time === 'morning' || time === 'afternoon' || time === 'sunset';
   if (/إنارة شارع|إضاءة الشارع|نيون تجارية|إنارة ليلية/.test(light)) return time === 'night' || time === 'sunset';
@@ -92,7 +97,7 @@ export function buildSmartSceneOptions(input: SmartOptionInput): SmartOptionResu
   const recommendedOutfits = scoredOutfits.filter(v => v.score >= 10).slice(0, 12).map(v => v.outfit);
   if (!recommendedOutfits.length) recommendedOutfits.push(...scoredOutfits.slice(0, 8).map(v => v.outfit));
 
-  const compatibleLighting = input.allowedLighting.filter(light => isLightingCompatible(light, timeOfDay));
+  const compatibleLighting = input.allowedLighting.filter(light => isLightingCompatible(light, timeOfDay, familyId, loc?.isOutdoor));
   const recommendedLighting = compatibleLighting.slice(0, 4);
   const availableGaze = new Set<string>(GAZE_INTERACTIONS.map(g => g.id));
   const recommendedGazeIds = unique(gazeSuggestions(activity, captureType, subScene).filter(id => availableGaze.has(id)));
