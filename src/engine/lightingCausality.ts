@@ -1,4 +1,5 @@
 import { MicroLocation, SceneFamilyId } from '../data/microLocations';
+import { getPhysicalLightingOption, isPhysicalLightingCompatible, type PhysicalLightModel } from '../data/physicalLighting';
 
 export type LightingSourceRole = 'primary' | 'secondary' | 'bounce' | 'practical';
 
@@ -42,6 +43,108 @@ const clamp = (value: number, min: number, max: number) =>
 
 const includesAny = (value: string, terms: string[]) =>
   terms.some(term => value.includes(term));
+
+interface PhysicalLightBehavior {
+  origin: string;
+  direction: string;
+  falloff: string;
+  shadows: string;
+  bounce: string[];
+}
+
+const PHYSICAL_LIGHT_BEHAVIOR: Record<PhysicalLightModel, PhysicalLightBehavior> = {
+  'sun-hard': {
+    origin: 'unobstructed direct solar radiation above the ordinary outdoor setting',
+    direction: 'steep high-angle solar incidence; all sunlit objects share one solar direction',
+    falloff: 'distant directional sunlight, not room-scale inverse-square attenuation',
+    shadows: 'short hard-edged cast shadows consistent across face, pavement, cars and wall edges',
+    bounce: ['open-sky atmospheric fill', 'nearby ground and pale facade reflections only when exposed']
+  },
+  'sun-low': {
+    origin: 'direct low-angle sun still present above the local horizon',
+    direction: 'single low lateral solar direction, consistent for subject and distant geometry',
+    falloff: 'distant directional sunlight with atmospheric diffuse skylight',
+    shadows: 'long coherent shadows from buildings and person, softened on shade side by real sky',
+    bounce: ['open sky', 'nearby matte walls and pavement']
+  },
+  'sky-shade': {
+    origin: 'visible open sky beyond an actual building, canopy, or vehicle obstruction',
+    direction: 'broad fill arriving from unobstructed sky aperture, with occluded direct sun',
+    falloff: 'distant spatially broad diffuse skylight shaped by shading geometry',
+    shadows: 'soft shade under brows and chin; shade boundary grounded in a real object',
+    bounce: ['concrete or paving ground', 'adjacent walls in direct view']
+  },
+  'wall-bounce': {
+    origin: 'direct sunlight reflected diffusely by a nearby sunlit light-colored plaster wall',
+    direction: 'broad lateral reflection from the physical wall surface',
+    falloff: 'wall-sized reflected source, weaker with distance and angle; not a point flashlight',
+    shadows: 'gentle wall-side fill against harder sun/shade structure without invisible rim light',
+    bounce: ['the selected nearby pale sunlit wall', 'ordinary ambient skylight']
+  },
+  window: {
+    origin: 'genuine exterior daylight passing through a physically present window or curtain',
+    direction: 'predominantly lateral from the window opening with frame and curtain occlusion',
+    falloff: 'distant skylight geometrically shaped by window size, curtains, and room depth',
+    shadows: 'window-side face gradients and believable frame/object contact shadows',
+    bounce: ['matte room walls', 'ceiling', 'actual nearby furniture or bed sheets']
+  },
+  ceiling: {
+    origin: 'installed working LED/recessed or high-bay ceiling luminaire',
+    direction: 'top-down from the selected ceiling fixture, never arbitrary front studio light',
+    falloff: 'local ceiling source; realistic distance, diffusion, partial fixture overlap and occlusion',
+    shadows: 'downward shadows in eye sockets, under nose, collar, seats and equipment',
+    bounce: ['matte ceiling', 'nearby walls', 'furniture or flooring']
+  },
+  fluorescent: {
+    origin: 'installed real fluorescent tube or linear office luminaire',
+    direction: 'elongated top-down lighting along the actual ceiling row',
+    falloff: 'room-scale linear fixture with plausible spacing and overlap',
+    shadows: 'soft directional overhead shadows with subtle row-to-row brightness variation',
+    bounce: ['ordinary room ceiling', 'painted walls', 'floor']
+  },
+  'local-lamp': {
+    origin: 'selected visible or structurally plausible desk, bedside, wall or TV practical source',
+    direction: 'localized lateral/downward spread from actual source position and shade geometry',
+    falloff: 'short- to room-range practical with noticeably weaker light on distant surfaces',
+    shadows: 'local penumbra, believable shade cutoff and stronger near-object shadowing',
+    bounce: ['nearest wall', 'bed linen or sofa fabric if nearby', 'tabletop if present']
+  },
+  'outdoor-practical': {
+    origin: 'actual street, gate, parking-canopy or entrance-mounted outdoor light fixture',
+    direction: 'downward and partly lateral from physical installed fixture location',
+    falloff: 'local night fixture pool attenuates over roadway, person, wall and pavement',
+    shadows: 'subject and parked vehicle cast coherent artificial-light shadows; unlit zones stay dark',
+    bounce: ['pavement and asphalt', 'nearby wall or gate surfaces']
+  },
+  'shop-spill': {
+    origin: 'real shopfront or doorway practical luminaires visible or located just outside frame',
+    direction: 'lateral outward spill from the real entrance or shop sign plane',
+    falloff: 'local illumination falls off away from facade and door threshold',
+    shadows: 'shadows point away from the shop fixture; street beyond is darker',
+    bounce: ['storefront facade', 'pavement', 'nearby wall']
+  },
+  'vehicle-day': {
+    origin: 'natural solar/sky daylight outside the stationary car filtered through glazing',
+    direction: 'through physically open windshield and side windows, bounded by pillars and roof',
+    falloff: 'distant daylight with geometry-dependent glass attenuation and interior occlusion',
+    shadows: 'window-shaped luminance gradients; windshield pillars and cabin roof block sunlight',
+    bounce: ['dashboard', 'seat upholstery', 'door trim']
+  },
+  'vehicle-exterior': {
+    origin: 'actual nearby street or parking practical shining through parked-vehicle glazing',
+    direction: 'lateral through the closest side window or windshield, limited by pillars',
+    falloff: 'local exterior light decays across window, cabin and dark upholstery',
+    shadows: 'uneven night side illumination, no mysteriously bright cabin or backlight',
+    bounce: ['instrument panel', 'door trim', 'seat upholstery']
+  },
+  'vehicle-dashboard': {
+    origin: 'instrument cluster, small cabin light or infotainment screen actually switched on',
+    direction: 'weak near-field forward/upward spread from genuine low-mounted displays',
+    falloff: 'small low-luminance source with fast near-field decay, never illuminating the whole car',
+    shadows: 'low-angle local glow on hands and lower face; cabin and rear seats remain dark',
+    bounce: ['nearby steering wheel', 'dashboard trim', 'hands']
+  }
+};
 
 export function deriveLightingCausality(input: LightingCausalityInput): LightingCausalityState {
   const {
@@ -243,6 +346,46 @@ export function deriveLightingCausality(input: LightingCausalityInput): Lighting
     bounceSurfaces.push('matte wall plane', 'ceiling', 'floor and nearby furniture');
   }
 
+  // Catalog modes override broad family heuristics with an explicit causal emitter.
+  // An invalid time/space selection is repaired by resolveScene, not fabricated here.
+  const selectedPreset = getPhysicalLightingOption(familyId, lightingMode);
+  const causalPreset = selectedPreset && isPhysicalLightingCompatible(selectedPreset, timeOfDay, isOutdoor)
+    ? selectedPreset : undefined;
+  if (causalPreset) {
+    const physics = PHYSICAL_LIGHT_BEHAVIOR[causalPreset.model];
+    primarySource = {
+      name: causalPreset.labelAR,
+      role: 'primary',
+      direction: physics.direction,
+      distanceBehavior: physics.falloff,
+      contribution: causalPreset.detail,
+      physicalOrigin: physics.origin
+    };
+    secondarySources.length = 0;
+    bounceSurfaces.length = 0;
+    bounceSurfaces.push(...physics.bounce);
+    if (causalPreset.model === 'sun-hard' || causalPreset.model === 'sun-low') {
+      secondarySources.push({
+        name: 'natural diffuse sky fill',
+        role: 'secondary',
+        direction: 'broad from the unobstructed sky hemisphere',
+        distanceBehavior: 'distant diffuse daylight',
+        contribution: 'weaker naturally colored sky fill without erasing direct-sun shadows',
+        physicalOrigin: 'atmospheric skylight'
+      });
+    }
+    if (/مع أباجورة|ليليّة مختلطة|ليلية مختلطة/.test(causalPreset.labelAR)) {
+      secondarySources.push({
+        name: 'real secondary bedside or room practical',
+        role: 'secondary',
+        direction: 'lateral from the explicitly selected room lamp',
+        distanceBehavior: 'local weak short-range source',
+        contribution: 'minor local lift only, subordinate to overhead general illumination',
+        physicalOrigin: 'actual nearby domestic lamp'
+      });
+    }
+  }
+
   // Phone-screen-only is a hard single-source mode. Background realism may
   // describe fixtures, but those fixtures must not become active emitters.
   if (!phoneOnly) {
@@ -259,7 +402,9 @@ export function deriveLightingCausality(input: LightingCausalityInput): Lighting
   }
 
   let shadowBehavior: string;
-  if (phoneOnly) {
+  if (causalPreset) {
+    shadowBehavior = PHYSICAL_LIGHT_BEHAVIOR[causalPreset.model].shadows;
+  } else if (phoneOnly) {
     shadowBehavior = 'rapid localized falloff with deeper shadow on ear, jaw, neck, and torso planes farther from the phone; background remains predominantly dark';
   } else if (isOutdoor && isMidday) {
     shadowBehavior = 'short hard-edged downward cast shadows under brow, nose, chin, collar, vehicles, and curb edges, softened only slightly by open-sky fill';
@@ -281,7 +426,11 @@ export function deriveLightingCausality(input: LightingCausalityInput): Lighting
       ? 'direction remains consistent across the visible scene; local brightness changes come mainly from angle, occlusion, and surface reflectance'
       : 'brightness decreases with source distance and occlusion; secondary surfaces receive visibly weaker illumination than the subject-facing planes';
 
-  const inverseSquareBehavior = phoneOnly
+  const inverseSquareBehavior = causalPreset
+    ? (causalPreset.model === 'sun-hard' || causalPreset.model === 'sun-low' || causalPreset.model === 'sky-shade'
+      ? 'solar and sky rays are distant and directional; do not impose lamp inverse-square falloff on the sun'
+      : 'local practical/reflected illumination follows geometric distance, occlusion, source size and actual surface reflectance')
+    : phoneOnly
     ? 'apply strong near-field inverse-square intuition: small changes in phone-to-face distance materially change facial brightness, while room-scale illumination stays weak'
     : isIndoorWhiteCeiling
       ? 'apply physically plausible local-source distance falloff to the ceiling fixture and weaker reflected bounce; do not claim uniform brightness independent of distance'
@@ -308,6 +457,7 @@ export function deriveLightingCausality(input: LightingCausalityInput): Lighting
     : 'in adequate daylight preserve clean smartphone capture; do not mandate ISO grain or artificial vignetting';
 
   const consistencyGuards = [
+    ...(causalPreset ? [causalPreset.detail, 'Do not invent extra active luminaires, impossible volumetric beams or decorative cinematic rim light; honor the selected fixture and ordinary sensor exposure.'] : []),
     exposureResponseGuard,
     'every visible highlight and cast shadow must trace back to the primary source, a listed secondary source, or a listed bounce surface',
     'subject and background must share the same light direction, color family, and occlusion logic',
