@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { type Response } from 'express';
 import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -14,8 +14,43 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = Number(process.env.PORT) || 3000;
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// Browser origin checks reduce cross-site misuse. The per-instance limit also
+// protects accidental API loops; production-wide quotas still belong at the edge.
+const aiRequestWindows = new Map<string, { count: number; expiresAt: number }>();
+app.use('/api/ai', (req, res, next) => {
+  const origin = req.get('origin');
+  if (origin) {
+    try {
+      if (new URL(origin).host !== req.get('host')) {
+        return res.status(403).json({ error: 'Cross-origin AI requests are not allowed' });
+      }
+    } catch {
+      return res.status(403).json({ error: 'Invalid request origin' });
+    }
+  }
+
+  const now = Date.now();
+  const key = req.ip || req.socket.remoteAddress || 'unknown';
+  if (aiRequestWindows.size > 1_000) {
+    for (const [ip, entry] of aiRequestWindows) {
+      if (entry.expiresAt <= now) aiRequestWindows.delete(ip);
+    }
+  }
+  const entry = aiRequestWindows.get(key);
+  const current = !entry || entry.expiresAt <= now
+    ? { count: 1, expiresAt: now + 60_000 }
+    : { count: entry.count + 1, expiresAt: entry.expiresAt };
+  aiRequestWindows.set(key, current);
+  if (current.count > 90) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((current.expiresAt - now) / 1_000))));
+    return res.status(429).json({ error: 'Too many AI requests; retry shortly' });
+  }
+  next();
+});
+
+// The reference-image analysis client uploads a compressed copy below 2 MB.
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
 const getGeminiApiKey = () =>
   process.env.GEMINI_API_KEY ||
@@ -108,7 +143,7 @@ async function callGeminiWithFallback(params: {
   config?: any;
   preferredModels?: string[];
 }) {
-  const models = params.preferredModels || ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'];
+  const models = params.preferredModels || ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'];
   const ai = createGeminiClient();
   let lastError: any = null;
   const now = Date.now();
@@ -155,6 +190,18 @@ async function callGeminiWithFallback(params: {
   }
 
   throw lastError || new Error('All Gemini model attempts failed or are temporarily unavailable');
+}
+
+// Do not disguise an upstream failure as a successful Gemini inspection.
+function sendGeminiFailure(res: Response, error: unknown, operationAR: string) {
+  const failure = classifyGeminiError(error);
+  const isQuota = failure.kind === 'quota';
+  return res.status(isQuota ? 429 : 503).json({
+    error: isQuota
+      ? 'تم بلوغ حد استخدام Gemini مؤقتًا. حاول لاحقًا.'
+      : `تعذر ${operationAR} بواسطة Gemini. تحقق من إعداد الاتصال أو حاول لاحقًا.`,
+    source: 'unavailable'
+  });
 }
 
 // Scene dictionaries for validation and local fallback
@@ -224,14 +271,17 @@ function sanitizeItem(item: string, allowedList: string[], fallback: string): st
 app.post('/api/ai/analyze-face', async (req, res) => {
   try {
     const { imageBase64, mimeType = 'image/jpeg' } = req.body;
-    if (!imageBase64) {
+    if (typeof imageBase64 !== 'string' || !imageBase64) {
       return res.status(400).json({ error: 'Image data is required' });
+    }
+    if (imageBase64.length > 3_200_000 || !['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) {
+      return res.status(413).json({ error: 'Unsupported image format or oversized analysis upload' });
     }
 
     const cleanBase64 = imageBase64.replace(/^data:image\/[a-zA-Z+]+;base64,/, '');
 
     const response = await callGeminiWithFallback({
-      preferredModels: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
+      preferredModels: ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'],
       contents: {
         parts: [
           {
@@ -309,25 +359,18 @@ Pay specific attention to:
     });
 
     const parsed = JSON.parse(response.text || '{}');
-    return res.json(parsed);
+    if (typeof parsed.identityLockPrompt !== 'string' || !parsed.identityLockPrompt.trim() ||
+        typeof parsed.arabicSummary !== 'string' ||
+        typeof parsed.glassesDetected !== 'boolean' ||
+        typeof parsed.hairDescription !== 'string' ||
+        typeof parsed.facialHairDescription !== 'string' ||
+        !Array.isArray(parsed.antiAiTips)) {
+      throw new Error('Gemini returned an invalid face-analysis result');
+    }
+    return res.json({ ...parsed, source: 'gemini' });
   } catch (error: any) {
-    console.error('Face analysis error, falling back to structured profile:', error);
-    // Graceful fallback profile
-    return res.json({
-      identityLockPrompt: `Preserve exact facial identity from the reference image. 193cm height, 83kg weight, tall lean-athletic male build. DO NOT alter facial proportions, head geometry, hairline, or natural hair density. DO NOT artificially beautify, de-age, or smooth skin. Preserve natural facial asymmetry and existing beard/moustache growth pattern.`,
-      arabicSummary: 'تم تثبيت الملامح الطبيعية: لحية طبيعية محددة، وبنية رياضية رشيقة بطول 193 سم.',
-      glassesDetected: true,
-      glassesDescription: 'نظارات طبية بإطار مستطيل داكن كلاسيكي',
-      hairDescription: 'شعر أسود طبيعي بكثافة متوازنة وخط شعر غير متكلف',
-      facialHairDescription: 'لحية وشارب نمو طبيعي متناسق غير مبالغ في تشذيبها',
-      recommendedHairId: 'h2',
-      recommendedExpressionId: 'e1',
-      antiAiTips: [
-        'تجنب التنعيم الرقمي على الخدين للحفاظ على مسام الجلد الحقيقية.',
-        'إبقاء انعكاسات النظارة غير متطابقة لإضفاء واقعية عضوية.',
-        'الحفاظ على عدم تماثل خصلات الشعر الطفيفة.'
-      ]
-    });
+    console.warn('Gemini face analysis failed:', error?.message);
+    return sendGeminiFailure(res, error, 'تحليل الصورة');
   }
 });
 
@@ -337,7 +380,7 @@ app.post('/api/ai/direct-scene', async (req, res) => {
     const { userVibe, currentFamily, referenceDescription } = req.body;
 
     const response = await callGeminiWithFallback({
-      preferredModels: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
+      preferredModels: ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'],
       contents: `You are a Saudi cinematic director and physical photography realism expert.
 Your mission is to invent a hyper-authentic, believable Saudi lifestyle/work scenario that looks 100% like an unedited raw photo taken spontaneously on an iPhone or Android phone by an ordinary person in Saudi Arabia.
 No tourist cliches, no floating studio lighting, no AI-slop perfection.
@@ -470,7 +513,7 @@ Select completely coherent, physically realistic attributes and provide a vivid 
       directorNoteAR: parsed.directorNoteAR || 'الانعكاسات غير المتناظرة على النظارة وتجاعيد القماش الطبيعية تمنح اللقطة مصداقية مادية تامة.',
     };
 
-    return res.json(sanitizedResult);
+    return res.json({ ...sanitizedResult, source: 'gemini' });
   } catch (error: any) {
     console.warn('Scene director API failed, generating intelligent local Saudi scenario:', error?.message);
 
@@ -539,6 +582,7 @@ Select completely coherent, physically realistic attributes and provide a vivid 
     const sc = fallbackScenarios[targetFamily] || fallbackScenarios['saudi-outdoor'];
 
     return res.json({
+      source: 'local',
       sceneFamily: targetFamily,
       subScene: sc.sub,
       activity: sc.act,
@@ -666,7 +710,7 @@ app.post('/api/ai/selfie-angle', async (req, res) => {
     }
 
     const response = await callGeminiWithFallback({
-      preferredModels: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
+      preferredModels: ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'],
       contents: `You are the Camera Director for a physically constrained Xiaomi 15 Ultra front-camera selfie engine.
 
 Choose EXACTLY ONE angle from the supplied eligible catalog. Never invent a new angle ID.
@@ -793,7 +837,7 @@ app.post('/api/ai/background-reasoning', async (req, res) => {
 
     const response = await callGeminiWithFallback({
       // Background reasoning is latency-sensitive.
-      preferredModels: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
+      preferredModels: ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'],
       contents: `You are a scene-context reasoner for a photorealistic Saudi smartphone selfie prompt engine.
 
 Your task is NOT to redesign the scene. Decide only how much secondary background life is contextually plausible.
@@ -906,7 +950,7 @@ app.post('/api/ai/audit-realism', async (req, res) => {
     const response = await callGeminiWithFallback({
       // Audit is latency-sensitive. 3.5 Flash is currently succeeding while 3.8 Flash
       // is frequently returning 503 high-demand responses in production.
-      preferredModels: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
+      preferredModels: ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'],
       contents: `You are an elite AI Image Realism Auditor and anti-slop evaluator.
 Examine this generation configuration and prompt:
 Configuration: ${JSON.stringify(sceneState, null, 2)}
@@ -964,25 +1008,17 @@ Return your assessment in Arabic.`,
     });
 
     const parsed = JSON.parse(response.text || '{}');
-    return res.json(parsed);
+    if (typeof parsed.realismScore !== 'number' ||
+        !Number.isFinite(parsed.realismScore) || parsed.realismScore < 0 || parsed.realismScore > 100 ||
+        typeof parsed.verdictAR !== 'string' ||
+        !Array.isArray(parsed.strengthsAR) || !Array.isArray(parsed.risksAR) ||
+        !Array.isArray(parsed.recommendationsAR)) {
+      throw new Error('Gemini returned an invalid audit result');
+    }
+    return res.json({ ...parsed, source: 'gemini' });
   } catch (error: any) {
-    console.warn('Audit realism API fallback triggered:', error?.message);
-    return res.json({
-      realismScore: 0,
-      verdictAR: 'تعذر تدقيق Gemini؛ تم الاعتماد على فحص الاتساق الفيزيائي المحلي',
-      strengthsAR: [
-        'تثبيت قيود النظارة ومنع تنعيم البشرة يحميان الهوية من التزييف البلاستيكي.',
-        'إدراج فيزياء الأقمشة والتجاعيد يكسر نمطية الموديلات ثلاثية الأبعاد.',
-        'تحديد زاوية الذراع والعدسة الواسعة للهاتف يمنح الكادر عمقاً عفوياً.'
-      ],
-      risksAR: [
-        'قد تحاول بعض المحركات تفتيح الظلال بشكل مفرط في الخلفيات البعيدة.'
-      ],
-      recommendationsAR: [
-        'احرص على استخدام أمر Anti-AI Raw لضمان ظهور مسام البشرة وحبيبات المستشعر.',
-        'يفضل تفعيل شوائب العدسة العضوية لمزيد من المصداقية المادية.'
-      ]
-    });
+    console.warn('Audit realism Gemini call failed:', error?.message);
+    return sendGeminiFailure(res, error, 'تدقيق الواقعية');
   }
 });
 
@@ -1018,7 +1054,7 @@ app.post('/api/ai/enhance-prompt', async (req, res) => {
 
   try {
     const response = await callGeminiWithFallback({
-      preferredModels: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
+      preferredModels: ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'],
       contents: `You are a master prompt engineering specialist for photorealistic AI imagery.
 Refine this prompt for ${targetEngine} to improve natural photographic realism without changing any physical facts already resolved by the local engine.
 Preserve all core identity restrictions, eyeglasses rules, outfit, location, camera geometry, lighting causality, and focal-length constraints exactly.
@@ -1038,11 +1074,10 @@ ${basePrompt}
 Output the refined prompt text directly in clean English.`,
     });
 
-    return res.json({ enhancedPrompt: response.text?.trim() || basePrompt });
+    return res.json({ enhancedPrompt: response.text?.trim() || basePrompt, source: 'gemini' });
   } catch (error: any) {
-    console.warn('Enhance prompt fallback:', error?.message);
-    const polishedFallback = `${basePrompt}\n\n[REALISM PRESERVATION]\nPreserve the camera profile, focal length, lighting causality, identity geometry, and scene physics already specified above. Add only restrained natural skin texture and physically plausible sensor noise when supported by low light. Do not substitute camera hardware or add generic 24-28mm/iPhone optics.`;
-    return res.json({ enhancedPrompt: polishedFallback });
+    console.warn('Gemini prompt enhancement failed:', error?.message);
+    return sendGeminiFailure(res, error, 'تعزيز البرومبت');
   }
 });
 
