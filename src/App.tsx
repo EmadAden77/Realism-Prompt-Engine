@@ -66,7 +66,6 @@ import {
   getActivityOptions,
   getOutfitCapabilities,
   getPoseOptions,
-  getSceneRecommendations,
   OutfitWearStyle,
   GarmentWearContext,
   ShirtTuck,
@@ -714,11 +713,6 @@ export default function PhysFrameApp() {
   const outfitCapabilities = getOutfitCapabilities(selectedOutfit);
   const activityOptions = state.sceneFamily ? getActivityOptions(state.sceneFamily, state.subScene) : [];
   const poseOptions = state.sceneFamily ? getPoseOptions(state.sceneFamily, state.subScene) : [];
-  const sceneRecommendations = state.sceneFamily
-    ? getSceneRecommendations(state.sceneFamily, state.subScene)
-    : { activities: [], poses: [] };
-  const recommendedActivitySet = new Set(sceneRecommendations.activities);
-  const recommendedPoseSet = new Set(sceneRecommendations.poses);
   const militarySubSceneGroups = state.sceneFamily === 'military-base'
     ? ['المكاتب', 'الممرات', 'الأبواب والمداخل', 'الانتظار والاجتماعات', 'الاستراحة والخدمات', 'الدرج', 'خارج المبنى', 'المواقف']
         .map(groupAR => ({
@@ -2861,6 +2855,9 @@ export default function PhysFrameApp() {
                     </div>
                   )}
 
+                  <p className="text-[9px] text-[var(--text-muted)] mb-2">
+                    {showAllSceneOptions ? 'التحكم المتقدم يعرض جميع المستويات، وسيحدّد المحرك ما تسمح به العدسة.' : 'المستويات الظاهرة مناسبة للسعة الفعلية للخلفية في زاوية السيلفي الحالية.'}
+                  </p>
                   <div className="grid grid-cols-3 gap-2">
                     <div>
                       <label className="text-[10px] text-[var(--text-muted)] block mb-1">البشر</label>
@@ -2872,12 +2869,16 @@ export default function PhysFrameApp() {
                         disabled={state.backgroundMode === 'off' || isHomeBackgroundScene(state.sceneFamily)}
                         className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white disabled:opacity-40"
                       >
-                        <option value="auto">{isHomeBackgroundScene(state.sceneFamily) ? 'من اختيار الخلفية المنزلية' : 'تلقائي'}</option>
-                        <option value="none">بدون</option>
-                        <option value="sparse">قليل</option>
-                        <option value="light">خفيف</option>
-                        <option value="moderate">متوسط</option>
-                        <option value="high">مرتفع</option>
+                        {[
+                          ['auto', isHomeBackgroundScene(state.sceneFamily) ? 'من اختيار الخلفية المنزلية' : 'تلقائي'],
+                          ['none', 'بدون'], ['sparse', 'قليل'], ['light', 'خفيف'],
+                          ['moderate', 'متوسط'], ['high', 'مرتفع']
+                        ].filter(([value]) => showAllSceneOptions || smartSceneOptions?.availableHumanDensities.includes(value as BackgroundControlDensity) ||
+                          value === state.backgroundHumans).map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}{!smartSceneOptions?.availableHumanDensities.includes(value as BackgroundControlDensity) ? ' · سيُخفض حسب الكادر' : ''}
+                          </option>
+                        ))}
                       </select>
                     </div>
 
@@ -2891,12 +2892,15 @@ export default function PhysFrameApp() {
                         disabled={state.backgroundMode === 'off'}
                         className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white disabled:opacity-40"
                       >
-                        <option value="auto">تلقائي</option>
-                        <option value="none">بدون</option>
-                        <option value="sparse">قليل</option>
-                        <option value="light">خفيف</option>
-                        <option value="moderate">متوسط</option>
-                        <option value="high">مرتفع</option>
+                        {[
+                          ['auto', 'تلقائي'], ['none', 'بدون'], ['sparse', 'قليل'],
+                          ['light', 'خفيف'], ['moderate', 'متوسط'], ['high', 'مرتفع']
+                        ].filter(([value]) => showAllSceneOptions || smartSceneOptions?.availableVehicleDensities.includes(value as BackgroundControlDensity) ||
+                          value === state.backgroundVehicles).map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}{!smartSceneOptions?.availableVehicleDensities.includes(value as BackgroundControlDensity) ? ' · سيُخفض حسب الكادر' : ''}
+                          </option>
+                        ))}
                       </select>
                     </div>
 
@@ -2910,12 +2914,15 @@ export default function PhysFrameApp() {
                         disabled={state.backgroundMode === 'off'}
                         className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-2 py-2 text-[10px] text-white disabled:opacity-40"
                       >
-                        <option value="auto">تلقائي</option>
-                        <option value="very-clean">نظيف جدًا</option>
-                        <option value="natural">طبيعي</option>
-                        <option value="lived-in">مستخدم/معاش</option>
-                        <option value="light">فوضى خفيفة</option>
-                        <option value="moderate">فوضى متوسطة</option>
+                        {[
+                          ['auto', 'تلقائي'], ['very-clean', 'نظيف جدًا'], ['natural', 'طبيعي'],
+                          ['lived-in', 'مستخدم/معاش'], ['light', 'فوضى خفيفة'], ['moderate', 'فوضى متوسطة']
+                        ].filter(([value]) => showAllSceneOptions || smartSceneOptions?.availableDisorder.includes(value as BackgroundDisorderControl) ||
+                          value === state.backgroundDisorder).map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}{!smartSceneOptions?.availableDisorder.includes(value as BackgroundDisorderControl) ? ' · سيُخفض حسب المشهد' : ''}
+                          </option>
+                        ))}
                       </select>
                     </div>
                   </div>
