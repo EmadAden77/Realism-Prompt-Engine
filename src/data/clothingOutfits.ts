@@ -13,6 +13,8 @@ export type ClothingCategory =
 
 export interface OutfitItem {
   id: string;
+  /** Outfit description is an indivisible selection, not independent editable garments. */
+  readonly fixedCompleteOutfit?: true;
   labelAR: string;
   labelAr: string; // compatibility alias
   promptDescription: string;
