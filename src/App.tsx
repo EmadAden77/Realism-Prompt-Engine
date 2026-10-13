@@ -145,6 +145,8 @@ interface SceneState {
   realismStyle: RealismStyle;
   customIdentityPrompt?: string;
   bedroomSelfieActionId?: string;
+  bedroomBedding?: import('./engine/bedroomRealismStudio').BedroomBedding;
+  bedroomComposition?: import('./engine/bedroomRealismStudio').BedroomComposition;
 
   // Appearance & Accessories
   glassesMode: GlassesMode;
