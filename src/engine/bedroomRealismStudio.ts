@@ -70,9 +70,9 @@ export function buildBedroomRealismPrompt(state: Pick<SceneState,
   if (state.sceneFamily !== 'bedroom') return '';
   const bedding: BedroomBedding = state.bedroomBedding ?? 'everyday';
   const composition: BedroomComposition = state.bedroomComposition ?? 'natural';
-  const bedIsLoaded = /سرير|مرتبة|مستلقي|مستلق|reclin|bed|mattress/i.test(
+  const bedIsLoaded = /(?:جالس|متكئ|مستلق|مستلقي).*(?:سرير|مرتبة)|(?:على|فوق|حافة) السرير|reclin|lying on bed|seated on bed/i.test(
     [state.subScene, state.pose].join(' ')
-  ) || !!state.bedroomSelfieActionId && /^(bed-|bedside-)/.test(state.bedroomSelfieActionId);
+  ) || !!state.bedroomSelfieActionId && /^bed-/.test(state.bedroomSelfieActionId);
   const beddingPhysics: Record<BedroomBedding, string> = {
     everyday: 'ordinary uneven fabric folds, one naturally displaced pillow and restrained daily-use creases; no theatrical mess',
     fresh: 'mostly smoothed cotton duvet with subtle irregular hand-made tucks, naturally puffed pillows, and slight residual wrinkles, never showroom-perfect',
