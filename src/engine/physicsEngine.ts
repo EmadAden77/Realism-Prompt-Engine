@@ -95,6 +95,7 @@ export interface SceneState {
   cameraAngle: CameraAngle;
   pose: string;
   outfitId: string;
+  outfitLocked?: boolean;
   outfitWearStyle?: OutfitWearStyle;
   garmentWearContext?: GarmentWearContext;
   shirtTuck?: ShirtTuck;
