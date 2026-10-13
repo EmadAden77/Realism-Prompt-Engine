@@ -2358,6 +2358,74 @@ export default function PhysFrameApp() {
                   )}
                 </section>
 
+                {state.sceneFamily === 'bedroom' && (
+                  <section className="bg-[var(--bg-card)] rounded-2xl border border-[var(--accent)]/35 p-4 space-y-3">
+                    <div className="flex justify-between items-center gap-2">
+                      <h3 className="font-bold text-xs text-white">🛏️ هندسة غرفة النوم الواقعية</h3>
+                      <span className="text-[9px] text-[var(--accent)]">غرفة واحدة · فيزياء متصلة</span>
+                    </div>
+                    <p className="text-[10px] text-[var(--text-muted)] leading-relaxed">
+                      مشاهد من حياة يومية، دون إضاءة استوديو أو أثاث مكرر. المقاسات التالية مواصفات
+                      تصميم تقريبية وليست قياسات من صورتك المرجعية.
+                    </p>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {[
+                        { label: 'مساحة الغرفة', value: '5.2 × 6.2 م' },
+                        { label: 'السقف', value: '≈ 2.9 م' },
+                        { label: 'السرير', value: '160 × 200 سم' }
+                      ].map(item => (
+                        <div key={item.label} className="text-center rounded-lg bg-black/20 border border-[var(--border)] p-2">
+                          <div className="text-[9px] text-[var(--text-muted)]">{item.label}</div>
+                          <div className="text-[10px] text-white mt-1 font-semibold" dir="ltr">{item.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-white font-semibold">مشاهد جاهزة بواقعية تلقائية</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {BEDROOM_REALISM_PRESETS.map(preset => (
+                        <button key={preset.id} type="button" onClick={() => applyBedroomPreset(preset)}
+                          className={`text-right rounded-xl border p-2.5 transition-colors hover:border-[var(--accent)] ${state.bedroomSelfieActionId === preset.actionId && state.timeOfDay === preset.timeOfDay
+                            ? 'border-[var(--accent)] bg-[var(--accent)]/10' : 'border-[var(--border)] bg-black/10'}`}>
+                          <span className="block text-[11px] font-bold text-white">{preset.labelAR}</span>
+                          <span className="block text-[9px] text-[var(--text-muted)] mt-1 leading-relaxed">{preset.detailAR}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="block text-[11px] font-semibold text-white">شكل الغطاء والوسائد</label>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {BEDROOM_BEDDING_OPTIONS.map(option => (
+                          <button key={option.id} type="button" title={option.detailAR}
+                            onClick={() => setState(prev => ({ ...prev, bedroomBedding: option.id }))}
+                            className={`text-right rounded-lg border px-2.5 py-2 text-[10px] ${(state.bedroomBedding ?? 'everyday') === option.id
+                              ? 'border-[var(--accent)] bg-[var(--accent)]/10 text-white font-bold'
+                              : 'border-[var(--border)] text-[var(--text-muted)]'}`}>
+                            {option.labelAR}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="block text-[11px] font-semibold text-white">تكوين الصورة</label>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {BEDROOM_COMPOSITION_OPTIONS.map(option => (
+                          <button key={option.id} type="button" title={option.detailAR}
+                            onClick={() => setState(prev => ({ ...prev, bedroomComposition: option.id }))}
+                            className={`text-right rounded-lg border px-2.5 py-2 text-[10px] ${(state.bedroomComposition ?? 'natural') === option.id
+                              ? 'border-[var(--accent)] bg-[var(--accent)]/10 text-white font-bold'
+                              : 'border-[var(--border)] text-[var(--text-muted)]'}`}>
+                            {option.labelAR}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <p className="text-[9px] text-[var(--text-muted)] leading-relaxed">
+                      انضغاط المرتبة لا يظهر إلا حيث يلامسها الجسم، والإضاءة تأتي من مصباح أو نافذة حقيقية،
+                      والكاميرا لا تتجاوز طول الذراع ولا تكشف أجزاء مستحيلة من الغرفة.
+                    </p>
+                  </section>
+                )}
+
                 {/* Live interactive actions happen at the moment of capture, never as a separate staged photo. */}
                 {state.sceneFamily === 'bedroom' && state.captureType !== 'third-person-candid' && (
                   <section className="bg-[var(--bg-card)] p-4 rounded-2xl border border-[var(--accent)]/40 space-y-3">
@@ -2369,6 +2437,15 @@ export default function PhysFrameApp() {
                       اختر المنطقة ثم النشاط. الهاتف بيد، واليد الأخرى تتفاعل مع العنصر الموجود أو الذي تختار إضافته للمشهد.
                       العمل على اللابتوب متاح عند المكتب والكرسي والنافذة والأرض والسرير.
                     </p>
+                    <div className="flex items-center justify-between gap-2 bg-black/10 border border-[var(--border)] rounded-lg p-2">
+                      <span className="text-[10px] text-[var(--text-muted)]">
+                        {getBedroomRecommendedActivities(bedroomSelfieZone, state.timeOfDay).length} تفاعلات في المنطقة
+                      </span>
+                      <button type="button" onClick={() => setShowAllBedroomActivities(v => !v)}
+                        className="text-[10px] underline text-[var(--accent)]">
+                        {showAllBedroomActivities ? 'الأقرب للمشهد' : 'عرض كل التفاعلات'}
+                      </button>
+                    </div>
                     <div className="grid grid-cols-4 gap-1.5">
                       {(Object.keys(BEDROOM_SELFIE_ZONE_LABELS) as BedroomSelfieZone[]).map(zone => (
                         <button type="button" key={zone} onClick={() => setBedroomSelfieZone(zone)}
@@ -2378,7 +2455,9 @@ export default function PhysFrameApp() {
                       ))}
                     </div>
                     <div className="grid grid-cols-1 gap-2">
-                      {getBedroomSelfieActivities(bedroomSelfieZone).map(action => (
+                      {getBedroomRecommendedActivities(bedroomSelfieZone, state.timeOfDay, state.bedroomSelfieActionId)
+                        .filter((action, index) => showAllBedroomActivities || index < 4 || action.id === state.bedroomSelfieActionId)
+                        .map(action => (
                         <button type="button" key={action.id}
                           onClick={() => {
                             setState(prev => ({
