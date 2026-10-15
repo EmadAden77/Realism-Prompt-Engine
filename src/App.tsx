@@ -35,7 +35,7 @@ import {
 } from 'lucide-react';
 import { MICRO_LOCATIONS, getMicroLocation, MicroLocation } from './data/microLocations';
 import { LIGHTING_CATALOG, compatiblePhysicalLighting, getPhysicalLightingOption } from './data/physicalLighting';
-import { OUTFITS, OutfitItem } from './data/clothingOutfits';
+import { OUTFITS, CLOTHING_CATEGORIES, filterClothingOutfits, OutfitItem } from './data/clothingOutfits';
 import { resolveScene } from './engine/physicsEngine';
 import {
   buildSmartSceneOptions,
@@ -586,6 +586,8 @@ const DEFAULT_STATE: SceneState = {
 export default function PhysFrameApp() {
   const [state, setState] = useState<SceneState>(DEFAULT_STATE);
   const [showAllSceneOptions, setShowAllSceneOptions] = useState(false);
+  const [clothingCategory, setClothingCategory] = useState('all');
+  const [clothingSearch, setClothingSearch] = useState('');
   // Async Gemini responses must never overwrite results for a newer scene.
   const latestSceneRef = useRef(state);
   latestSceneRef.current = state;
@@ -685,7 +687,7 @@ export default function PhysFrameApp() {
           if (!validOutfit) {
             parsed.outfitId = DEFAULT_STATE.outfitId;
           }
-          setState({ ...DEFAULT_STATE, ...parsed });
+          setState({ ...DEFAULT_STATE, ...parsed, outfitLocked: true });
         }
 
         const savedPresets = localStorage.getItem('physframe_presets');
@@ -720,6 +722,7 @@ export default function PhysFrameApp() {
 
   const activeFamily = state.sceneFamily ? SCENE_FAMILIES[state.sceneFamily] : null;
   const selectedOutfit = OUTFITS.find(o => o.id === state.outfitId);
+  const visibleOutfits = useMemo(() => filterClothingOutfits(clothingCategory, clothingSearch), [clothingCategory, clothingSearch]);
   const selectedBedroomSelfie = getBedroomSelfieActivity(state.bedroomSelfieActionId);
   const activityOptions = state.sceneFamily ? getActivityOptions(state.sceneFamily, state.subScene) : [];
   const poseOptions = state.sceneFamily ? getPoseOptions(state.sceneFamily, state.subScene) : [];
@@ -757,7 +760,6 @@ export default function PhysFrameApp() {
       state.activity, state.outfitId, backgroundDecision]);
   const smartActivitySet = new Set(smartSceneOptions?.recommendedActivities ?? []);
   const smartPoseSet = new Set(smartSceneOptions?.recommendedPoses ?? []);
-  const smartOutfitSet = new Set(smartSceneOptions?.recommendedOutfits.map(item => item.id) ?? []);
   const smartGazeSet = new Set(smartSceneOptions?.recommendedGazeIds ?? []);
   const selfieAngleDecision = currentResolvedPreview?.physicalState.selfieAngle ?? null;
   const currentMicroLocation = state.sceneFamily ? getMicroLocation(state.sceneFamily, state.subScene) : undefined;
@@ -1143,7 +1145,7 @@ export default function PhysFrameApp() {
         subScene: 'مكتب إداري عسكري',
         activity: 'عمل مكتبي',
         pose: 'جالس خلف المكتب',
-        outfitId: 'mil_admin_tan_shirt', // قميص عسكري إداري مكتبي
+        outfitId: state.outfitId, // Keep the selected outfit unchanged
         expression: 'e6', // حازم ورسمي وقور
         hairStyle: 'h2',
         timeOfDay: 'midday',
@@ -1173,7 +1175,7 @@ export default function PhysFrameApp() {
         subScene: 'أمام مقهى',
         activity: 'جالس في المقهى',
         pose: 'جالس على كرسي',
-        outfitId: 'thobe_white_summer',
+        outfitId: state.outfitId, // Keep the selected outfit unchanged
         expression: 'e4', // ابتسامة عفوية نصف مفتوحة
         hairStyle: 'h1',
         timeOfDay: 'afternoon',
@@ -1203,7 +1205,7 @@ export default function PhysFrameApp() {
         subScene: 'بجانب الأثقال',
         activity: 'يستريح بين الجولات',
         pose: 'جالس على مقعد التمرين',
-        outfitId: 'gym_black_tee_grey_shorts',
+        outfitId: state.outfitId, // Keep the selected outfit unchanged
         expression: 'e11', // متحفز بعد التمرين
         hairStyle: 'h5', // بعد التمرين مبلل
         timeOfDay: 'night',
@@ -1233,7 +1235,7 @@ export default function PhysFrameApp() {
         subScene: 'داخل السيارة',
         activity: 'خلف المقود والسيارة متوقفة',
         pose: 'جالس باسترخاء في المقعد',
-        outfitId: 'out_black_hoodie_cargos', // هودي أوفرسايز أسود
+        outfitId: state.outfitId, // Keep the selected outfit unchanged
         expression: 'e9', // متأمل وسارح
         hairStyle: 'h4',
         timeOfDay: 'night',
@@ -1263,7 +1265,7 @@ export default function PhysFrameApp() {
         subScene: 'بجانب النافذة',
         activity: 'يشرب قهوة',
         pose: 'مسترخٍ على الكنبة',
-        outfitId: 'home_cozy_knit_joggers', // كنزة صوفية مريحة
+        outfitId: state.outfitId, // Keep the selected outfit unchanged
         expression: 'e16', // ابتسامة رضا وتنهيدة ارتياح
         hairStyle: 'h4',
         timeOfDay: 'morning',
@@ -1293,7 +1295,7 @@ export default function PhysFrameApp() {
         subScene: 'شارع فلل سكني',
         activity: 'واقف بشكل طبيعي',
         pose: 'واقف بثبات',
-        outfitId: 'thobe_winter_farwa', // ثوب زيتي مع فروة شمالية
+        outfitId: state.outfitId, // Keep the selected outfit unchanged
         expression: 'e27', // استنشاق هواء نقي
         hairStyle: 'h1',
         timeOfDay: 'sunset',
@@ -1760,7 +1762,7 @@ export default function PhysFrameApp() {
         state as unknown as Record<string, unknown>
       );
       const finalResolved = intelligence.finalResolved;
-      const finalState = finalResolved.state as SceneState;
+      const finalState: SceneState = { ...(finalResolved.state as SceneState), outfitId: state.outfitId, outfitLocked: true };
 
       setState(finalState);
       localStorage.setItem('physframe_current_state', JSON.stringify(finalState));
@@ -2010,9 +2012,9 @@ export default function PhysFrameApp() {
               aria-label="إعادة ضبط الإعدادات"
               className="text-xs text-[var(--text-muted)] hover:text-white rounded-lg p-1.5 hover:bg-white/5 transition-colors"
               onClick={() => {
-                setState(DEFAULT_STATE);
+                setState(prev => ({ ...DEFAULT_STATE, outfitId: prev.outfitId, outfitLocked: true }));
                 localStorage.removeItem('physframe_current_state');
-                showToast('تمت إعادة ضبط جميع الخيارات');
+                showToast('تمت إعادة ضبط المشهد مع الاحتفاظ بالملابس');
               }}
             >
               <RotateCcw className="w-3.5 h-3.5" />
@@ -3204,45 +3206,79 @@ export default function PhysFrameApp() {
                   )}
                 </section>
 
-                {/* Clothing & Attire */}
-                <section className="bg-[var(--bg-card)] p-4 rounded-2xl border border-[var(--border)]">
-                   <h3 className="font-bold text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2.5">الملابس والمظهر</h3>
-                   <p className="text-[10px] text-[var(--text-muted)] mb-1.5">الأطقم الكاملة الأقرب للمكان والنشاط تظهر أولًا، ولا يُغيَّر طقمك تلقائيًا.</p>
-                   <select
-                     value={state.outfitId}
-                     onChange={e => setState({ ...state, outfitId: e.target.value, outfitLocked: true, outfitWearStyle: 'natural-neat', garmentWearContext: 'neutral', shirtTuck: 'auto', sleeveStyle: 'auto', shirtButtons: 'auto', collarStyle: 'auto', outerwearClosure: 'auto', hoodPosition: 'auto', thobeCollar: 'auto' })}
-                     className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[var(--accent)] mb-2"
-                   >
-                     {!!state.outfitId && !smartOutfitSet.has(state.outfitId) && !showAllSceneOptions && (
-                       <option value={state.outfitId}>طقمك الحالي: {selectedOutfit?.labelAR || state.outfitId}</option>
-                     )}
-                     <optgroup label="★ أطقم مقترحة لهذه اللقطة">
-                       {smartSceneOptions?.recommendedOutfits.map(o =>
-                         <option key={o.id} value={o.id}>{o.labelAR}</option>)}
-                     </optgroup>
-                     {showAllSceneOptions && Array.from(new Set(OUTFITS.map(o => o.categoryAR))).map(cat => (
-                       <optgroup key={cat} label={`── ${cat} ──`} className="bg-[#181B1E] text-[var(--accent)] font-bold">
-                         {OUTFITS.filter(o => o.categoryAR === cat && !smartOutfitSet.has(o.id)).map(o => (
-                           <option key={o.id} value={o.id} className="bg-[var(--bg-main)] text-white font-normal py-1">
-                             {o.labelAR}
-                           </option>
-                         ))}
-                       </optgroup>
-                     ))}
-                   </select>
-                   <button type="button" onClick={() => setShowAllSceneOptions(v => !v)}
-                     className="mb-3 text-[10px] text-[var(--accent)] underline">
-                     {showAllSceneOptions ? 'إخفاء الأطقم الإضافية' : 'عرض مكتبة الملابس كاملة'}
-                   </button>
-
-                   <div className="rounded-xl border border-[var(--accent)]/30 bg-[var(--accent)]/5 p-3 mb-3">
-                     <div className="text-[11px] font-bold text-white">🔒 طقم كامل وثابت</div>
-                     <p className="text-[10px] text-[var(--text-muted)] mt-1 leading-relaxed">
-                       كل اختيار يمثل طقمًا كاملًا. تتغير حركة القماش وثنياته مع الجسم والإضاءة فقط،
-                       ولا تتغير القطع أو الألوان أو طريقة اللبس عند تغيير المشهد.
-                     </p>
-                     <p className="text-[10px] text-[var(--accent)] mt-1">{selectedOutfit?.labelAR || 'اختر طقمًا كاملًا'}</p>
-                   </div>
+                 {/* Clothing & Attire: permanent fixed library */}
+                 <section className="bg-[var(--bg-card)] p-4 rounded-2xl border border-[var(--border)]">
+                    <h3 className="font-bold text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2.5">الملابس والمظهر</h3>
+                    <p className="text-[10px] text-[var(--text-muted)] mb-2">
+                      {OUTFITS.length} طقمًا ثابتًا، متاحة دائمًا في جميع المشاهد دون إخفاء أو استبدال تلقائي.
+                    </p>
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                      <label className="block min-w-0">
+                        <span className="block text-[10px] text-[var(--text-muted)] mb-1">قسم الملابس</span>
+                        <select
+                          value={clothingCategory}
+                          onChange={e => setClothingCategory(e.target.value)}
+                          aria-label="قسم الملابس"
+                          className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-xl px-2 py-2 text-xs text-white"
+                        >
+                          {CLOTHING_CATEGORIES.map(cat => <option key={cat.id} value={cat.id}>{cat.labelAR}</option>)}
+                        </select>
+                      </label>
+                      <label className="block min-w-0">
+                        <span className="block text-[10px] text-[var(--text-muted)] mb-1">ابحث عن ملابس</span>
+                        <input type="search" value={clothingSearch}
+                          onChange={e => setClothingSearch(e.target.value)}
+                          aria-label="ابحث في الملابس" placeholder="تيشيرت، شورت..."
+                          className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-xl px-2 py-2 text-xs text-white"
+                        />
+                      </label>
+                    </div>
+                    <label htmlFor="outfit-picker" className="block text-[10px] text-[var(--text-muted)] mb-1">
+                      اختر طقمًا كاملًا ({visibleOutfits.length} متاح)
+                    </label>
+                    <select
+                      id="outfit-picker"
+                      value={state.outfitId}
+                      onChange={e => {
+                        const outfitId = e.target.value;
+                        if (!OUTFITS.some(o => o.id === outfitId)) return;
+                        setState(prev => ({
+                          ...prev, outfitId, outfitLocked: true, outfitWearStyle: 'natural-neat',
+                          garmentWearContext: 'neutral', shirtTuck: 'auto', sleeveStyle: 'auto',
+                          shirtButtons: 'auto', collarStyle: 'auto',
+                          outerwearClosure: 'auto', hoodPosition: 'auto', thobeCollar: 'auto'
+                        }));
+                        setUseEnhancedPrompt(false);
+                        setEnhancedPrompts({});
+                      }}
+                      className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[var(--accent)] mb-2"
+                    >
+                      {selectedOutfit && !visibleOutfits.some(o => o.id === selectedOutfit.id) && (
+                        <option value={selectedOutfit.id}>🔒 المختار: {selectedOutfit.labelAR}</option>
+                      )}
+                      {CLOTHING_CATEGORIES.filter(cat => cat.id !== 'all').map(cat => {
+                        const items = visibleOutfits.filter(o =>
+                          (Array.isArray(o.category) ? o.category : [o.category]).includes(cat.id)
+                        );
+                        return items.length ? (
+                          <optgroup key={cat.id} label={cat.labelAR}>
+                            {items.map(o => <option key={o.id} value={o.id}>{o.labelAR}</option>)}
+                          </optgroup>
+                        ) : null;
+                      })}
+                    </select>
+                    {visibleOutfits.length === 0 && (
+                      <p role="status" className="text-[10px] text-[var(--text-muted)] mb-2">
+                        لا توجد ملابس مطابقة. طقمك المختار محفوظ.
+                      </p>
+                    )}
+                    <div className="rounded-xl border border-[var(--accent)]/30 bg-[var(--accent)]/5 p-3 mb-3">
+                      <div className="text-[11px] font-bold text-white">🔒 طقم كامل وثابت</div>
+                      <p className="text-[10px] text-[var(--text-muted)] mt-1 leading-relaxed">
+                        يتغير الطقم فقط عند اختيارك له يدويًا. تغيير المكان أو الوقت أو المشهد الجاهز أو التصحيح التلقائي لا يبدّل ملابسك.
+                      </p>
+                      <p className="text-[10px] text-[var(--accent)] mt-1">{selectedOutfit?.labelAR || 'اختر طقمًا كاملًا'}</p>
+                    </div>
 
                    <div className="grid grid-cols-2 gap-2.5">
                      <div>
@@ -4270,7 +4306,7 @@ export default function PhysFrameApp() {
                     <div className="space-y-2.5">
                       {presets.map(preset => (
                         <div key={preset.id} className="bg-[var(--bg-hover)] border border-white/5 p-3.5 rounded-xl flex justify-between items-center hover:border-[var(--border-accent)] transition-all">
-                           <div className="flex-1 cursor-pointer" onClick={() => { setState(preset.state); setShowPresetsSheet(false); showToast(`تم تحميل: ${preset.name}`); }}>
+                           <div className="flex-1 cursor-pointer" onClick={() => { setState(prev => ({ ...DEFAULT_STATE, ...preset.state, outfitId: prev.outfitId, outfitLocked: true })); setShowPresetsSheet(false); showToast(`تم تحميل: ${preset.name} مع الاحتفاظ بالملابس`); }}>
                              <h4 className="font-bold text-xs text-white mb-0.5">{preset.name}</h4>
                              <p className="text-[11px] text-[var(--text-muted)]">
                                {preset.state.captureType} • {preset.state.subScene || 'عام'} • {preset.state.timeOfDay}
