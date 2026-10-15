@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { buildSemanticScene } from './semanticSceneCompiler';
 import { resolveScene, type SceneState } from './physicsEngine';
-import { OUTFITS } from '../data/clothingOutfits';
+import { OUTFITS, CLOTHING_CATEGORIES, filterClothingOutfits } from '../data/clothingOutfits';
 import type { DerivedSceneState } from './realismDeriver';
 
 const base: SceneState = {
@@ -50,3 +50,23 @@ for (const family of ['gym', 'saudi-outdoor', 'car', 'military-base', 'living-ro
 const oldSaved = compile({ ...base, outfitLocked: undefined });
 assert.match(oldSaved.outfit, /LOCKED COMPLETE OUTFIT/, 'Old saved states should lock by default');
 console.log('✅ Complete fixed outfit keeps garment identity across scenes and ignores legacy per-piece controls');
+
+// The complete wardrobe must stay present and in a stable order for every scene.
+assert.ok(OUTFITS.length >= 99, 'The permanently available wardrobe must remain extensive');
+assert.equal(new Set(OUTFITS.map(item => item.id)).size, OUTFITS.length, 'Every outfit ID must be unique');
+assert.deepEqual(filterClothingOutfits().map(item => item.id), OUTFITS.map(item => item.id),
+  'Opening the clothes list must show the entire static catalog, never a 12-item suggestion subset');
+for (const category of CLOTHING_CATEGORIES.filter(item => item.id !== 'all')) {
+  const matches = filterClothingOutfits(category.id);
+  assert.ok(matches.length > 0, 'Category must be accessible at all times: ' + category.labelAR);
+}
+assert.ok(filterClothingOutfits('home', 'شورت').length >= 5,
+  'The home clothing list must expose several complete T-shirt and shorts sets');
+assert.deepEqual(filterClothingOutfits().map(item => item.id), OUTFITS.map(item => item.id),
+  'Searching or filtering must not mutate the fixed wardrobe order');
+const stableOutfit = 'home_grey_tee_white_shorts';
+for (const family of ['bedroom', 'gym', 'saudi-outdoor', 'car', 'military-base', 'living-room'] as const) {
+  const scene = compile({ ...base, outfitId: stableOutfit, sceneFamily: family, subScene: '' });
+  assert.match(scene.outfit, /grey.*T-shirt.*white.*shorts/i, 'Selected home clothes stay unchanged in ' + family);
+}
+console.log('✅ Permanent 99-outfit wardrobe, categories, search, and cross-scene locks');
