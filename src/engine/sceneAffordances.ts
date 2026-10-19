@@ -510,7 +510,7 @@ const RULES: PoseRule[] = [
   // Vehicle interior versus exterior.
   {
     family: 'car',
-    match: /مقعد السائق|أمام المقود|قرب النافذة|الباب مغلق/,
+    match: /مقعد السائق|أمام المقود|قرب النافذة/,
     suggestions: [
       FAMILY_FALLBACKS.car[0],
       pose(
@@ -871,11 +871,19 @@ export function getStructuredPoseSuggestions(familyId: SceneFamilyId, subScene =
   const rule = RULES.find(item => item.family === familyId && item.match.test(subScene));
   const microLoc = subScene ? getMicroLocation(familyId, subScene) : undefined;
   const legacy = (microLoc?.recommendedPoses || []).map(label => inferPoseSuggestion(familyId, subScene, label));
-  return uniqueByLabel([
+  // A car exterior must never suggest driver/passenger-seat poses.
+  // Likewise a cabin scene must not offer standing outside the door.
+  const candidates = [
     ...(rule?.suggestions || []),
     ...legacy,
     ...FAMILY_FALLBACKS[familyId]
-  ]).slice(0, 5);
+  ];
+  const compatible = familyId === 'car' && microLoc
+    ? candidates.filter(item => microLoc.isOutdoor
+      ? item.stance === 'standing' || item.stance === 'walking'
+      : item.stance === 'sitting' || item.stance === 'reclined')
+    : candidates;
+  return uniqueByLabel(compatible).slice(0, 5);
 }
 
 export function resolveStructuredPoseSuggestion(
