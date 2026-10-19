@@ -1,4 +1,5 @@
 import { resolveBedroomSelfieActivity } from './bedroomSelfieAffordances';
+import { describe2017RangeRoverSport } from './carReality';
 import { getMicroLocation } from '../data/microLocations';
 import { getPhysicalLightingOption } from '../data/physicalLighting';
 import { gazeInteractionPrompt } from '../data/gazeInteractions';
@@ -178,10 +179,17 @@ export function compileUltraShortPrompt(
     || /خارج|بجانب|مواقف|outside|beside|parking/i.test(state.subScene));
   const carStatement = state.sceneFamily !== 'car'
     ? ''
-    : outdoorCar
-      ? 'Outside beside the parked vehicle: feet on ground, exterior side panels and window reflections; no cabin seating.'
-      : 'Inside the vehicle: seated in the chosen seat, real headrest, pillars and dashboard only where visible; no outside-standing pose.';
-  const microDetails = micro?.environmentPrompt
+    : (outdoorCar ? 'Outside beside the parked vehicle: ' : 'Inside the vehicle: ')
+      + describe2017RangeRoverSport({
+        subScene: state.subScene,
+        outdoor: outdoorCar,
+        timeOfDay: state.timeOfDay,
+        lightingMode: state.lightingMode,
+        pose: state.pose
+      });
+  // A car preset contains stock descriptive hints, some daylight-only;
+  // never append them verbatim to a night scene or a fixed-model car export.
+  const microDetails = state.sceneFamily !== 'car' && micro?.environmentPrompt
     ? compact(micro.environmentPrompt.split(',').slice(0, 3).join(', '), 160)
     : '';
   const cameraDistance = physical?.cameraDistance.match(/(\d{2,3}(?:-\d{2,3})?)\s*cm/i)?.[1];
