@@ -37,6 +37,7 @@ import {
   ResolvedGroupSelfie
 } from './groupSelfie';
 import { deriveMicroPhysics } from './sceneAffordances';
+import { carSeatView } from './carReality';
 import type {
   OutfitWearStyle,
   GarmentWearContext,
@@ -507,8 +508,19 @@ export function resolveScene(rawState: SceneState): ResolvedScene {
           description: `Standing or walking pose ("${s.pose}") is physically impossible inside vehicle cabin (${s.subScene}).`,
           autoResolvedBy: 'Adjusted pose to seated in bucket seat with backrest contact and steering wheel clearance.'
         });
-        s.pose = s.subScene.includes('راكب') ? 'جالس في مقعد الراكب' : 'جالس باسترخاء في المقعد';
+        const seat = carSeatView(s.subScene);
+        s.pose = seat === 'front-passenger' ? 'جالس في مقعد الراكب'
+          : seat === 'rear-passenger' ? 'جالس في المقعد الخلفي'
+          : 'جالس في مقعد السائق';
       }
+    } else if (/جالس|مقعد|المقود|داخل السيارة|داخل المركبة/.test(s.pose)) {
+      issues.push({
+        type: 'physical_impossibility',
+        field: 'pose',
+        description: 'An in-cabin sitting pose was selected for a car exterior location.',
+        autoResolvedBy: 'Changed pose to standing beside the parked vehicle, with grounded feet and safe door/mirror clearance.'
+      });
+      s.pose = 'واقف بجانب السيارة';
     }
   } else if (familyId === 'military-base') {
     if (s.subScene.includes('مكتب') && (s.pose.includes('السرير') || s.pose.includes('المقود') || s.pose.includes('الأجهزة'))) {
@@ -567,7 +579,7 @@ export function resolveScene(rawState: SceneState): ResolvedScene {
         autoResolvedBy: 'Assigned authentic nocturnal lighting source appropriate to location.'
       });
       if (familyId === 'saudi-outdoor') s.lightingMode = 'إنارة شارع دافئة';
-      else if (familyId === 'car') s.lightingMode = 'إضاءة الشارع عبر زجاج السيارة';
+      else if (familyId === 'car') s.lightingMode = isOutdoor ? 'إنارة موقف ليلي بجانب السيارة' : 'إضاءة الشارع عبر زجاج السيارة';
       else if (familyId === 'living-room') s.lightingMode = 'إنارة ليلية مختلطة';
       else if (familyId === 'bedroom') s.lightingMode = 'إضاءة أباجورة دافئة';
       else s.lightingMode = 'إضاءة ممرات متوازية';
@@ -981,8 +993,17 @@ function calculateDetailedPhysicalState(
   const foregroundElements: string[] = [];
 
   if (familyId === 'car' && !isOutdoor) {
-    occlusions.push('lower body occluded by car door panel, center console, and steering wheel');
-    foregroundElements.push('slight edge of steering wheel rim or A-pillar trim partially visible at extreme outer frame boundary');
+    const seat = carSeatView(state.subScene, state.pose);
+    if (seat === 'driver') {
+      occlusions.push('lower torso occluded by the left-hand-drive steering wheel and lower dashboard only where actually in frame');
+      foregroundElements.push('driver-side A-pillar, wheel rim or left door trim only when physically visible');
+    } else if (seat === 'front-passenger') {
+      occlusions.push('lower torso occluded by the passenger-side door panel and center console only within the real camera angle');
+      foregroundElements.push('right door or windshield pillar, not a steering wheel in front of the passenger');
+    } else {
+      occlusions.push('front seatbacks partially block the forward view from the rear seating position');
+      foregroundElements.push('rear headrest, front seatback or B-pillar edge only inside the view');
+    }
   } else if (state.pose.includes('خلف المكتب') || (familyId === 'military-base' && state.subScene.includes('مكتب'))) {
     occlusions.push('waist and lower torso occluded by administrative desk surface');
     foregroundElements.push('front edge of office desk with neatly placed document folder in immediate near-ground');
