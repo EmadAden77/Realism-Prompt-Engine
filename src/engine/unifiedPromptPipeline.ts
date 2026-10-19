@@ -1,6 +1,7 @@
 import { resolveBedroomSelfieActivity } from './bedroomSelfieAffordances';
 import { getMicroLocation } from '../data/microLocations';
 import { getPhysicalLightingOption } from '../data/physicalLighting';
+import { gazeInteractionPrompt } from '../data/gazeInteractions';
 import { exportCausalAttestationLedger, type CausalLedgerEntry } from './promptCompiler';
 import { planSpatialComposition, type SpatialCompositionPlan } from './spatialCompositionPlanner';
 import { createSceneManifest, deriveCausalHairExpression, type SceneManifest } from './causalPipeline';
@@ -157,6 +158,10 @@ export function compileUltraShortPrompt(
   const interactive = resolveBedroomSelfieActivity(state);
   const hairstyle = semantic.hair.match(/Selected hairstyle:\s*([^.]*)\./i)?.[1] || '';
   const expression = semantic.expression.split(/\.\s+/)[0];
+  const gaze = state.gazeInteractionId ? gazeInteractionPrompt(state.gazeInteractionId) : '';
+  const bedContact = state.sceneFamily === 'bedroom' && /سرير|مرتبة|bed|mattress/i.test(state.pose)
+    ? 'Mattress and pillow compress only where body weight contacts; naturally wrinkled bedding, supported hips/shoulders and real contact shadows.'
+    : '';
   const outfit = semantic.outfit.split(/\. LOCKED COMPLETE OUTFIT:/)[0];
   const outdoorCar = state.sceneFamily === 'car' && (micro?.isOutdoor
     || /خارج|بجانب|مواقف|outside|beside|parking/i.test(state.subScene));
@@ -216,6 +221,7 @@ export function compileUltraShortPrompt(
         : state.referenceImageId ? 'Eyewear follows reference.' : '',
     'Outfit: ' + compact(outfit, 240) + '. Keep all chosen garments/colors; true seams, weave, gravity folds and contact creases.',
     'Expression: ' + compact(expression, 105) + '.',
+    gaze ? 'Gaze: ' + compact(gaze, 120) + '.' : '',
     hairstyle ? 'Hair: ' + compact(hairstyle, 80) + '; preserve reference hairline and density.' : '',
     'Pose: ' + compact(state.pose, 115) + '.',
     state.activity ? 'Action: ' + compact(state.activity, 90) + '.' : '',
@@ -225,6 +231,7 @@ export function compileUltraShortPrompt(
     'Setting: ' + compact(micro?.labelAR || state.subScene || 'ordinary Saudi scene', 90) + '.',
     microDetails ? 'Visible scene: ' + microDetails + '.' : '',
     carStatement,
+    bedContact,
     camera,
     contact,
     group,
