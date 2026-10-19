@@ -133,7 +133,7 @@ export function compileUltraShortPrompt(
   semantic: SemanticPromptScene
 ): string {
   const tidy = (value: string, limit: number): string => {
-    const normalized = value.replace(/\\s+/g, ' ').trim();
+    const normalized = value.replace(/\s+/g, ' ').trim();
     if (normalized.length <= limit) return normalized;
     const slice = normalized.slice(0, limit);
     return slice.slice(0, Math.max(slice.lastIndexOf(' '), limit - 24)).trim().replace(/[,;:.]$/, '');
@@ -144,8 +144,8 @@ export function compileUltraShortPrompt(
       ? 'Use attached photo for exact facial identity, age, skin, beard and hairline only; no face reshaping.'
       : 'Natural, unretouched face.',
     '193cm, 83kg, lean-athletic.',
-    'Outfit: ' + tidy(semantic.outfit.split(/\\.\\s+/)[0], 165) + '.',
-    'Expression: ' + tidy(semantic.expression.split(/\\.\\s+/)[0], 95) + '.',
+    'Outfit: ' + tidy(semantic.outfit.split(/\.\s+/)[0], 165) + '.',
+    'Expression: ' + tidy(semantic.expression.split(/\.\s+/)[0], 95) + '.',
     'Pose: ' + tidy(state.pose, 85) + '.',
     'Scene: ' + tidy(state.subScene || state.sceneFamily || 'Saudi setting', 100) + '.',
     state.sceneFamily === 'car'
@@ -155,7 +155,7 @@ export function compileUltraShortPrompt(
       : '',
     state.captureType === 'front-selfie'
       ? 'Handheld front-camera selfie, believable arm reach and wide-angle perspective.'
-      : tidy(semantic.captureMechanics.split(/\\.\\s+/)[0], 105) + '.',
+      : tidy(semantic.captureMechanics.split(/\.\s+/)[0], 105) + '.',
     (state.timeOfDay === 'night' ? 'Night' : state.timeOfDay) +
       ', light: ' + tidy(state.lightingMode, 72) + '.',
     'Real phone-camera grain, plausible shadows, no CGI or beauty filter.',
