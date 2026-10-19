@@ -1,3 +1,4 @@
+import { getStructuredPoseSuggestions } from './sceneAffordances';
 import { getMicroLocation, type SceneFamilyId } from '../data/microLocations';
 import { OUTFITS, type OutfitItem } from '../data/clothingOutfits';
 import { GAZE_INTERACTIONS } from '../data/gazeInteractions';
@@ -88,7 +89,9 @@ export function buildSmartSceneOptions(input: SmartOptionInput): SmartOptionResu
   const { familyId, subScene, timeOfDay, captureType, activity, viewGeometry } = input;
   const loc = getMicroLocation(familyId, subScene);
   const allActivities = getActivityOptions(familyId, subScene).map(a => a.labelAR);
-  const allPoses = getPoseOptions(familyId, subScene);
+  const allPoses = familyId === 'car'
+    ? getStructuredPoseSuggestions(familyId, subScene).map(item => item.labelAR)
+    : getPoseOptions(familyId, subScene);
   const recommended = getSceneRecommendations(familyId, subScene);
   const recommendedActivities = unique([...recommended.activities.filter(a => allActivities.includes(a)), ...allActivities]).slice(0, 5);
   const recommendedPoses = unique([...recommended.poses.filter(p => allPoses.includes(p)), ...allPoses]).slice(0, 5);
