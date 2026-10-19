@@ -1,4 +1,5 @@
 import { resolveBedroomSelfieActivity } from './bedroomSelfieAffordances';
+import { describe2017RangeRoverSport, isCarExteriorSubScene } from './carReality';
 import { buildBedroomRealismPrompt } from './bedroomRealismStudio';
 import { getMicroLocation } from '../data/microLocations';
 import { OUTFITS } from '../data/clothingOutfits';
@@ -467,6 +468,20 @@ export const buildSemanticScene = (
       ? `${microLoc.environmentPrompt}. Spatial mechanics: ${microLoc.spatialBehavior}.`
       : `Ordinary realistic setting in Saudi Arabia.`;
     visibleEnvironmentText = `Location: ${locationLabel ? `${locationLabel} - ` : ''}${state.subScene || ''}. Environmental setting: ${microDetails} Visible background elements: ${derived.visibleBackgroundElements.join(', ')}.`;
+  }
+  // For the fixed 2017 Range Rover, do not send the generic sedan/cabin catalog
+  // prose through the neutral prompt. The verified vehicle + selected camera
+  // side replace mutually incompatible raw micro-location embellishments.
+  if (state.sceneFamily === 'car') {
+    const outside = microLoc?.isOutdoor ?? isCarExteriorSubScene(state.subScene);
+    visibleEnvironmentText = 'Selected car setting: ' + (microLoc?.labelAR || state.subScene) + '. '
+      + describe2017RangeRoverSport({
+        subScene: state.subScene,
+        outdoor: outside,
+        timeOfDay: state.timeOfDay,
+        lightingMode: state.lightingMode,
+        pose: state.pose
+      });
   }
   if (physicalState?.backgroundRealism) {
     visibleEnvironmentText += ` Background control: humans=${physicalState.backgroundRealism.humanDensity}, vehicles=${physicalState.backgroundRealism.vehicleDensity}, disorder=${physicalState.backgroundRealism.disorderLevel}. User controls remain subject to physical FOV limits.`;
