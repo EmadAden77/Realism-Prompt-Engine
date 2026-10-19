@@ -273,12 +273,12 @@ export function compileUnifiedPromptPipeline(
   );
   const geminiAdapter = compilePlatformAdapter(
     'gemini',
-    neutral.text,
+    shortPrompt,
     manifest
   );
   const midjourneyAdapter = compilePlatformAdapter(
     'midjourney',
-    neutral.text,
+    shortPrompt,
     manifest
   );
 
