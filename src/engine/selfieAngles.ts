@@ -1,4 +1,5 @@
 import { SceneFamilyId } from '../data/microLocations';
+import { carSeatView, isCarExteriorSubScene } from './carReality';
 import {
   BackgroundMode,
   BackgroundControlDensity,
@@ -296,22 +297,13 @@ const containsAny = (value: string, terms: string[] | undefined) =>
 
 export function isCarInteriorSelfieContext(context: Pick<SelfieAngleContext, 'sceneFamily' | 'subScene' | 'activity' | 'pose'>): boolean {
   if (context.sceneFamily !== 'car') return false;
-  const sub = context.subScene || '';
-  return [
-    'مقعد السائق',
-    'المقعد الأمامي للراكب',
-    'بين المقعدين الأماميين',
-    'المقعد الخلفي'
-  ].some(term => sub.includes(term));
+  return !isCarExteriorSubScene(context.subScene || '');
 }
 
 export function inferCarSeatRole(context: Pick<SelfieAngleContext, 'sceneFamily' | 'subScene' | 'activity' | 'pose'>): CarSeatRole {
   if (!isCarInteriorSelfieContext(context)) return 'either';
-  const text = `${context.subScene} ${context.activity} ${context.pose}`;
-  if (/المقعد الخلفي|خلفي/.test(text)) return 'rear-passenger';
-  if (/الراكب/.test(text)) return 'front-passenger';
-  if (/السائق|المقود|خلف المقود/.test(text)) return 'driver';
-  return 'either';
+  const seat = carSeatView(context.subScene || '', context.pose || '');
+  return seat === 'front-center' ? 'either' : seat;
 }
 
 const framingDistanceLimits: Record<SelfieFraming, [number, number]> = {
@@ -333,9 +325,11 @@ export function getEligibleSelfieAngles(context: SelfieAngleContext): SelfieAngl
     if (preset.subSceneKeywords?.length && !containsAny(context.subScene, preset.subSceneKeywords)) return false;
     if (preset.lightingKeywords?.length && !containsAny(context.lightingMode || '', preset.lightingKeywords)) return false;
 
-    if (carInterior) {
-      if (preset.family !== 'vehicle') return false;
-      if (carSeat !== 'either' && preset.carSeat && preset.carSeat !== 'either' && preset.carSeat !== carSeat) return false;
+    if (context.sceneFamily === 'car') {
+      // Vehicle cabin presets must never be selected for an outside selfie.
+      if (!carInterior && preset.family === 'vehicle') return false;
+      if (carInterior && preset.family !== 'vehicle') return false;
+      if (carInterior && carSeat !== 'either' && preset.carSeat && preset.carSeat !== 'either' && preset.carSeat !== carSeat) return false;
     }
 
     return true;
