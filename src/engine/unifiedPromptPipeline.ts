@@ -163,6 +163,17 @@ export function compileUltraShortPrompt(
     ? 'Mattress and pillow compress only where body weight contacts; naturally wrinkled bedding, supported hips/shoulders and real contact shadows.'
     : '';
   const outfit = semantic.outfit.split(/\. LOCKED COMPLETE OUTFIT:/)[0];
+  const wearControls = [
+    ['tuck', state.shirtTuck],
+    ['sleeves', state.sleeveStyle],
+    ['buttons', state.shirtButtons],
+    ['collar', state.collarStyle],
+    ['outerwear', state.outerwearClosure],
+    ['hood', state.hoodPosition],
+    ['thobe collar', state.thobeCollar]
+  ].filter((entry): entry is [string, string] =>
+    typeof entry[1] === 'string' && entry[1] !== 'auto'
+  ).map(([name, value]) => name + ': ' + value.replace(/-/g, ' ')).join('; ');
   const outdoorCar = state.sceneFamily === 'car' && (micro?.isOutdoor
     || /خارج|بجانب|مواقف|outside|beside|parking/i.test(state.subScene));
   const carStatement = state.sceneFamily !== 'car'
@@ -219,7 +230,8 @@ export function compileUltraShortPrompt(
     state.glassesMode === 'no_glasses' ? 'No glasses.'
       : state.glassesMode === 'wear_glasses' ? 'Black rectangular eyeglasses.'
         : state.referenceImageId ? 'Eyewear follows reference.' : '',
-    'Outfit: ' + compact(outfit, 240) + '. Keep all chosen garments/colors; true seams, weave, gravity folds and contact creases.',
+    'Outfit: ' + compact(outfit, 340) + '. Keep all chosen garments/colors; true seams, weave, gravity folds and contact creases.',
+    wearControls ? 'Garment configuration: ' + wearControls + '.' : '',
     'Expression: ' + compact(expression, 105) + '.',
     gaze ? 'Gaze: ' + compact(gaze, 120) + '.' : '',
     hairstyle ? 'Hair: ' + compact(hairstyle, 80) + '; preserve reference hairline and density.' : '',
