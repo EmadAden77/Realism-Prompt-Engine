@@ -237,6 +237,15 @@ assert.match(phoneOnly.platforms.gemini.prompt, /rapid falloff below upper chest
 assert.match(phoneOnly.platforms.gemini.prompt, /no ceiling\/bedside\/vehicle\/flash or invisible fill/);
 assert.doesNotMatch(phoneOnly.platforms.gemini.prompt, /actual overhead streetlight/i);
 
+const bedroomBedContact = compileUnifiedPromptPipeline({
+  ...base,
+  sceneFamily: 'bedroom', subScene: 'بجانب السرير',
+  pose: 'جالس على حافة السرير', lightingMode: 'إضاءة أباجورة دافئة'
+});
+assert.match(bedroomBedContact.platforms.chatgpt.prompt, /Mattress and pillow compress only where body weight contacts/);
+const selectedGaze = compileUnifiedPromptPipeline({...base, gazeInteractionId: 'g6'});
+assert.match(selectedGaze.platforms.gemini.prompt, /Eyes focused on the phone screen rather than the lens/);
+
 const opticalMirror = compileUnifiedPromptPipeline({
   ...base, sceneFamily: 'bedroom', subScene: 'أمام المرآة',
   captureType: 'mirror-selfie', lightingMode: 'إضاءة أباجورة دافئة'
