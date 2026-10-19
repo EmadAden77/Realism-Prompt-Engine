@@ -138,6 +138,11 @@ export function compileUltraShortPrompt(
     const slice = normalized.slice(0, limit);
     return slice.slice(0, Math.max(slice.lastIndexOf(' '), limit - 24)).trim().replace(/[,;:.]$/, '');
   };
+  const interactive = resolveBedroomSelfieActivity(state);
+  const selectedHair = semantic.hair.match(/Selected hairstyle:\s*([^.]*)\./i)?.[1] || '';
+  const groupConstraint = semantic.groupSelfie?.includes('Lateral space is constrained')
+    ? 'Limited lateral shoulder space.'
+    : '';
   const parts = [
     'Photorealistic vertical 9:16 smartphone photo.',
     state.referenceImageId
@@ -147,7 +152,15 @@ export function compileUltraShortPrompt(
     state.glassesMode === 'no_glasses' ? 'No glasses.' : state.glassesMode === 'wear_glasses' ? 'Black rectangular glasses.' : '',
     'Outfit: ' + tidy(semantic.outfit.split(/\.\s+/)[0], 165) + '.',
     'Expression: ' + tidy(semantic.expression.split(/\.\s+/)[0], 95) + '.',
+    selectedHair ? 'Hair: ' + tidy(selectedHair, 60) + '; original hairline/density.' : '',
     'Pose: ' + tidy(state.pose, 85) + '.',
+    state.activity ? 'Activity: ' + tidy(state.activity, 85) + '.' : '',
+    interactive.status === 'ready' && interactive.activity
+      ? 'Interaction: ' + tidy(interactive.activity.contact, 105) + '.'
+      : '',
+    state.groupSelfieEnabled
+      ? 'Group selfie: ' + (state.groupSelfieSize || 2) + ' people, distinct faces, realistic shoulder spacing. ' + groupConstraint
+      : '',
     'Scene: ' + tidy(state.subScene || state.sceneFamily || 'Saudi setting', 100) + '.',
     state.sceneFamily === 'car'
       ? (/داخل|مقعد|مقود|راكب/.test(state.subScene) && !/خارج|بجانب|مواقف/.test(state.subScene)
