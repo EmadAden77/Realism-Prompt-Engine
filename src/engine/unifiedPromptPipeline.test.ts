@@ -193,6 +193,57 @@ const besideCar = compileUnifiedPromptPipeline({
 assert.match(besideCar.platforms.chatgpt.prompt, /Beside a parked car/);
 assert.doesNotMatch(besideCar.platforms.chatgpt.prompt, /Inside a stationary car/);
 
+// Exported prompts must inherit resolved physical decisions, not guess from Arabic text.
+const carSeatById = compileUnifiedPromptPipeline({
+  ...base,
+  sceneFamily: 'car',
+  subScene: 'car_driver_parked',
+  pose: 'جالس في مقعد السائق',
+  lightingMode: 'إضاءة الشارع عبر زجاج السيارة',
+});
+assert.match(carSeatById.platforms.chatgpt.prompt, /Inside the vehicle:/);
+assert.match(carSeatById.platforms.chatgpt.prompt, /headrest, pillars and dashboard/);
+assert.doesNotMatch(carSeatById.platforms.chatgpt.prompt, /Outside beside the parked vehicle:/);
+
+const carOutsideById = compileUnifiedPromptPipeline({
+  ...base,
+  sceneFamily: 'car',
+  subScene: 'car_outside_beside_door_closed',
+  pose: 'واقف بجانب باب السائق',
+  lightingMode: 'إنارة موقف ليلي بجانب السيارة',
+});
+assert.match(carOutsideById.platforms.gemini.prompt, /Outside beside the parked vehicle:/);
+assert.doesNotMatch(carOutsideById.platforms.gemini.prompt, /Inside the vehicle:/);
+assert.match(carOutsideById.platforms.gemini.prompt, /parking fixture/);
+
+const carOutsideFreeText = compileUnifiedPromptPipeline({
+  ...base,
+  sceneFamily: 'car',
+  subScene: 'بجانب السيارة في المواقف',
+  pose: 'واقف بجانب باب السائق',
+  lightingMode: 'إنارة موقف ليلي بجانب السيارة',
+});
+assert.equal(carOutsideFreeText.manifest.resolved.physicalState.bodyOrientation.includes('bucket seat'), false);
+assert.match(carOutsideFreeText.platforms.gemini.prompt, /Outside beside the parked vehicle:/);
+
+assert.match(pipeline.platforms.chatgpt.prompt, /21mm equivalent, f\/2\.0/);
+assert.match(pipeline.platforms.chatgpt.prompt, /pitch\/yaw\/roll/);
+assert.match(pipeline.platforms.chatgpt.prompt, /connected phone-holding arm/);
+assert.match(pipeline.platforms.chatgpt.prompt, /true seams, weave, gravity folds and contact creases/);
+assert.match(pipeline.platforms.chatgpt.prompt, /Same camera exposure and noise across face, clothing and background/);
+
+assert.match(phoneOnly.platforms.gemini.prompt, /Only the phone screen lights face and near fingers/);
+assert.match(phoneOnly.platforms.gemini.prompt, /rapid falloff below upper chest/);
+assert.match(phoneOnly.platforms.gemini.prompt, /no ceiling\/bedside\/vehicle\/flash or invisible fill/);
+assert.doesNotMatch(phoneOnly.platforms.gemini.prompt, /actual overhead streetlight/i);
+
+const opticalMirror = compileUnifiedPromptPipeline({
+  ...base, sceneFamily: 'bedroom', subScene: 'أمام المرآة',
+  captureType: 'mirror-selfie', lightingMode: 'إضاءة أباجورة دافئة'
+});
+assert.match(opticalMirror.platforms.gemini.prompt, /Single real phone visible in one flat-mirror reflection/);
+assert.doesNotMatch(opticalMirror.platforms.gemini.prompt, /Xiaomi 15 Ultra front camera/);
+
 const outfitChanged = compileUnifiedPromptPipeline({
   ...base,
   outfitId: 'navy_shirt_grey_trousers',
