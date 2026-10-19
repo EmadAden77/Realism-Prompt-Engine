@@ -498,17 +498,40 @@ export function resolveScene(rawState: SceneState): ResolvedScene {
 
   // Check & Resolve 2: Seat & Body Pose vs Micro-Location Compatibility
   if (familyId === 'car') {
-    if (!isOutdoor) {
-      // Inside car interior: must be in-seat poses
-      if (s.pose.includes('واقف') || s.pose.includes('يمشي') || s.pose.includes('السرير') || s.pose.includes('الأجهزة')) {
-        issues.push({
-          type: 'physical_impossibility',
-          field: 'pose',
-          description: `Standing or walking pose ("${s.pose}") is physically impossible inside vehicle cabin (${s.subScene}).`,
-          autoResolvedBy: 'Adjusted pose to seated in bucket seat with backrest contact and steering wheel clearance.'
-        });
-        s.pose = s.subScene.includes('راكب') ? 'جالس في مقعد الراكب' : 'جالس باسترخاء في المقعد';
-      }
+    const incompatiblePose = isOutdoor
+      ? /جالس|مقعد|مقود|السرير|الأجهزة/.test(s.pose)
+      : /واقف|يمشي|السرير|الأجهزة|بجانب السيارة|عند باب السائق|على السيارة/.test(s.pose);
+    if (incompatiblePose) {
+      issues.push({
+        type: 'physical_impossibility',
+        field: 'pose',
+        description: isOutdoor
+          ? 'An exterior car photograph cannot keep an in-cabin seated pose.'
+          : 'An interior car photograph cannot keep an exterior standing pose.',
+        autoResolvedBy: 'Aligned the pose with the selected car micro-location.'
+      });
+      s.pose = isOutdoor
+        ? 'واقف بجانب السيارة'
+        : s.subScene.includes('راكب')
+          ? 'جالس في مقعد الراكب'
+          : s.subScene.includes('الخلفي')
+            ? 'جالس في المقعد الخلفي'
+            : 'جالس في مقعد السائق';
+    }
+    if (isOutdoor && /خلف المقود|في مقعد|داخل السيارة/.test(s.activity)) {
+      issues.push({
+        type: 'contradiction', field: 'activity',
+        description: 'Exterior car scene inherited an interior driving activity.',
+        autoResolvedBy: 'Changed to a stationary exterior activity.'
+      });
+      s.activity = 'ينتظر بجانب السيارة';
+    } else if (!isOutdoor && /واقف بجانب السيارة|خارج السيارة|أمام السيارة/.test(s.activity)) {
+      issues.push({
+        type: 'contradiction', field: 'activity',
+        description: 'Interior car scene inherited an exterior activity.',
+        autoResolvedBy: 'Changed to a stationary cabin activity.'
+      });
+      s.activity = 'ينتظر داخل السيارة';
     }
   } else if (familyId === 'military-base') {
     if (s.subScene.includes('مكتب') && (s.pose.includes('السرير') || s.pose.includes('المقود') || s.pose.includes('الأجهزة'))) {
@@ -775,12 +798,29 @@ export function validateScene(inputState: SceneState | ResolvedScene): Validatio
   }
 
   // 2. Pose vs Geometry
-  if (familyId === 'car' && !isOutdoor) {
-    if (state.pose.includes('واقف') || state.pose.includes('يمشي')) {
+  if (familyId === 'car') {
+    const incompatibleCarPose = isOutdoor
+      ? /جالس|مقعد|مقود|السرير|الأجهزة/.test(state.pose)
+      : /واقف|يمشي|السرير|الأجهزة|بجانب السيارة|عند باب السائق|على السيارة/.test(state.pose);
+    if (incompatibleCarPose) {
       issues.push({
         type: 'physical_impossibility',
         field: 'pose',
-        description: 'Standing or walking pose inside a closed vehicle cabin.'
+        description: isOutdoor
+          ? 'Seated cabin pose conflicts with the selected exterior car location.'
+          : 'Standing exterior pose conflicts with the selected vehicle cabin.'
+      });
+    }
+    if (isOutdoor && /خلف المقود|في مقعد|داخل السيارة/.test(state.activity)) {
+      issues.push({
+        type: 'contradiction', field: 'activity',
+        description: 'Driving/inside activity conflicts with exterior car location.'
+      });
+    }
+    if (!isOutdoor && /واقف بجانب السيارة|خارج السيارة|أمام السيارة/.test(state.activity)) {
+      issues.push({
+        type: 'contradiction', field: 'activity',
+        description: 'Exterior activity conflicts with interior car location.'
       });
     }
   }
