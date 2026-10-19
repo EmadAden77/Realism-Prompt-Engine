@@ -48,10 +48,12 @@ assert.match(
   pipeline.platforms.gemini.rawPrompt,
   /provided image input only to preserve/i
 );
-assert.match(pipeline.platforms.chatgpt.prompt, /SUBJECT & IDENTITY LOCK/);
-assert.match(pipeline.platforms.gemini.prompt, /SUBJECT & IDENTITY LOCK/);
-assert.match(pipeline.platforms.midjourney.prompt, /SUBJECT & IDENTITY LOCK/);
+assert.match(pipeline.platforms.chatgpt.prompt, /Photorealistic vertical 9:16/);
+assert.match(pipeline.platforms.gemini.prompt, /Photorealistic vertical 9:16/);
+assert.match(pipeline.platforms.midjourney.prompt, /Photorealistic vertical 9:16/);
 assert.match(pipeline.platforms.midjourney.prompt, /--v 8\.2 --raw$/);
+assert(pipeline.platforms.gemini.prompt.length < pipeline.neutral.text.length / 2, 'export must be substantially shorter than audited internal prompt');
+assert.doesNotMatch(pipeline.platforms.gemini.prompt, /\\[CAUSAL REALISM CONSTRAINTS\\]/);
 assert.equal(pipeline.platforms.chatgpt.adapter.recommendedModel, 'gpt-image-2.5-sunburst');
 assert.equal(pipeline.platforms.gemini.adapter.recommendedModel, 'gemini-nano-banana-2.1');
 assert.equal(pipeline.platforms.midjourney.adapter.referenceWorkflow, 'midjourney_edit_model');
