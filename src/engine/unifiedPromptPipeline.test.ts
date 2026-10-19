@@ -202,7 +202,11 @@ const carSeatById = compileUnifiedPromptPipeline({
   lightingMode: 'إضاءة الشارع عبر زجاج السيارة',
 });
 assert.match(carSeatById.platforms.chatgpt.prompt, /Inside the vehicle:/);
-assert.match(carSeatById.platforms.chatgpt.prompt, /headrest, pillars and dashboard/);
+assert.match(carSeatById.platforms.chatgpt.prompt, /seatback\/headrest behind/);
+assert.match(carSeatById.platforms.chatgpt.prompt, /LEFT driver seat/);
+assert.match(carSeatById.platforms.chatgpt.prompt, /2017 Range Rover Sport L494 pre-facelift/);
+assert.match(carSeatById.platforms.chatgpt.prompt, /single|one central infotainment touchscreen/i);
+assert.doesNotMatch(carSeatById.platforms.chatgpt.prompt, /ordinary modern sedan or SUV/);
 assert.doesNotMatch(carSeatById.platforms.chatgpt.prompt, /Outside beside the parked vehicle:/);
 
 const carOutsideById = compileUnifiedPromptPipeline({
@@ -224,6 +228,37 @@ const carOutsideFreeText = compileUnifiedPromptPipeline({
   lightingMode: 'إنارة موقف ليلي بجانب السيارة',
 });
 assert.equal(carOutsideFreeText.manifest.resolved.physicalState.bodyOrientation.includes('bucket seat'), false);
+const rangeRoverExternalNight = compileUnifiedPromptPipeline({
+  ...base, sceneFamily: 'car', subScene: 'car_beside_driver_door',
+  pose: 'جالس في مقعد السائق', activity: 'واقف بشكل طبيعي',
+  lightingMode: 'ضوء نهاري طبيعي', timeOfDay: 'night'
+});
+assert.equal(rangeRoverExternalNight.manifest.resolved.state.pose, 'واقف بجانب السيارة');
+assert.equal(rangeRoverExternalNight.manifest.resolved.state.lightingMode, 'إنارة موقف ليلي بجانب السيارة');
+assert.match(rangeRoverExternalNight.platforms.gemini.prompt, /Fuji White/);
+assert.match(rangeRoverExternalNight.platforms.gemini.prompt, /pre-facelift/);
+assert.match(rangeRoverExternalNight.platforms.gemini.prompt, /Headlights, taillights and dashboard stay OFF unless explicitly requested/);
+assert.doesNotMatch(rangeRoverExternalNight.platforms.gemini.prompt, /full outdoor daylight|headrest, pillars and dashboard/i);
+
+const rangeRoverPassenger = compileUnifiedPromptPipeline({
+  ...base, sceneFamily: 'car', subScene: 'car_front_passenger',
+  pose: 'واقف', timeOfDay: 'night',
+  lightingMode: 'إنارة موقف ليلي بجانب السيارة'
+});
+assert.equal(rangeRoverPassenger.manifest.resolved.state.pose, 'جالس في مقعد الراكب');
+assert.equal(rangeRoverPassenger.manifest.resolved.state.lightingMode, 'إضاءة الشارع عبر زجاج السيارة');
+assert.match(rangeRoverPassenger.platforms.chatgpt.prompt, /RIGHT front passenger seat/);
+assert.match(rangeRoverPassenger.platforms.chatgpt.prompt, /center console is to the LEFT/);
+assert.doesNotMatch(rangeRoverPassenger.platforms.chatgpt.prompt, /standing beside the parked car|2018\+ dual-stack touchscreens as a feature/i);
+
+const rangeRoverRear = compileUnifiedPromptPipeline({
+  ...base, sceneFamily: 'car', subScene: 'car_in_front_trunk',
+  pose: 'واقف بجانب السيارة', lightingMode: 'إنارة موقف ليلي بجانب السيارة',
+});
+assert.match(rangeRoverRear.platforms.gemini.prompt, /era-correct tailgate/);
+assert.doesNotMatch(rangeRoverRear.platforms.gemini.prompt, /front grille appearing behind the person as a feature/);
+assert.doesNotMatch(rangeRoverRear.platforms.gemini.prompt, /trunk lid/);
+
 assert.match(carOutsideFreeText.platforms.gemini.prompt, /Outside beside the parked vehicle:/);
 
 assert.match(pipeline.platforms.chatgpt.prompt, /21mm equivalent, f\/2\.0/);
