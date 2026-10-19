@@ -144,6 +144,7 @@ export function compileUltraShortPrompt(
       ? 'Use attached photo for exact facial identity, age, skin, beard and hairline only; no face reshaping.'
       : 'Natural, unretouched face.',
     '193cm, 83kg, lean-athletic.',
+    state.glassesMode === 'no_glasses' ? 'No glasses.' : state.glassesMode === 'wear_glasses' ? 'Black rectangular glasses.' : '',
     'Outfit: ' + tidy(semantic.outfit.split(/\.\s+/)[0], 165) + '.',
     'Expression: ' + tidy(semantic.expression.split(/\.\s+/)[0], 95) + '.',
     'Pose: ' + tidy(state.pose, 85) + '.',
