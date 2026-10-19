@@ -2337,7 +2337,13 @@ export const MICRO_LOCATIONS: Record<SceneFamilyId, MicroLocation[]> = {
 export function getMicroLocation(familyId: SceneFamilyId | null, subSceneIdentifier: string): MicroLocation | undefined {
   if (!familyId || !MICRO_LOCATIONS[familyId]) return undefined;
   const list = MICRO_LOCATIONS[familyId];
-  return list.find(m => m.id === subSceneIdentifier || m.labelAR === subSceneIdentifier) || list[0];
+  const selected = list.find(m => m.id === subSceneIdentifier || m.labelAR === subSceneIdentifier);
+  if (selected) return selected;
+  // Free-text car scenes must not silently become the first (interior) driver-seat preset.
+  if (familyId === 'car' && /خارج|بجانب|مواقف|outside|beside|parking/i.test(subSceneIdentifier)) {
+    return list.find(m => m.isOutdoor) || list[0];
+  }
+  return list[0];
 }
 
 export function getMicroLocationsForFamily(familyId: SceneFamilyId): MicroLocation[] {
