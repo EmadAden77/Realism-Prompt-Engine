@@ -246,6 +246,14 @@ assert.match(bedroomBedContact.platforms.chatgpt.prompt, /Mattress and pillow co
 const selectedGaze = compileUnifiedPromptPipeline({...base, gazeInteractionId: 'g6'});
 assert.match(selectedGaze.platforms.gemini.prompt, /Eyes focused on the phone screen rather than the lens/);
 
+const garmentSettings = compileUnifiedPromptPipeline({
+  ...base, shirtTuck: 'tucked', sleeveStyle: 'rolled-forearm',
+  shirtButtons: 'top-one-open',
+});
+assert.match(garmentSettings.platforms.chatgpt.prompt, /tuck: tucked/);
+assert.match(garmentSettings.platforms.chatgpt.prompt, /sleeves: rolled forearm/);
+assert.match(garmentSettings.platforms.chatgpt.prompt, /buttons: top one open/);
+
 const opticalMirror = compileUnifiedPromptPipeline({
   ...base, sceneFamily: 'bedroom', subScene: 'أمام المرآة',
   captureType: 'mirror-selfie', lightingMode: 'إضاءة أباجورة دافئة'
