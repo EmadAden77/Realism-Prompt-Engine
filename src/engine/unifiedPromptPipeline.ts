@@ -197,6 +197,7 @@ export function compileUltraShortPrompt(
         ? ' within ' + state.measuredGroupSpaceWidthMeters + 'm lateral space'
         : '')
       + '; natural shoulder clearance, one capturing phone.'
+      + (semantic.groupSelfie?.includes('Lateral space is constrained') ? ' Limited lateral shoulder space.' : '')
     : '';
   const homePeople = !state.groupSelfieEnabled
     && state.homeBackgroundPeopleMode && state.homeBackgroundPeopleMode !== 'none'
