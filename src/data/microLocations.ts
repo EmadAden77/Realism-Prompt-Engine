@@ -1,3 +1,5 @@
+import { isCarExteriorSubScene } from '../engine/carReality';
+
 export type SceneFamilyId = 'bedroom' | 'living-room' | 'saudi-outdoor' | 'gym' | 'car' | 'military-base';
 
 export type MicroLocationSpaceType = 'indoor' | 'outdoor' | 'semi-outdoor';
@@ -1329,9 +1331,9 @@ export const MICRO_LOCATIONS: Record<SceneFamilyId, MicroLocation[]> = {
     {
       id: 'car_driver_parked',
       labelAR: 'مقعد السائق والسيارة متوقفة',
-      environmentPrompt: 'interior driver seat of an ordinary modern sedan or SUV in Saudi Arabia, engine turned off, textured steering wheel with thumb grips, dashboard digital instrument cluster, center touchscreen display, textured seatbelt across chest, and front windshield showing ordinary Saudi residential street with boundary walls through glass',
+      environmentPrompt: 'interior driver seat of a stock 2017 pre-facelift Range Rover Sport L494, left-hand drive, in Saudi Arabia, engine turned off, textured steering wheel with thumb grips, 2017 instrument binnacle, center touchscreen display, textured seatbelt across chest, and front windshield showing ordinary Saudi residential street with boundary walls through glass',
       spatialBehavior: 'selfie arm reach (approx 45cm) from driver seat, smartphone held naturally at chest-to-eye level, steering wheel rim and dashboard visible in lower frame, headrest directly behind head',
-      backgroundElements: ['textured steering wheel with thumb grips', 'dashboard digital gauge cluster screen', 'center console touchscreen with AC dials', 'seatbelt webbing across shoulder', 'windshield view of residential villa wall through glass'],
+      backgroundElements: ['textured steering wheel with thumb grips', 'period-correct instrument binnacle', 'single upper center infotainment screen and separate physical climate dials', 'seatbelt webbing across shoulder', 'windshield view of residential villa wall through glass'],
       activity: 'car parked in residential bay, complete vehicle stillness and private cabin moment',
       lightingHints: 'soft diffused daylight entering through front windshield and driver side window, subtle reflections on gauge glass',
       isOutdoor: false
@@ -1339,7 +1341,7 @@ export const MICRO_LOCATIONS: Record<SceneFamilyId, MicroLocation[]> = {
     {
       id: 'car_driver_behind_wheel',
       labelAR: 'مقعد السائق أمام المقود',
-      environmentPrompt: 'classic driver perspective behind the steering wheel, hands resting naturally on the steering wheel rim, steering column stalks, padded vinyl dashboard with AC vents, rearview mirror at top edge, sun visor folded up, and windshield view of quiet Saudi neighborhood street',
+      environmentPrompt: 'classic driver perspective behind the steering wheel, free hand may rest lightly on the steering wheel rim while the other holds the selfie phone, steering column stalks, padded vinyl dashboard with AC vents, rearview mirror at top edge, sun visor folded up, and windshield view of quiet Saudi neighborhood street',
       spatialBehavior: 'eye-level chest-up selfie from driver seat, authentic in-cabin geometry with headrest behind shoulders, no impossible floating camera angles',
       backgroundElements: ['steering wheel upper rim and center horn pad', 'rearview mirror in upper frame', 'soft-touch vinyl dashboard with AC vents', 'driver seat headrest behind shoulders', 'windshield view of quiet residential street and parked car'],
       activity: 'momentary pause before driving, focused calm posture behind wheel',
@@ -1379,7 +1381,7 @@ export const MICRO_LOCATIONS: Record<SceneFamilyId, MicroLocation[]> = {
     {
       id: 'car_front_passenger',
       labelAR: 'المقعد الأمامي للراكب',
-      environmentPrompt: 'front passenger seat interior perspective, clean passenger dashboard with airbag seam, textured passenger seatbelt across shoulder, center console cup holders and transmission shifter visible to the right, and passenger door panel',
+      environmentPrompt: 'front passenger seat interior perspective, clean passenger dashboard with airbag seam, textured passenger seatbelt across shoulder, center console and gear controls to the left of the front passenger, and passenger door panel',
       spatialBehavior: 'camera held from front passenger position, diagonal view across cabin toward driver side or straight on passenger seat, natural in-seat perspective',
       backgroundElements: ['passenger front dashboard and glovebox seam', 'center console transmission selector and armrest', 'passenger sun visor with vanity mirror lid', 'passenger door armrest and air vent', 'front passenger headrest'],
       activity: 'passenger relaxing during drive or waiting while driver runs a quick errand',
@@ -1399,9 +1401,9 @@ export const MICRO_LOCATIONS: Record<SceneFamilyId, MicroLocation[]> = {
     {
       id: 'car_rear_seat',
       labelAR: 'المقعد الخلفي',
-      environmentPrompt: 'sitting in the comfortable rear passenger bench seat of an ordinary sedan or SUV, back of front seat headrests in near field, side rear door panel with power window button, rear quarter window, and wide spacious cabin depth',
+      environmentPrompt: 'sitting in the rear passenger bench seat of a 2017 Range Rover Sport L494, back of front seat headrests in near field, side rear door panel with power window button, rear quarter window, and wide spacious cabin depth',
       spatialBehavior: 'camera positioned in the rear seat, front seatbacks creating natural interior framing and authentic depth layers',
-      backgroundElements: ['back of front driver and passenger seats with storage pouches', 'rear door window with subtle sunshade or tint', 'center ceiling rear dome light fixture', 'rear seatbelt webbing across chest', 'front cabin dashboard seen in distance'],
+      backgroundElements: ['backs of the actual front seats with trim and pockets only if present', 'rear door window with subtle sunshade or tint', 'center ceiling rear dome light fixture', 'rear seatbelt webbing across chest', 'front cabin dashboard seen in distance'],
       activity: 'rear passenger riding along or resting in back seat, relaxed commuter vibe',
       lightingHints: 'deep ambient cabin shade, light streaming in from front windshield far ahead and rear side windows',
       isOutdoor: false
@@ -1413,7 +1415,7 @@ export const MICRO_LOCATIONS: Record<SceneFamilyId, MicroLocation[]> = {
       spatialBehavior: 'standing three-quarter turn outside the car, car body forming immediate background and contact plane',
       backgroundElements: ['car door panel reflecting residential street scene', 'exterior door handle and lock sensor', 'car roofline and tinted side glass', 'car alloy wheel and black tire with slight road dust', 'asphalt pavement with concrete curb'],
       activity: 'standing beside vehicle after parking, casual everyday candid snapshot',
-      lightingHints: 'full outdoor daylight, glossy curved vehicle metal reflecting ambient sky and warm ground tones',
+      lightingHints: 'real sky reflections by day or localized practical-lamp reflections at night, never self-lit body paint',
       isOutdoor: true
     },
     {
@@ -1423,7 +1425,7 @@ export const MICRO_LOCATIONS: Record<SceneFamilyId, MicroLocation[]> = {
       spatialBehavior: 'close contact with driver door exterior, vehicle geometry anchoring one side of frame',
       backgroundElements: ['driver exterior door handle and keyhole', 'driver side view mirror with turn signal blinker', 'front driver window glass with sky reflection', 'car front fender seam and hood line', 'pavement curbside with subtle accumulated sand'],
       activity: 'driver preparing to unlock vehicle or pausing after arrival',
-      lightingHints: 'outdoor daylight with specular reflection on side glass and mirror casing',
+      lightingHints: 'realistic day-sky or selected night-fixture reflection on side glass and mirror casing',
       isOutdoor: true
     },
     {
@@ -1433,7 +1435,7 @@ export const MICRO_LOCATIONS: Record<SceneFamilyId, MicroLocation[]> = {
       spatialBehavior: 'candid posture angled toward camera in front of vehicle hood and headlight, car extending diagonally behind',
       backgroundElements: ['car front headlight assembly with clear plastic lens', 'front grille and manufacturer emblem', 'sloping metal hood surface with subtle reflections', 'front bumper and Saudi registration plate', 'residential villa wall and asphalt backdrop'],
       activity: 'standing casually near vehicle after parking on neighborhood street',
-      lightingHints: 'bright sun highlights glinting off headlight reflector and metallic hood paint',
+      lightingHints: 'headlamp-lens and white-hood reflections from the actual chosen daylight or nighttime fixtures',
       isOutdoor: true
     },
     {
@@ -1459,9 +1461,9 @@ export const MICRO_LOCATIONS: Record<SceneFamilyId, MicroLocation[]> = {
     {
       id: 'car_in_front_trunk',
       labelAR: 'أمام صندوق السيارة',
-      environmentPrompt: 'standing at the rear of the vehicle directly behind the trunk lid, rear Saudi license plate in recess, trunk release button, rear bumper sill, parking space asphalt with concrete curb, and villa wall in background',
+      environmentPrompt: 'standing at the rear of the Range Rover Sport directly behind its liftgate, rear Saudi license plate in recess, tailgate release switch, rear bumper sill, parking space asphalt with concrete curb, and villa wall in background',
       spatialBehavior: 'centered behind vehicle rear, vehicle width spanning behind subject with plausible depth',
-      backgroundElements: ['car trunk lid and rear emblem', 'Saudi rear vehicle plate with Arabic and Latin characters', 'rear bumper sill protector', 'lower rear bumper and exhaust tip', 'parking bay line on asphalt'],
+      backgroundElements: ['SUV liftgate and period-correct rear badging', 'Saudi rear vehicle plate with Arabic and Latin characters', 'rear bumper sill protector', 'lower rear bumper and exhaust tip', 'parking bay line on asphalt'],
       activity: 'loading or unloading groceries or gym bag, routine everyday errand',
       lightingHints: 'overhead outdoor light casting shadow under rear bumper overhang',
       isOutdoor: true
@@ -1473,17 +1475,17 @@ export const MICRO_LOCATIONS: Record<SceneFamilyId, MicroLocation[]> = {
       spatialBehavior: 'wide spatial depth, standing beside car with distant parking lot rows receding into background',
       backgroundElements: ['car parked in designated stall', 'adjacent parked family vehicle', 'white painted stall lines on asphalt', 'distant building boundary wall and minaret silhouette', 'open cloudless desert sky'],
       activity: 'returning to car after Friday prayer or supermarket run',
-      lightingHints: 'full unimpeded 360-degree desert daylight, bright ground radiosity bounce from asphalt',
+      lightingHints: 'daylight from the real open sky in daytime; installed parking lights only when the time and selected lighting allow them',
       isOutdoor: true
     },
     {
       id: 'car_shaded_parking_bay',
       labelAR: 'بجانب السيارة تحت مظلة',
-      environmentPrompt: 'car parked beneath an arched tensile fabric parking shade, steel canopy frame, cool diffused blue-grey shadow under the shade, sunny asphalt with tire marks visible beyond, and concrete wheel stop',
+      environmentPrompt: 'car parked beneath an arched tensile fabric parking shade, steel canopy frame, cool diffused blue-grey shadow under the shade, asphalt with real tire marks visible beyond; sunlit only during daylight, and concrete wheel stop',
       spatialBehavior: 'standing beside car under canopy structure, defined shade envelope surrounding subject',
-      backgroundElements: ['curved tensile parking canopy overhead', 'steel support pillar with mounting bolts', 'car body bathed in soft shade', 'bright hot sunlight just past the canopy edge', 'concrete tire stop with tire scuffs'],
+      backgroundElements: ['curved tensile parking canopy overhead', 'steel support pillar with mounting bolts', 'car body bathed in soft shade', 'brighter pavement beyond the canopy only when it is daytime', 'concrete tire stop with tire scuffs'],
       activity: 'sheltered from summer sun beside car, comfortable outdoor pause',
-      lightingHints: 'diffused cool skylight under canopy, no harsh facial squinting, bright background blowout',
+      lightingHints: 'physical canopy shade with sky light by day, or actual installed fixture spill after dark; no invented bright sky',
       isOutdoor: true
     },
     {
@@ -1501,9 +1503,9 @@ export const MICRO_LOCATIONS: Record<SceneFamilyId, MicroLocation[]> = {
       labelAR: 'السيارة بجانب رصيف سكني',
       environmentPrompt: 'car parked parallel along the concrete curb of an ordinary Saudi residential villa street, concrete sidewalk pavers, low boundary wall of a villa with iron gate, asphalt road with faint sand dusting, and quiet neighborhood atmosphere',
       spatialBehavior: 'standing between the curbside car door and the residential sidewalk, suburban intimacy',
-      backgroundElements: ['curbside parked sedan', 'black and yellow painted concrete curb', 'residential sidewalk pavers', 'residential perimeter wall and metal gate', 'clean residential asphalt street'],
+      backgroundElements: ['curbside parked 2017 Range Rover Sport L494', 'black and yellow painted concrete curb', 'residential sidewalk pavers', 'residential perimeter wall and metal gate', 'clean residential asphalt street'],
       activity: 'arriving at family home, calm neighborhood stillness',
-      lightingHints: 'soft street daylight, natural wall bounce onto car and subject',
+      lightingHints: 'daytime wall bounce or localized real street/parking fixtures at night, matching the selected clock',
       isOutdoor: true
     },
     {
@@ -1519,11 +1521,11 @@ export const MICRO_LOCATIONS: Record<SceneFamilyId, MicroLocation[]> = {
     {
       id: 'car_night_quiet_parking',
       labelAR: 'السيارة في موقف ليلي هادئ',
-      environmentPrompt: 'car parked at nighttime in a peaceful neighborhood parking pocket, sodium-vapor or warm LED street lamps casting amber glow, car interior dashboard dials softly illuminated, and quiet night air',
-      spatialBehavior: 'nighttime portrait beside or inside parked car, ambient night atmosphere with physically plausible illumination',
+      environmentPrompt: 'car parked at nighttime in a peaceful neighborhood parking pocket, sodium-vapor or warm LED street lamps casting amber glow, dark vehicle cabin with dashboard only lit when the selected lighting mode actually powers it, and quiet night air',
+      spatialBehavior: 'nighttime exterior portrait beside the parked car, ambient night atmosphere with physically plausible illumination',
       backgroundElements: ['car exterior under warm street lamp', 'amber/yellow street light pool on asphalt', 'car illuminated dashboard glow visible through glass', 'dark residential silhouettes in distance', 'deep dark night sky'],
       activity: 'late night pause, quiet contemplative moment after evening drive',
-      lightingHints: 'warm directional street lamp from above casting rich amber highlights and long dramatic night shadows, glowing car headlights or taillights',
+      lightingHints: 'warm directional street lamp from above casting rich amber highlights and long dramatic night shadows, headlights and taillights remain off unless explicitly selected',
       isOutdoor: true
     }
   ],
@@ -2340,8 +2342,14 @@ export function getMicroLocation(familyId: SceneFamilyId | null, subSceneIdentif
   const selected = list.find(m => m.id === subSceneIdentifier || m.labelAR === subSceneIdentifier);
   if (selected) return selected;
   // Free-text car scenes must not silently become the first (interior) driver-seat preset.
-  if (familyId === 'car' && /خارج|بجانب|مواقف|outside|beside|parking/i.test(subSceneIdentifier)) {
-    return list.find(m => m.isOutdoor) || list[0];
+  if (familyId === 'car') {
+    const outside = isCarExteriorSubScene(subSceneIdentifier);
+    if (outside) {
+      if (/رفرف|fender/i.test(subSceneIdentifier)) return list.find(m => m.id === 'car_near_front_fender') || list[0];
+      if (/باب السائق|driver door/i.test(subSceneIdentifier)) return list.find(m => m.id === 'car_beside_driver_door') || list[0];
+      if (/صندوق|tailgate|trunk/i.test(subSceneIdentifier)) return list.find(m => m.id === 'car_in_front_trunk') || list[0];
+      return list.find(m => m.id === 'car_outside_beside_door_closed') || list[0];
+    }
   }
   return list[0];
 }
