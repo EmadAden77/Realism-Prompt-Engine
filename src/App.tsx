@@ -1247,7 +1247,9 @@ export default function PhysFrameApp() {
         lensCondition: 'xiaomi-clean',
         clothingCondition: 'worn-all-day',
         atmosphericCondition: 'neutral',
-        foregroundObstruction: 'through-glass',
+        // Front camera is inside the cabin: windows belong in the background,
+        // never as an impossible sheet of glass between phone and face.
+        foregroundObstruction: 'clean',
         realismStyle: 'anti-ai-raw',
         muscleFatigue: 'bloodshot-sclera',
         lightingIntensity: 35,
