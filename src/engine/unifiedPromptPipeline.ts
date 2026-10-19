@@ -1,4 +1,6 @@
 import { resolveBedroomSelfieActivity } from './bedroomSelfieAffordances';
+import { getMicroLocation } from '../data/microLocations';
+import { getPhysicalLightingOption } from '../data/physicalLighting';
 import { exportCausalAttestationLedger, type CausalLedgerEntry } from './promptCompiler';
 import { planSpatialComposition, type SpatialCompositionPlan } from './spatialCompositionPlanner';
 import { createSceneManifest, deriveCausalHairExpression, type SceneManifest } from './causalPipeline';
@@ -7,6 +9,7 @@ import {
   validateScene,
   type PromptValidationResult,
   type SceneState,
+  type DerivedPhysicalState,
   type ValidationResult,
 } from './physicsEngine';
 import {
@@ -124,58 +127,113 @@ const reconcileSharedNegative = (
 };
 
 /**
- * Export a deliberately short visual instruction. The fully detailed neutral
- * prompt and provenance remain available for diagnostics and auditing.
- * Do not copy long physics explanations or hidden scene-control metadata.
+ * Export a compact, physically grounded image prompt.
+ *
+ * Keep the canonical resolved scene as the only source of camera, location and
+ * light facts. Brief visual constraints must never contradict those facts.
+ * The verbose causal audit is kept in neutral/diagnostics, not sent to models.
  */
 export function compileUltraShortPrompt(
   state: SceneState,
-  semantic: SemanticPromptScene
+  semantic: SemanticPromptScene,
+  physical?: DerivedPhysicalState
 ): string {
-  const tidy = (value: string, limit: number): string => {
+  const compact = (value: string, limit = 180): string => {
     const normalized = value.replace(/\s+/g, ' ').trim();
     if (normalized.length <= limit) return normalized;
-    const slice = normalized.slice(0, limit);
-    return slice.slice(0, Math.max(slice.lastIndexOf(' '), limit - 24)).trim().replace(/[,;:.]$/, '');
+    const cut = normalized.slice(0, limit);
+    const boundary = cut.lastIndexOf(' ');
+    return cut.slice(0, boundary > limit * 0.65 ? boundary : limit)
+      .trim().replace(/[,;:.]$/, '');
   };
+
+  const micro = getMicroLocation(state.sceneFamily, state.subScene);
+  const lightOption = state.sceneFamily
+    ? getPhysicalLightingOption(state.sceneFamily, state.lightingMode)
+    : undefined;
+  const screenOnly = lightOption?.model === 'phone-screen'
+    || /شاشة الهاتف.*فقط|phone[- ]?screen.*only/i.test(state.lightingMode);
+  const phoneFlash = /فلاش|flash/i.test(state.lightingMode) && !screenOnly;
   const interactive = resolveBedroomSelfieActivity(state);
-  const selectedHair = semantic.hair.match(/Selected hairstyle:\s*([^.]*)\./i)?.[1] || '';
-  const groupConstraint = semantic.groupSelfie?.includes('Lateral space is constrained')
-    ? 'Limited lateral shoulder space.'
+  const hairstyle = semantic.hair.match(/Selected hairstyle:\s*([^.]*)\./i)?.[1] || '';
+  const expression = semantic.expression.split(/\.\s+/)[0];
+  const outfit = semantic.outfit.split(/\. LOCKED COMPLETE OUTFIT:/)[0];
+  const outdoorCar = state.sceneFamily === 'car' && (micro?.isOutdoor
+    || /خارج|بجانب|مواقف|outside|beside|parking/i.test(state.subScene));
+  const carStatement = state.sceneFamily !== 'car'
+    ? ''
+    : outdoorCar
+      ? 'Outside beside the parked vehicle: feet on ground, exterior side panels and window reflections; no cabin seating.'
+      : 'Inside the vehicle: seated in the chosen seat, real headrest, pillars and dashboard only where visible; no outside-standing pose.';
+  const microDetails = micro?.environmentPrompt
+    ? compact(micro.environmentPrompt.split(',').slice(0, 3).join(', '), 160)
     : '';
-  const parts = [
-    'Photorealistic vertical 9:16 smartphone photo.',
+  const cameraDistance = physical?.cameraDistance.match(/(\d{2,3}(?:-\d{2,3})?)\s*cm/i)?.[1];
+  const angleNumber = (value?: string): string => value?.match(/-?\d+(?:\.\d+)?°/)?.[0] || '';
+  const angles = physical
+    ? [angleNumber(physical.cameraPitch), angleNumber(physical.cameraYaw), angleNumber(physical.cameraRoll)]
+    : [];
+  const camera = state.captureType === 'front-selfie'
+    ? 'Xiaomi 15 Ultra front camera, 21mm equivalent, f/2.0, '
+      + (cameraDistance ? cameraDistance + 'cm handheld reach' : 'natural one-arm reach')
+      + (angles.every(Boolean) ? ', pitch/yaw/roll ' + angles.join('/') : '')
+      + '. One connected phone-holding arm, camera outside the frame; natural wide-angle foreshortening, no floating viewpoint.'
+    : state.captureType === 'mirror-selfie'
+      ? 'Single real phone visible in one flat-mirror reflection, correct hand and reflection geometry; no duplicate phone.'
+      : 'Eye-level candid observer camera, no raised selfie arm or impossible perspective.';
+  const lighting = screenOnly
+    ? 'Only the phone screen lights face and near fingers; rapid falloff below upper chest, nearly black surroundings, no ceiling/bedside/vehicle/flash or invisible fill.'
+    : phoneFlash
+      ? 'Only the selected physical flash and credible ambient fixtures; hard near-axis highlights, coherent cast shadows and darker background.'
+      : lightOption
+        ? compact(lightOption.detail, 178)
+        : 'Light source: ' + compact(state.lightingMode, 65) + '; all highlights and shadows must trace to a real source.';
+  const contact = physical?.occlusions?.[0]
+    ? 'Occlusion: ' + compact(physical.occlusions[0], 108) + '.'
+    : '';
+  const group = state.groupSelfieEnabled
+    ? 'Group selfie of ' + (state.groupSelfieSize || 2) + ' distinct people'
+      + (state.measuredGroupSpaceWidthMeters
+        ? ' within ' + state.measuredGroupSpaceWidthMeters + 'm lateral space'
+        : '')
+      + '; natural shoulder clearance, one capturing phone.'
+    : '';
+  const homePeople = !state.groupSelfieEnabled
+    && state.homeBackgroundPeopleMode && state.homeBackgroundPeopleMode !== 'none'
+    && state.homeBackgroundCount
+      ? 'Background: ' + state.homeBackgroundCount + ' ' + state.homeBackgroundPeopleMode
+        + ' with distinct, non-cloned faces only where framing permits.'
+      : '';
+  const pieces = [
+    'Photorealistic vertical 9:16, unedited smartphone photograph.',
     state.referenceImageId
-      ? 'Use attached photo for exact facial identity, age, skin, beard and hairline only; no face reshaping.'
-      : 'Natural, unretouched face.',
-    '193cm, 83kg, lean-athletic.',
-    state.glassesMode === 'no_glasses' ? 'No glasses.' : state.glassesMode === 'wear_glasses' ? 'Black rectangular glasses.' : '',
-    'Outfit: ' + tidy(semantic.outfit.split(/\.\s+/)[0], 165) + '.',
-    'Expression: ' + tidy(semantic.expression.split(/\.\s+/)[0], 95) + '.',
-    selectedHair ? 'Hair: ' + tidy(selectedHair, 60) + '; original hairline/density.' : '',
-    'Pose: ' + tidy(state.pose, 85) + '.',
-    state.activity ? 'Activity: ' + tidy(state.activity, 85) + '.' : '',
-    interactive.status === 'ready' && interactive.activity
-      ? 'Interaction: ' + tidy(interactive.activity.contact, 105) + '.'
+      ? 'Reference photo fixes exact facial identity, age, skull, eyes, nose, jaw, beard, skin tone/asymmetry and original hairline/density; never reshape or beautify.'
+      : 'Natural unretouched face; do not invent reference-only identity details.',
+    'Male, 193cm, 83kg, lean-athletic.',
+    state.glassesMode === 'no_glasses' ? 'No glasses.'
+      : state.glassesMode === 'wear_glasses' ? 'Black rectangular eyeglasses.'
+        : state.referenceImageId ? 'Eyewear follows reference.' : '',
+    'Outfit: ' + compact(outfit, 240) + '. Keep all chosen garments/colors; true seams, weave, gravity folds and contact creases.',
+    'Expression: ' + compact(expression, 105) + '.',
+    hairstyle ? 'Hair: ' + compact(hairstyle, 80) + '; preserve reference hairline and density.' : '',
+    'Pose: ' + compact(state.pose, 115) + '.',
+    state.activity ? 'Action: ' + compact(state.activity, 90) + '.' : '',
+    interactive.status === 'ready'
+      ? 'Hand/prop contact: ' + compact(interactive.activity.contact, 135) + '.'
       : '',
-    state.groupSelfieEnabled
-      ? 'Group selfie: ' + (state.groupSelfieSize || 2) + ' people, distinct faces, realistic shoulder spacing. ' + groupConstraint
-      : '',
-    'Scene: ' + tidy(state.subScene || state.sceneFamily || 'Saudi setting', 100) + '.',
-    state.sceneFamily === 'car'
-      ? (/داخل|مقعد|مقود|راكب/.test(state.subScene) && !/خارج|بجانب|مواقف/.test(state.subScene)
-        ? 'Inside a stationary car, natural seat and steering-wheel geometry.'
-        : 'Beside a parked car, natural exterior perspective; no cabin pose.')
-      : '',
-    state.captureType === 'front-selfie'
-      ? 'Handheld front-camera selfie, believable arm reach and wide-angle perspective.'
-      : tidy(semantic.captureMechanics.split(/\.\s+/)[0], 105) + '.',
-    (state.timeOfDay === 'night' ? 'Night' : state.timeOfDay) +
-      ', light: ' + tidy(state.lightingMode, 72) + '.',
-    'Real phone-camera grain, plausible shadows, no CGI or beauty filter.',
+    'Setting: ' + compact(micro?.labelAR || state.subScene || 'ordinary Saudi scene', 90) + '.',
+    microDetails ? 'Visible scene: ' + microDetails + '.' : '',
+    carStatement,
+    camera,
+    contact,
+    group,
+    homePeople,
+    'Time: ' + state.timeOfDay + '. Lighting: ' + lighting,
+    screenOnly ? 'Expose for the near face without raising distant background; deep natural shadows remain.' : 'Real-source direction, occlusion, distance falloff and weaker bounce; no unexplained rim/fill light.',
+    'Same camera exposure and noise across face, clothing and background; real skin microtexture, restrained HDR, imperfect white balance, natural sensor grain, no fake bokeh, CGI or skin smoothing.'
   ];
-  return parts.filter(Boolean).join(' ');
-};
+  return pieces.filter(Boolean).join(' ');
+}
 
 const compilePlatformAdapter = (
   target: UnifiedPromptTarget,
@@ -278,7 +336,7 @@ export function compileUnifiedPromptPipeline(
     manifest.knowledgeDecisions
   );
 
-  const shortPrompt = compileUltraShortPrompt(resolved.state, semantic);
+  const shortPrompt = compileUltraShortPrompt(resolved.state, semantic, resolved.physicalState);
 
   const chatgptAdapter = compilePlatformAdapter(
     'chatgpt',
