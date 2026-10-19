@@ -123,6 +123,46 @@ const reconcileSharedNegative = (
   };
 };
 
+/**
+ * Export a deliberately short visual instruction. The fully detailed neutral
+ * prompt and provenance remain available for diagnostics and auditing.
+ * Do not copy long physics explanations or hidden scene-control metadata.
+ */
+export function compileUltraShortPrompt(
+  state: SceneState,
+  semantic: SemanticPromptScene
+): string {
+  const tidy = (value: string, limit: number): string => {
+    const normalized = value.replace(/\\s+/g, ' ').trim();
+    if (normalized.length <= limit) return normalized;
+    const slice = normalized.slice(0, limit);
+    return slice.slice(0, Math.max(slice.lastIndexOf(' '), limit - 24)).trim().replace(/[,;:.]$/, '');
+  };
+  const parts = [
+    'Photorealistic vertical 9:16 smartphone photo.',
+    state.referenceImageId
+      ? 'Use attached photo for exact facial identity, age, skin, beard and hairline only; no face reshaping.'
+      : 'Natural, unretouched face.',
+    '193cm, 83kg, lean-athletic.',
+    'Outfit: ' + tidy(semantic.outfit.split(/\\.\\s+/)[0], 165) + '.',
+    'Expression: ' + tidy(semantic.expression.split(/\\.\\s+/)[0], 95) + '.',
+    'Pose: ' + tidy(state.pose, 85) + '.',
+    'Scene: ' + tidy(state.subScene || state.sceneFamily || 'Saudi setting', 100) + '.',
+    state.sceneFamily === 'car'
+      ? (/داخل|مقعد|مقود|راكب/.test(state.subScene) && !/خارج|بجانب|مواقف/.test(state.subScene)
+        ? 'Inside a stationary car, natural seat and steering-wheel geometry.'
+        : 'Beside a parked car, natural exterior perspective; no cabin pose.')
+      : '',
+    state.captureType === 'front-selfie'
+      ? 'Handheld front-camera selfie, believable arm reach and wide-angle perspective.'
+      : tidy(semantic.captureMechanics.split(/\\.\\s+/)[0], 105) + '.',
+    (state.timeOfDay === 'night' ? 'Night' : state.timeOfDay) +
+      ', light: ' + tidy(state.lightingMode, 72) + '.',
+    'Real phone-camera grain, plausible shadows, no CGI or beauty filter.',
+  ];
+  return parts.filter(Boolean).join(' ');
+};
+
 const compilePlatformAdapter = (
   target: UnifiedPromptTarget,
   neutralPrompt: string,
@@ -224,9 +264,11 @@ export function compileUnifiedPromptPipeline(
     manifest.knowledgeDecisions
   );
 
+  const shortPrompt = compileUltraShortPrompt(resolved.state, semantic);
+
   const chatgptAdapter = compilePlatformAdapter(
     'chatgpt',
-    neutral.text,
+    shortPrompt,
     manifest
   );
   const geminiAdapter = compilePlatformAdapter(
