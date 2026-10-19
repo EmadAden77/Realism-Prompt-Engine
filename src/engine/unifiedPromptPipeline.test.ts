@@ -184,14 +184,14 @@ const insideCar = compileUnifiedPromptPipeline({
   ...base, sceneFamily: 'car', subScene: 'داخل السيارة',
   pose: 'جالس في مقعد السائق', activity: 'السيارة متوقفة'
 });
-assert.match(insideCar.platforms.gemini.prompt, /Inside a stationary car/);
-assert.doesNotMatch(insideCar.platforms.gemini.prompt, /Beside a parked car/);
+assert.match(insideCar.platforms.gemini.prompt, /Inside the vehicle:/);
+assert.doesNotMatch(insideCar.platforms.gemini.prompt, /Outside beside the parked vehicle:/);
 const besideCar = compileUnifiedPromptPipeline({
   ...base, sceneFamily: 'car', subScene: 'بجانب السيارة في المواقف',
   pose: 'واقف بجانب باب السائق'
 });
-assert.match(besideCar.platforms.chatgpt.prompt, /Beside a parked car/);
-assert.doesNotMatch(besideCar.platforms.chatgpt.prompt, /Inside a stationary car/);
+assert.match(besideCar.platforms.chatgpt.prompt, /Outside beside the parked vehicle:/);
+assert.doesNotMatch(besideCar.platforms.chatgpt.prompt, /Inside the vehicle:/);
 
 // Exported prompts must inherit resolved physical decisions, not guess from Arabic text.
 const carSeatById = compileUnifiedPromptPipeline({
