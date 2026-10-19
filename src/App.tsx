@@ -51,6 +51,7 @@ import {
   verifyCausalFingerprint,
   validateExternalPromptCandidate,
 } from './engine/unifiedPromptPipeline';
+import { compileCompactPrompt, compileCompactNegativePrompt } from './engine/compactPrompt';
 import type { UnifiedConflictReport } from './engine/conflictValidator';
 import { analyzeAndRepairScene } from './engine/realismIntelligence';
 import {
@@ -1247,7 +1248,7 @@ export default function PhysFrameApp() {
         lensCondition: 'xiaomi-clean',
         clothingCondition: 'worn-all-day',
         atmosphericCondition: 'neutral',
-        foregroundObstruction: 'through-glass',
+        foregroundObstruction: 'clean',
         realismStyle: 'anti-ai-raw',
         muscleFatigue: 'bloodshot-sclera',
         lightingIntensity: 35,
@@ -1864,7 +1865,7 @@ export default function PhysFrameApp() {
       if (!enhancePipeline.diagnostics.anglePromptReady) {
         throw new Error('لا يمكن تعزيز أو إرسال برومبت دون أدلة هندسية كافية للكاميرا.');
       }
-      const base = enhancePipeline.platforms[targetEngine].prompt;
+      const base = compileCompactPrompt(enhancePipeline, targetEngine);
 
       const res = await fetch('/api/ai/enhance-prompt', {
         method: 'POST',
@@ -1883,7 +1884,7 @@ export default function PhysFrameApp() {
       }
       // Requests are asynchronous; never apply enhancement to another scene.
       const latest = compileUnifiedPromptPipeline(latestSceneRef.current as any);
-      if (latest.platforms[targetEngine].prompt !== base) {
+      if (compileCompactPrompt(latest, targetEngine) !== base) {
         showToast('تغير المشهد أثناء التعزيز؛ أعد التعزيز للإعدادات الحالية');
         return;
       }
@@ -1937,9 +1938,9 @@ export default function PhysFrameApp() {
     // Memoized authoritative engine path; modal changes cannot recompute scene physics.
     const pipeline = currentPromptPipeline;
     angleExportReady = pipeline.diagnostics.anglePromptReady && verifyCausalFingerprint(pipeline);
-    chatGPTPrompt = pipeline.platforms.chatgpt.prompt;
-    geminiPrompt = pipeline.platforms.gemini.prompt;
-    negativePrompt = pipeline.platforms.chatgpt.negativePrompt || pipeline.negative.text;
+    chatGPTPrompt = compileCompactPrompt(pipeline, 'chatgpt');
+    geminiPrompt = compileCompactPrompt(pipeline, 'gemini');
+    negativePrompt = compileCompactNegativePrompt(pipeline);
   }
 
   const currentEnhancedChatGPT = useEnhancedPrompt &&
