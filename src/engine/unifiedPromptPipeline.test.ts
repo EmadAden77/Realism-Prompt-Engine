@@ -180,6 +180,19 @@ assert.equal(
   pipeline.platforms.midjourney.prompt
 );
 
+const insideCar = compileUnifiedPromptPipeline({
+  ...base, sceneFamily: 'car', subScene: 'داخل السيارة',
+  pose: 'جالس في مقعد السائق', activity: 'السيارة متوقفة'
+});
+assert.match(insideCar.platforms.gemini.prompt, /Inside a stationary car/);
+assert.doesNotMatch(insideCar.platforms.gemini.prompt, /Beside a parked car/);
+const besideCar = compileUnifiedPromptPipeline({
+  ...base, sceneFamily: 'car', subScene: 'بجانب السيارة في المواقف',
+  pose: 'واقف بجانب باب السائق'
+});
+assert.match(besideCar.platforms.chatgpt.prompt, /Beside a parked car/);
+assert.doesNotMatch(besideCar.platforms.chatgpt.prompt, /Inside a stationary car/);
+
 const outfitChanged = compileUnifiedPromptPipeline({
   ...base,
   outfitId: 'navy_shirt_grey_trousers',
@@ -203,7 +216,7 @@ assert.equal(
 );
 assert.equal(pipeline.spatialPlan.regions[0].role, 'subject');
 assert.match(pipeline.semantic.visibleEnvironment, /Spatial composition:/);
-assert.match(pipeline.platforms.gemini.prompt, /Spatial composition:/);
+assert.match(pipeline.platforms.gemini.prompt, /Photorealistic vertical 9:16/);
 
 const closeSpatial = compileUnifiedPromptPipeline({
   ...base,
@@ -284,8 +297,9 @@ const bedroomWork = compileUnifiedPromptPipeline({
 });
 assert.equal(bedroomWork.diagnostics.anglePromptReady, true);
 assert.match(bedroomWork.semantic.poseAndContact, /free hand on laptop trackpad/);
-assert.match(bedroomWork.platforms.gemini.prompt, /INTERACTIVE BEDROOM SELFIE AT SHUTTER TIME/);
-assert.match(bedroomWork.platforms.chatgpt.prompt, /compact bedroom work desk/);
+assert.match(bedroomWork.semantic.poseAndContact, /INTERACTIVE BEDROOM SELFIE AT SHUTTER TIME/);
+assert.match(bedroomWork.platforms.gemini.prompt, /free hand on laptop trackpad/);
+assert.match(bedroomWork.semantic.poseAndContact, /compact bedroom work desk/);
 const incompatibleCapture = compileUnifiedPromptPipeline({
   ...base, sceneFamily: 'bedroom', subScene: 'قرب الجدار المقابل للسرير',
   bedroomSelfieActionId: 'desk-trackpad', captureType: 'mirror-selfie'
@@ -297,7 +311,7 @@ const mirrorInteraction = compileUnifiedPromptPipeline({
   ...base, sceneFamily: 'bedroom', subScene: 'أمام المرآة',
   bedroomSelfieActionId: 'mirror-collar', captureType: 'mirror-selfie'
 });
-assert.match(mirrorInteraction.platforms.gemini.prompt, /one real capturing smartphone/);
+assert.match(mirrorInteraction.semantic.poseAndContact, /one real capturing smartphone/);
 
 console.log('unifiedPromptPipeline tests passed');
 
@@ -332,13 +346,13 @@ const tightGroupPipeline = compileUnifiedPromptPipeline({
 });
 assert.equal(tightGroupPipeline.manifest.resolved.physicalState.groupSelfie?.shoulderClearance?.clearanceConstraint,'tight');
 assert.match(tightGroupPipeline.semantic.groupSelfie || '', /Lateral space is constrained/);
-assert.match(tightGroupPipeline.platforms.gemini.prompt, /Lateral space is constrained/);
+assert.match(tightGroupPipeline.platforms.gemini.prompt, /Limited lateral shoulder space/);
 const openGroupPipeline = compileUnifiedPromptPipeline({
   ...base, groupSelfieEnabled:true, groupSelfieSize:2,
   measuredGroupSpaceWidthMeters:3,
 });
 assert.equal(openGroupPipeline.manifest.resolved.physicalState.groupSelfie?.shoulderClearance?.clearanceConstraint,'open');
-assert.doesNotMatch(openGroupPipeline.platforms.gemini.prompt,/Lateral space is constrained/);
+assert.doesNotMatch(openGroupPipeline.platforms.gemini.prompt,/Limited lateral shoulder space/);
 
 const sourcedWidth = compileUnifiedPromptPipeline({
   ...base,groupSelfieEnabled:true,groupSelfieSize:4,
@@ -378,10 +392,10 @@ assert.doesNotMatch(unknownHair.platforms.chatgpt.prompt, /undefined/);
 
 const militaryHair = compileUnifiedPromptPipeline({...base, hairStyle:'h6'});
 assert.match(militaryHair.semantic.hair, /No automatic haircut is permitted/);
-assert.match(militaryHair.platforms.chatgpt.prompt, /do not perform a digital buzz cut/);
+assert.match(militaryHair.semantic.hair, /do not perform a digital buzz cut/);
 const noHairReference = compileUnifiedPromptPipeline({...base, referenceImageId:null, hairStyle:'h2'});
 assert.match(noHairReference.semantic.hair, /No visual hair reference is attached/);
 assert.doesNotMatch(noHairReference.semantic.hair, /Use the supplied reference to determine/);
 const referenceAwareHair = compileUnifiedPromptPipeline({...base, hairStyle:'h3'});
 assert.match(referenceAwareHair.semantic.hair, /If the chosen styling is incompatible/);
-assert.match(referenceAwareHair.platforms.gemini.prompt, /existing hair only/);
+assert.match(referenceAwareHair.semantic.hair, /existing hair only/);
