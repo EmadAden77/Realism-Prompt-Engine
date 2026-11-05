@@ -127,6 +127,8 @@ interface SceneState {
   cameraAngle: CameraAngle;
   pose: string;
   outfitId: string;
+  vehicleModel?: 'l494-2017' | 'l494-2022';
+  vehicleMotion?: 'parked' | 'moving' | 'unknown';
   outfitLocked: boolean;
   outfitWearStyle: OutfitWearStyle;
   garmentWearContext: GarmentWearContext;
@@ -3234,7 +3236,7 @@ export default function PhysFrameApp() {
                          </select>
                        </label>
                      </div>
-                     {resolvePhysicalConstraints(state).issues.map(issue => (
+                     {resolvePhysicalConstraints(state as unknown as import('./engine/physicalConsistency').SceneConstraintInput).issues.map(issue => (
                        <div key={issue.code} role="status" className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-[10px] text-amber-200">
                          <strong>{issue.severity}: {issue.code}</strong> — {issue.messageAR}
                          {issue.suggestedRepair && <div className="mt-1">{issue.suggestedRepair}</div>}
