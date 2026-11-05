@@ -480,6 +480,24 @@ export function compileUnifiedPromptPipeline(
     midjourneyPrompt: midjourney.prompt,
   });
 
+  // Surface deterministic constraint failures in the existing Arabic validation UI.
+  // Blocking issues must be visible alongside the existing conflict validator.
+  for (const issue of physicalConsistency.issues) {
+    const severity = issue.severity === 'BLOCKER' || issue.severity === 'ERROR' ? 'error' : 'warning';
+    const item = {
+      ruleId: 'physical:' + issue.code,
+      severity: severity as 'error' | 'warning',
+      code: issue.code,
+      message: issue.messageAR + (issue.suggestedRepair ? ' — ' + issue.suggestedRepair : ''),
+      affectedFields: issue.fields,
+      source: 'resolved-scene' as const,
+    };
+    conflictReport.results.push(item);
+    if (severity === 'error') conflictReport.errors.push(item);
+    else conflictReport.warnings.push(item);
+  }
+  if (physicalConsistency.hasBlocker) conflictReport.isValid = false;
+
   const causalLedger = exportCausalAttestationLedger(neutral.fragments,manifest.angleDecision?.decisionAuditTrail);
   const fingerprint = causalFingerprint({state:resolved.state, angle:manifest.angleDecision, prompt:neutral.text});
   return {
