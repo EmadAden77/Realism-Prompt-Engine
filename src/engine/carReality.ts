@@ -19,7 +19,7 @@ export function isCarExteriorSubScene(subScene: string, knownOutdoor?: boolean):
 export function carSeatView(subScene: string, pose = ''): CarView {
   const text = subScene + ' ' + pose;
   if (/rear_seat|المقعد الخلفي|rear seat/i.test(text)) return 'rear-passenger';
-  if (/front_passenger|الراكب|passenger/i.test(text)) return 'front-passenger';
+  if (/front[_ -]?passenger|(?:ال|لل)?راكب|passenger/i.test(text)) return 'front-passenger';
   if (/between_front_seats|بين المقعدين|front center/i.test(text)) return 'front-center';
   return 'driver';
 }
