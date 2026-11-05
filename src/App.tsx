@@ -37,6 +37,7 @@ import { MICRO_LOCATIONS, getMicroLocation, MicroLocation } from './data/microLo
 import { LIGHTING_CATALOG, compatiblePhysicalLighting, getPhysicalLightingOption } from './data/physicalLighting';
 import { OUTFITS, CLOTHING_CATEGORIES, filterClothingOutfits, OutfitItem } from './data/clothingOutfits';
 import { resolveScene } from './engine/physicsEngine';
+import type { BedroomCaptureConfig } from './engine/bedroomConstraintResolver';
 import {
   buildSmartSceneOptions,
   smartDependentPatch,
@@ -148,6 +149,7 @@ interface SceneState {
   bedroomSelfieActionId?: string;
   bedroomBedding?: import('./engine/bedroomRealismStudio').BedroomBedding;
   bedroomComposition?: import('./engine/bedroomRealismStudio').BedroomComposition;
+  bedroomCapture?: BedroomCaptureConfig;
 
   // Appearance & Accessories
   glassesMode: GlassesMode;
@@ -583,8 +585,27 @@ const DEFAULT_STATE: SceneState = {
   bedroomComposition: 'natural'
 };
 
+const DEFAULT_BEDROOM_CAPTURE: BedroomCaptureConfig = {
+  holdingHand: 'right',
+  hands: {right: 'holding_phone', left: 'touching_hair'},
+  microGesture: 'hair_touch',
+  camera: {deviceId: 'iPhone 15 Pro', module: 'front', lensToFaceCm: 55},
+  body: {heightCm: 193, weightKg: 83, type: 'lean_athletic'},
+  pose: 'pillow_supported', pillow: 'fiber', mattress: 'soft',
+  lighting: {mode: 'phone_screen_only', activeSources: ['phone_screen'], lampVisible: true, lampOn: false, dustBeam: false},
+  clothing: {top: 'warm light-gray cotton T-shirt', bottom: 'matching lounge sweatpants',fabric: 'cotton',fit: 'loose'},
+  framing: 'chest-up'
+};
+
 export default function PhysFrameApp() {
   const [state, setState] = useState<SceneState>(DEFAULT_STATE);
+  const updateBedroomCapture = (patch: Partial<BedroomCaptureConfig>) => {
+    setState(prev => ({
+      ...prev,
+      bedroomCapture: {...DEFAULT_BEDROOM_CAPTURE, ...prev.bedroomCapture, ...patch}
+    }));
+  };
+
   const [showAllSceneOptions, setShowAllSceneOptions] = useState(false);
   const [clothingCategory, setClothingCategory] = useState('all');
   const [clothingSearch, setClothingSearch] = useState('');
@@ -2467,6 +2488,79 @@ export default function PhysFrameApp() {
                       انضغاط المرتبة لا يظهر إلا حيث يلامسها الجسم، والإضاءة تأتي من مصباح أو نافذة حقيقية،
                       والكاميرا لا تتجاوز طول الذراع ولا تكشف أجزاء مستحيلة من الغرفة.
                     </p>
+                  </section>
+                )}
+
+                {state.sceneFamily === 'bedroom' && state.captureType === 'front-selfie' && (
+                  <section className="bg-[var(--bg-card)] p-4 rounded-2xl border border-[var(--border)] space-y-3">
+                    <h3 className="text-xs font-bold text-white">🧩 قيود السيلفي الدقيقة</h3>
+                    <label className="flex items-center gap-2 text-xs">
+                      <input type="checkbox" checked={!!state.bedroomCapture}
+                        onChange={e => setState(prev => ({...prev, bedroomCapture: e.target.checked ? {...DEFAULT_BEDROOM_CAPTURE} : undefined}))}/>
+                      تفعيل التحقق من اليدين والكاميرا والإضاءة لهذا المشهد
+                    </label>
+                    {state.bedroomCapture && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <label className="text-[11px]">اليد الحاملة
+                          <select className="w-full bg-black/20 border border-[var(--border)] rounded-lg p-2"
+                            value={state.bedroomCapture.holdingHand}
+                            onChange={e => {
+                              const hand = e.target.value as 'left'|'right';
+                              updateBedroomCapture({holdingHand:hand,hands:{
+                                [hand]:'holding_phone',
+                                [hand==='right'?'left':'right']:state.bedroomCapture?.microGesture==='hair_touch'?'touching_hair':'resting'
+                              } as BedroomCaptureConfig['hands']});
+                            }}>
+                            <option value="right">اليمنى</option><option value="left">اليسرى</option>
+                          </select>
+                        </label>
+                        <label className="text-[11px]">حركة اليد الحرة
+                          <select className="w-full bg-black/20 border border-[var(--border)] rounded-lg p-2"
+                            value={state.bedroomCapture.microGesture || 'none'}
+                            onChange={e => {
+                              const gesture=e.target.value as 'hair_touch'|'none';
+                              const free=state.bedroomCapture!.holdingHand==='right'?'left':'right';
+                              updateBedroomCapture({microGesture:gesture,hands:{...state.bedroomCapture!.hands,[free]:gesture==='hair_touch'?'touching_hair':'resting'}});
+                            }}>
+                            <option value="hair_touch">لمس الشعر</option><option value="none">استرخاء</option>
+                          </select>
+                        </label>
+                        <label className="text-[11px]">الوضعية
+                          <select className="w-full bg-black/20 border border-[var(--border)] rounded-lg p-2"
+                            value={state.bedroomCapture.pose}
+                            onChange={e => updateBedroomCapture({pose:e.target.value as BedroomCaptureConfig['pose']})}>
+                            {(['supine','left_side','right_side','reclined','semi_reclined','prone','sitting','headboard_sitting','elbow_supported','pillow_supported'] as const).map(p=><option key={p} value={p}>{p}</option>)}
+                          </select>
+                        </label>
+                        <label className="text-[11px]">بعد العدسة عن الوجه (سم)
+                          <input aria-label="بعد العدسة عن الوجه" type="number" min="20" max="90" step="1"
+                            className="w-full bg-black/20 border border-[var(--border)] rounded-lg p-2"
+                            value={state.bedroomCapture.camera.lensToFaceCm ?? ''}
+                            onChange={e=>updateBedroomCapture({camera:{...state.bedroomCapture!.camera,lensToFaceCm:Number(e.target.value)}})}/>
+                        </label>
+                        <label className="text-[11px] col-span-2">مصدر الإضاءة
+                          <select className="w-full bg-black/20 border border-[var(--border)] rounded-lg p-2"
+                            value={state.bedroomCapture.lighting.mode}
+                            onChange={e=>{
+                              const mode=e.target.value as BedroomCaptureConfig['lighting']['mode'];
+                              updateBedroomCapture({lighting:{...state.bedroomCapture!.lighting,mode,activeSources:mode==='phone_screen_only'?['phone_screen']:['ceiling_light'],lampOn:false}});
+                            }}>
+                            <option value="phone_screen_only">شاشة الهاتف فقط</option>
+                            <option value="room_lighting">إضاءة سقفية في غرفة النوم</option>
+                          </select>
+                        </label>
+                        {currentPromptPipeline?.diagnostics.bedroomConstraints && (
+                          <div className="col-span-2 text-[11px]">
+                            {currentPromptPipeline.diagnostics.bedroomConstraints.valid
+                              ? <span className="text-emerald-300">✓ قيود الالتقاط متسقة مبدئيًا — مع مراعاة تقديرات الوصول</span>
+                              : <div className="text-red-300">
+                                  {currentPromptPipeline.diagnostics.bedroomConstraints.errors.map(issue=>
+                                    <p key={issue.code}>{issue.code}: {issue.messageAr}</p>)}
+                                </div>}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </section>
                 )}
 
