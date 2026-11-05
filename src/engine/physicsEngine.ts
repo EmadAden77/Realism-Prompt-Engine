@@ -121,6 +121,8 @@ export interface SceneState {
   /** Room-scale realism controls, never reinterpret the identity reference as a room measurement. */
   bedroomBedding?: import('./bedroomRealismStudio').BedroomBedding;
   bedroomComposition?: import('./bedroomRealismStudio').BedroomComposition;
+  /** Optional v9.1 explicit bedroom capture constraints; legacy presets remain valid. */
+  bedroomCapture?: import('./bedroomConstraintResolver').BedroomCaptureConfig;
   /** Optional explicit observations; never inferred solely from a lighting label. */
   earTransmissionEvidence?: { sourceBehindEar: boolean; earExposed: boolean; hairOccluded: boolean; tissuePathMm: number; viewerOnOppositeSide: boolean; };
   /** Optional measured accessible width; unspecified locations retain unknown clearance. */
