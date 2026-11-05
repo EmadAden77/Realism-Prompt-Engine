@@ -244,7 +244,7 @@ export function compileUltraShortPrompt(
     state.glassesMode === 'no_glasses' ? 'No glasses.'
       : state.glassesMode === 'wear_glasses' ? 'Black rectangular eyeglasses.'
         : state.referenceImageId ? 'Eyewear follows reference.' : '',
-    'Outfit: ' + compact(visibleOutfit.visiblePrompt, 340) + '. Correct weave, seam tension, gravity folds and contact compression only where visible.',
+    'Outfit: ' + compact(visibleOutfit.visiblePrompt, 340) + '. Preserve true seams, weave, gravity folds and contact creases only where visible; keep chosen garment colors and complete outfit internally.',
     wearControls ? 'Garment configuration: ' + wearControls + '.' : '',
     'Expression: ' + compact(expression, 105) + '.',
     gaze ? 'Gaze: ' + compact(gaze, 120) + '.' : '',
