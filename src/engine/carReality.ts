@@ -75,3 +75,38 @@ export function describe2017RangeRoverSport(input: {
     'Preserve one vehicle, no duplicated wheels, handles, badges, license plates or invented trim.'
   ].join(' ');
 }
+
+
+/**
+ * Optional verified 2022 L494 interior. Preserve the existing pre-facelift
+ * 2017 description for legacy saved scenes; do not mix console architectures.
+ * Reference: Land Rover 2022 Range Rover Sport L494 product brochure (Touch Pro Duo).
+ */
+export function describeRangeRoverSport(
+  input: Parameters<typeof describe2017RangeRoverSport>[0] & {
+    model?: 'l494-2017' | 'l494-2022';
+  }
+): string {
+  if (input.model !== 'l494-2022') return describe2017RangeRoverSport(input);
+  const seat = carSeatView(input.subScene, input.pose);
+  const base = '2022 Range Rover Sport L494 (facelift), left-hand-drive cabin, authentic two 10-inch Touch Pro Duo centre screens arranged vertically; upper infotainment and lower climate/vehicle functions, genuine SportShift selector and three-spoke multifunction steering wheel. Never substitute the pre-facelift single-screen 2017 dashboard or the all-new L461 13.1-inch single central screen.';
+  if (input.outdoor) {
+    return 'Exact 2022 Range Rover Sport L494 exterior, not the L461 generation. Parked vehicle in a grounded everyday location; authentic body geometry, one continuous vehicle and coherent contact shadows. Trim and paint colour follow explicit selections; no invented optional luxury equipment.';
+  }
+  const role = seat === 'driver'
+    ? 'Subject in front-left driver seat. Steering wheel immediately forward of the driver, left-side door toward vehicle exterior, centre console to subject anatomical right. Driver belt from vehicle-left shoulder region toward opposite hip.'
+    : seat === 'front-passenger'
+      ? 'Subject in front-right passenger seat. Centre console is to subject anatomical left; right door is on exterior right. Passenger belt from vehicle-right shoulder region toward opposite hip.'
+      : seat === 'rear-passenger'
+        ? 'Subject on rear bench; front seatbacks can occlude the dashboard and console.'
+        : 'Front-centre camera viewpoint requires an actual reachable handheld or secured camera position, not floating optics.';
+  return [
+    base, role,
+    'The dashboard and controls are visible only through a real sightline and within the requested crop.',
+    'Light beige leather and dark wood veneer only when explicitly selected; optional ambient lighting must not be assumed switched on.',
+    input.timeOfDay === 'night'
+      ? 'Night cabin stays dim. Only selected phone screen, cabin fixtures or exterior practical lights physically passing through glass may illuminate the subject.'
+      : 'Daylight and reflections enter through actual glazing, with pillar and headrest occlusion.',
+    'One physically consistent camera projection; never swap vehicle sides merely because the selfie looks mirrored.'
+  ].join(' ');
+}
