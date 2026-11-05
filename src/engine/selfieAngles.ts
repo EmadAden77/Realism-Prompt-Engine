@@ -446,7 +446,16 @@ export function resolveSelfieAngleGeometry(context: SelfieAngleContext): Resolve
     ? SELFIE_ANGLE_LIBRARY.find(x => x.id === context.advice?.angleId)
     : undefined;
 
-  const adviceAccepted = Boolean(advisedPreset && eligibleIds.has(advisedPreset.id));
+  // Do not trust a suggested camera angle unless its seat-specific geometry
+  // agrees with the occupant named by the actual sub-scene and pose.
+  const inferredSeat = inferCarSeatRole(context);
+  const explicitPassenger = /الراكب|front[_ -]?passenger|passenger seat/i.test(context.subScene);
+  const explicitRear = /الخلفي|rear[_ -]?seat/i.test(context.subScene);
+  const seatForSafety = explicitRear ? 'rear-passenger' : explicitPassenger ? 'front-passenger' : inferredSeat;
+  const seatCompatible = !isCarInteriorSelfieContext(context)
+    || !advisedPreset?.carSeat || advisedPreset.carSeat === 'either'
+    || seatForSafety === 'either' || advisedPreset.carSeat === seatForSafety;
+  const adviceAccepted = Boolean(advisedPreset && eligibleIds.has(advisedPreset.id) && seatCompatible);
   const preset = adviceAccepted ? advisedPreset! : fallback;
   const advice = adviceAccepted ? context.advice : undefined;
 
