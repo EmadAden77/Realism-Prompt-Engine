@@ -1,4 +1,5 @@
 import { resolveBedroomSelfieActivity } from './bedroomSelfieAffordances';
+import { resolveBedroomCapture, type ResolutionResult, type BedroomResolved } from './bedroomConstraintResolver';
 import { describe2017RangeRoverSport } from './carReality';
 import { getMicroLocation } from '../data/microLocations';
 import { getPhysicalLightingOption } from '../data/physicalLighting';
@@ -61,6 +62,7 @@ export interface UnifiedPromptDiagnostics {
   isValid: boolean;
   anglePromptReady: boolean;
   angleBlockingReasons: string[];
+  bedroomConstraints: ResolutionResult<BedroomResolved> | null;
 }
 
 export interface UnifiedPromptPipelineResult {
@@ -341,6 +343,9 @@ export function verifyCausalFingerprint(pipeline: UnifiedPromptPipelineResult): 
 export function compileUnifiedPromptPipeline(
   rawState: SceneState
 ): UnifiedPromptPipelineResult {
+  const bedroomConstraints = rawState.sceneFamily === 'bedroom' && rawState.bedroomCapture
+    ? resolveBedroomCapture(rawState.bedroomCapture)
+    : null;
   const inputValidation = validateScene(rawState);
   const manifest = createSceneManifest(rawState, 'neutral');
   const resolved = manifest.resolved;
@@ -359,12 +364,26 @@ export function compileUnifiedPromptPipeline(
   semantic.hair = [semantic.hair, ...hairExpression.hair].join(' ');
   semantic.expression = [semantic.expression, ...hairExpression.expression].join(' ');
 
+  // For explicitly configured bedroom captures, override legacy contradictory
+  // text sections with a single resolved source of truth before compilation.
+  if (bedroomConstraints?.valid) {
+    const instructions = bedroomConstraints.value.visualInstructions;
+    semantic.identity = bedroomConstraints.value.identityPrompt;
+    semantic.poseAndContact = instructions[2] + ' ' + instructions[3];
+    semantic.captureMechanics = instructions[4];
+    semantic.cameraRealism = 'Natural phone-camera noise and computational processing; no fabricated sensor measurements.';
+    semantic.lighting = instructions.find(line => line.includes('OLED display') || line.startsWith('Light comes only')) || semantic.lighting;
+    semantic.visibleEnvironment = 'Ordinary bedroom with physically supported furniture and bedding; no floating objects.';
+    semantic.outfit = instructions.find(line => line.includes('cloth wrinkles follow')) || semantic.outfit;
+  }
   const neutral = compileNeutralPrompt(
     semantic,
     manifest.knowledgeDecisions
   );
 
-  const shortPrompt = compileUltraShortPrompt(resolved.state, semantic, resolved.physicalState);
+  const shortPrompt = bedroomConstraints?.valid
+    ? bedroomConstraints.value.visualInstructions.join(' ')
+    : compileUltraShortPrompt(resolved.state, semantic, resolved.physicalState);
 
   const chatgptAdapter = compilePlatformAdapter(
     'chatgpt',
@@ -440,10 +459,13 @@ export function compileUnifiedPromptPipeline(
   };
 
   const bedroomInteraction = resolveBedroomSelfieActivity(resolved.state);
-  const anglePromptReady = manifest.angleDecision?.status !== 'insufficient-evidence' && bedroomInteraction.status !== 'blocked';
+  const anglePromptReady = manifest.angleDecision?.status !== 'insufficient-evidence'
+    && bedroomInteraction.status !== 'blocked'
+    && (bedroomConstraints === null || bedroomConstraints.valid);
   const angleBlockingReasons = [
     ...(manifest.angleDecision?.status === 'insufficient-evidence' ? ['No verified camera geometry available'] : []),
-    ...bedroomInteraction.reasons
+    ...bedroomInteraction.reasons,
+    ...(bedroomConstraints && !bedroomConstraints.valid ? bedroomConstraints.errors.map(error => `${error.code}: ${error.messageAr}`) : [])
   ];
   if (!anglePromptReady) {
     neutral.text = '';
@@ -503,6 +525,7 @@ export function compileUnifiedPromptPipeline(
       isValid: conflictReport.isValid && anglePromptReady,
       anglePromptReady,
       angleBlockingReasons,
+      bedroomConstraints,
     },
   };
 }
