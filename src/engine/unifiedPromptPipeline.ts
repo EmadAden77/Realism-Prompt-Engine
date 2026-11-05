@@ -343,7 +343,7 @@ export function verifyCausalFingerprint(pipeline: UnifiedPromptPipelineResult): 
 export function compileUnifiedPromptPipeline(
   rawState: SceneState
 ): UnifiedPromptPipelineResult {
-  const bedroomConstraints = rawState.sceneFamily === 'bedroom' && rawState.bedroomCapture
+  const bedroomConstraints = rawState.sceneFamily === 'bedroom' && rawState.captureType === 'front-selfie' && rawState.bedroomCapture
     ? resolveBedroomCapture(rawState.bedroomCapture)
     : null;
   const inputValidation = validateScene(rawState);
