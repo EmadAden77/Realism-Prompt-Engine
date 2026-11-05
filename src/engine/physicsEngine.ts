@@ -97,6 +97,13 @@ export interface SceneState {
   cameraAngle: CameraAngle;
   pose: string;
   outfitId: string;
+  /** Retain 2017 default for legacy scenes; explicitly select 2022 L494 when requested. */
+  vehicleModel?: 'l494-2017' | 'l494-2022';
+  vehicleMotion?: 'parked' | 'moving' | 'unknown';
+  selfieCalibration?: import('./physicalConsistency').PhysicalCalibration;
+  portraitModeEnabled?: boolean;
+  bodyHeightCm?: number;
+  bodyMassKg?: number;
   outfitLocked?: boolean;
   outfitWearStyle?: OutfitWearStyle;
   garmentWearContext?: GarmentWearContext;
