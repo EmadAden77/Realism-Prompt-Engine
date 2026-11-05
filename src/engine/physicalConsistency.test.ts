@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import type { SceneState } from './physicsEngine';
-import { describeRangeRoverSport } from './carReality';
+import { describeRangeRoverSport, carSeatView } from './carReality';
 import {
   VEHICLE_LOCAL_TOPOLOGY, compileVisibleWardrobe,
   resolvePhysicalConstraints, visibleRegions
@@ -26,6 +26,7 @@ assert(VEHICLE_LOCAL_TOPOLOGY.anchors.driverDoor.x < VEHICLE_LOCAL_TOPOLOGY.anch
 assert(VEHICLE_LOCAL_TOPOLOGY.anchors.centerConsole.x > VEHICLE_LOCAL_TOPOLOGY.anchors.driverSeat.x);
 assert.equal(VEHICLE_LOCAL_TOPOLOGY.anchors.passengerSeat.x > 0, true);
 assert.equal(resolve().seat,'driver');
+assert.equal(carSeatView('المقعد الأمامي للراكب','جالس بهدوء'), 'front-passenger');
 assert.equal(resolve().model,'l494-2017');
 
 // 04: Full extension cannot coincide with 90-degree elbow flexion.
