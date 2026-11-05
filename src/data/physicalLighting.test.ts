@@ -12,12 +12,16 @@ import { deriveLightingCausality } from '../engine/lightingCausality';
 
 const families: SceneFamilyId[] = ['military-base', 'saudi-outdoor', 'car', 'living-room', 'bedroom', 'gym'];
 const times: LightingClock[] = ['morning', 'midday', 'afternoon', 'sunset', 'night'];
+// The bedroom, living-room and car have an additional screen-only mode. Strict counts preserve it.
+const expectedCounts: Record<SceneFamilyId, number> = {
+  'military-base':10, 'saudi-outdoor':10, car:11, 'living-room':11, bedroom:11, gym:10
+};
 let total = 0;
 
 for (const family of families) {
   const options = LIGHTING_CATALOG[family];
-  assert.equal(options.length, 10, `${family} must have ten distinct lighting modes`);
-  assert.equal(new Set(options.map(p => p.labelAR)).size, 10, `${family} contains duplicate labels`);
+  assert.equal(options.length, expectedCounts[family], `${family} lighting catalog count changed unexpectedly`);
+  assert.equal(new Set(options.map(p => p.labelAR)).size, expectedCounts[family], `${family} contains duplicate labels`);
   for (const option of options) {
     total++;
     assert.equal(getPhysicalLightingOption(family, option.labelAR), option);
@@ -54,7 +58,7 @@ for (const family of families) {
     }
   }
 }
-assert.equal(total, 60, 'Catalog must expose sixty physical lighting modes');
+assert.equal(total, 63, 'Catalog must preserve the full 63 source-aware lighting modes');
 
 const outdoorPlan = buildSmartSceneOptions({
   familyId: 'saudi-outdoor', subScene: 'شارع فلل سكني', timeOfDay: 'night',
@@ -69,4 +73,4 @@ assert(carNight.includes('إضاءة الشارع عبر زجاج السيارة
 assert(!carNight.includes('شمس الظهر عبر زجاج السيارة'));
 assert(!compatiblePhysicalLighting('car', 'night', true).some(o => o.model === 'vehicle-dashboard'));
 
-console.log('60 physical lighting modes: catalog, time, geometry and causal physics tests passed');
+console.log('63 physical lighting modes: catalog, time, geometry and causal physics tests passed');
