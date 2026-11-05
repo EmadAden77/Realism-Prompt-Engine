@@ -1,5 +1,5 @@
 import { resolveBedroomSelfieActivity } from './bedroomSelfieAffordances';
-import { describe2017RangeRoverSport, isCarExteriorSubScene } from './carReality';
+import { describeRangeRoverSport, isCarExteriorSubScene } from './carReality';
 import { buildBedroomRealismPrompt } from './bedroomRealismStudio';
 import { getMicroLocation } from '../data/microLocations';
 import { OUTFITS } from '../data/clothingOutfits';
@@ -469,13 +469,14 @@ export const buildSemanticScene = (
       : `Ordinary realistic setting in Saudi Arabia.`;
     visibleEnvironmentText = `Location: ${locationLabel ? `${locationLabel} - ` : ''}${state.subScene || ''}. Environmental setting: ${microDetails} Visible background elements: ${derived.visibleBackgroundElements.join(', ')}.`;
   }
-  // For the fixed 2017 Range Rover, do not send the generic sedan/cabin catalog
+  // For the selected Range Rover L494 model year, do not send generic sedan/cabin catalog
   // prose through the neutral prompt. The verified vehicle + selected camera
   // side replace mutually incompatible raw micro-location embellishments.
   if (state.sceneFamily === 'car') {
     const outside = microLoc?.isOutdoor ?? isCarExteriorSubScene(state.subScene);
     visibleEnvironmentText = 'Selected car setting: ' + (microLoc?.labelAR || state.subScene) + '. '
-      + describe2017RangeRoverSport({
+      + describeRangeRoverSport({
+        model: state.vehicleModel,
         subScene: state.subScene,
         outdoor: outside,
         timeOfDay: state.timeOfDay,

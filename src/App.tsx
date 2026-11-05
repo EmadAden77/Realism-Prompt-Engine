@@ -1,3 +1,4 @@
+import { resolvePhysicalConstraints } from './engine/physicalConsistency';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Sparkles,
@@ -126,6 +127,8 @@ interface SceneState {
   cameraAngle: CameraAngle;
   pose: string;
   outfitId: string;
+  vehicleModel?: 'l494-2017' | 'l494-2022';
+  vehicleMotion?: 'parked' | 'moving' | 'unknown';
   outfitLocked: boolean;
   outfitWearStyle: OutfitWearStyle;
   garmentWearContext: GarmentWearContext;
@@ -3207,6 +3210,40 @@ export default function PhysFrameApp() {
                     </div>
                   )}
                 </section>
+
+                 {/* Model-year is explicit; preserve legacy L494 2017 by default. */}
+                 {state.sceneFamily === 'car' && (
+                   <section className="bg-[var(--bg-card)] p-4 rounded-2xl border border-[var(--border)]">
+                     <h3 className="font-bold text-xs text-white mb-2">هندسة السيارة والتحقق الفيزيائي</h3>
+                     <div className="grid grid-cols-2 gap-2">
+                       <label className="text-[10px] text-[var(--text-muted)]">
+                         موديل المقصورة
+                         <select aria-label="موديل رينج روفر" value={state.vehicleModel || 'l494-2017'}
+                           onChange={e => setState(prev => ({...prev,vehicleModel:e.target.value as 'l494-2017' | 'l494-2022'}))}
+                           className="w-full mt-1 bg-[var(--bg-main)] border border-[var(--border)] rounded-lg p-2 text-xs text-white">
+                           <option value="l494-2017">2017 L494 · شاشة واحدة</option>
+                           <option value="l494-2022">2022 L494 · شاشتان</option>
+                         </select>
+                       </label>
+                       <label className="text-[10px] text-[var(--text-muted)]">
+                         حالة السيارة
+                         <select aria-label="حالة السيارة" value={state.vehicleMotion || 'unknown'}
+                           onChange={e => setState(prev => ({...prev,vehicleMotion:e.target.value as 'parked' | 'moving' | 'unknown'}))}
+                           className="w-full mt-1 bg-[var(--bg-main)] border border-[var(--border)] rounded-lg p-2 text-xs text-white">
+                           <option value="unknown">غير معروفة</option>
+                           <option value="parked">متوقفة</option>
+                           <option value="moving">تتحرك</option>
+                         </select>
+                       </label>
+                     </div>
+                     {resolvePhysicalConstraints(state as unknown as import('./engine/physicalConsistency').SceneConstraintInput).issues.map(issue => (
+                       <div key={issue.code} role="status" className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-[10px] text-amber-200">
+                         <strong>{issue.severity}: {issue.code}</strong> — {issue.messageAR}
+                         {issue.suggestedRepair && <div className="mt-1">{issue.suggestedRepair}</div>}
+                       </div>
+                     ))}
+                   </section>
+                 )}
 
                  {/* Clothing & Attire: permanent fixed library */}
                  <section className="bg-[var(--bg-card)] p-4 rounded-2xl border border-[var(--border)]">

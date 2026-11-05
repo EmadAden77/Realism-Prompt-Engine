@@ -361,7 +361,9 @@ export function deriveLightingCausality(input: LightingCausalityInput): Lighting
   if (causalPreset) {
     const physics = PHYSICAL_LIGHT_BEHAVIOR[causalPreset.model];
     primarySource = {
-      name: causalPreset.labelAR + (causalPreset.model === 'fluorescent' ? ' (real overhead fluorescent fixture)' : causalPreset.model === 'vehicle-day' ? ' (daylight through vehicle glazing)' : causalPreset.labelAR.includes('5000K') ? ' (5000K neutral-cool white)' : ''),
+      name: causalPreset.model === 'phone-screen'
+        ? (displayFlashOnly ? 'front display flash / screen fill' : 'smartphone display glow')
+        : causalPreset.labelAR + (causalPreset.model === 'fluorescent' ? ' (real overhead fluorescent fixture)' : causalPreset.model === 'vehicle-day' ? ' (daylight through vehicle glazing)' : causalPreset.labelAR.includes('5000K') ? ' (5000K neutral-cool white)' : ''),
       role: 'primary',
       direction: physics.direction,
       distanceBehavior: physics.falloff,
@@ -433,7 +435,9 @@ export function deriveLightingCausality(input: LightingCausalityInput): Lighting
       ? 'direction remains consistent across the visible scene; local brightness changes come mainly from angle, occlusion, and surface reflectance'
       : 'brightness decreases with source distance and occlusion; secondary surfaces receive visibly weaker illumination than the subject-facing planes';
 
-  const inverseSquareBehavior = causalPreset
+  const inverseSquareBehavior = phoneOnly
+    ? 'OLED screen is an extended area emitter: apply geometric near-field falloff; inverse-square is only a far-field approximation, not a calibrated point-source law at selfie distance.'
+    : causalPreset
     ? (causalPreset.model === 'sun-hard' || causalPreset.model === 'sun-low' || causalPreset.model === 'sky-shade'
       ? 'solar and sky rays are distant and directional; do not impose lamp inverse-square falloff on the sun'
       : 'local practical/reflected illumination follows geometric distance, occlusion, source size and actual surface reflectance')
