@@ -1,5 +1,6 @@
 import { resolveBedroomSelfieActivity } from './bedroomSelfieAffordances';
-import { describe2017RangeRoverSport } from './carReality';
+import { describeRangeRoverSport } from './carReality';
+import { resolvePhysicalConstraints, compileVisibleWardrobe, type SceneConstraintReport } from './physicalConsistency';
 import { getMicroLocation } from '../data/microLocations';
 import { getPhysicalLightingOption } from '../data/physicalLighting';
 import { gazeInteractionPrompt } from '../data/gazeInteractions';
@@ -61,6 +62,7 @@ export interface UnifiedPromptDiagnostics {
   isValid: boolean;
   anglePromptReady: boolean;
   angleBlockingReasons: string[];
+  physicalConsistency: SceneConstraintReport;
 }
 
 export interface UnifiedPromptPipelineResult {
@@ -164,6 +166,7 @@ export function compileUltraShortPrompt(
     ? 'Mattress and pillow compress only where body weight contacts; naturally wrinkled bedding, supported hips/shoulders and real contact shadows.'
     : '';
   const outfit = semantic.outfit.split(/\. LOCKED COMPLETE OUTFIT:/)[0];
+  const visibleOutfit = compileVisibleWardrobe(state, outfit);
   const wearControls = [
     ['tuck', state.shirtTuck],
     ['sleeves', state.sleeveStyle],
@@ -180,7 +183,8 @@ export function compileUltraShortPrompt(
   const carStatement = state.sceneFamily !== 'car'
     ? ''
     : (outdoorCar ? 'Outside beside the parked vehicle: ' : 'Inside the vehicle: ')
-      + describe2017RangeRoverSport({
+      + describeRangeRoverSport({
+        model: state.vehicleModel,
         subScene: state.subScene,
         outdoor: outdoorCar,
         timeOfDay: state.timeOfDay,
@@ -234,11 +238,13 @@ export function compileUltraShortPrompt(
     state.referenceImageId
       ? 'Reference photo fixes exact facial identity, age, skull, eyes, nose, jaw, beard, skin tone/asymmetry and original hairline/density; never reshape or beautify.'
       : 'Natural unretouched face; do not invent reference-only identity details.',
-    'Male, 193cm, 83kg, lean-athletic.',
+    state.bodyHeightCm && state.bodyMassKg
+      ? 'Body proportions as supplied: ' + state.bodyHeightCm + 'cm, ' + state.bodyMassKg + 'kg; natural frame without invented muscle volume.'
+      : 'Maintain the reference body proportions; no assumed measured height or weight.',
     state.glassesMode === 'no_glasses' ? 'No glasses.'
       : state.glassesMode === 'wear_glasses' ? 'Black rectangular eyeglasses.'
         : state.referenceImageId ? 'Eyewear follows reference.' : '',
-    'Outfit: ' + compact(outfit, 340) + '. Keep all chosen garments/colors; true seams, weave, gravity folds and contact creases.',
+    'Outfit: ' + compact(visibleOutfit.visiblePrompt, 340) + '. Correct weave, seam tension, gravity folds and contact compression only where visible.',
     wearControls ? 'Garment configuration: ' + wearControls + '.' : '',
     'Expression: ' + compact(expression, 105) + '.',
     gaze ? 'Gaze: ' + compact(gaze, 120) + '.' : '',
@@ -345,6 +351,7 @@ export function compileUnifiedPromptPipeline(
   const manifest = createSceneManifest(rawState, 'neutral');
   const resolved = manifest.resolved;
   const resolvedValidation = validateScene(resolved);
+  const physicalConsistency = resolvePhysicalConstraints(resolved.state);
 
   const semantic = buildSemanticScene(
     resolved.state,
@@ -443,9 +450,10 @@ export function compileUnifiedPromptPipeline(
   const anglePromptReady = manifest.angleDecision?.status !== 'insufficient-evidence' && bedroomInteraction.status !== 'blocked';
   const angleBlockingReasons = [
     ...(manifest.angleDecision?.status === 'insufficient-evidence' ? ['No verified camera geometry available'] : []),
-    ...bedroomInteraction.reasons
+    ...bedroomInteraction.reasons,
+    ...physicalConsistency.issues.filter(issue => issue.severity === 'BLOCKER' || issue.severity === 'ERROR').map(issue => issue.code + ': ' + issue.messageAR)
   ];
-  if (!anglePromptReady) {
+  if (!anglePromptReady || physicalConsistency.hasBlocker) {
     neutral.text = '';
     for (const platform of [chatgpt, gemini, midjourney]) {
       platform.prompt = '';
@@ -500,9 +508,10 @@ export function compileUnifiedPromptPipeline(
         totalSavedChars:
           neutral.compression.savedChars + negative.compression.savedChars,
       },
-      isValid: conflictReport.isValid && anglePromptReady,
-      anglePromptReady,
+      isValid: conflictReport.isValid && anglePromptReady && !physicalConsistency.hasBlocker,
+      anglePromptReady: anglePromptReady && !physicalConsistency.hasBlocker,
       angleBlockingReasons,
+      physicalConsistency,
     },
   };
 }
