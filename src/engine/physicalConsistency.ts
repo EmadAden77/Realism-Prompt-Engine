@@ -109,7 +109,9 @@ export function compileVisibleWardrobe(
   try {
     const outfit = getClothingOutfit(state.outfitId);
     const description = outfit?.promptDescription || '';
-    top = description.split(/\s+paired with\s+|\s+matched with\s+|\s+and\s+(?:tailored |straight |dark |light )?(?:trousers|pants|jeans|shorts)\b/i)[0];
+    top = description
+      .split(/\s+paired with\s+|\s+matched with\s+|\s+and\s+(?:tailored |straight |dark |light )?(?:trousers|pants|jeans|shorts)\b/i)[0]
+      .replace(/,\s*(?:(?:medium|light|dark|deep|warm|tailored|straight|grey|navy|blue|black|beige|khaki|cotton|\w+-\w+)\s+){0,5}(?:trousers|pants|jeans|shorts)\b.*$/i, '');
   } catch (_) {
     // No manufactured wardrobe attributes when the outfit is missing.
   }
