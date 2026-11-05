@@ -28,6 +28,9 @@ jobs:
       - name: TypeScript
         run: npm run lint
 
+      - name: New physical constraint regression checks
+        run: npx tsx src/engine/physicalConsistency.test.ts
+
       - name: Physics engine tests
         run: npm test
 
