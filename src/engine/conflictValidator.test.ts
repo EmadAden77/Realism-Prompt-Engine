@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { detectCarSelfieOpticalConflicts, detectConditionalWearConflict, detectArtificialBackgroundPattern, validateUnifiedConflicts } from './conflictValidator';
 import { compileUnifiedPromptPipeline } from './unifiedPromptPipeline';
+import { compatiblePhysicalLighting } from '../data/physicalLighting';
 import type { SceneState } from './physicsEngine';
 
 const base: SceneState = {
@@ -63,10 +64,10 @@ const phoneCorrection = phoneDay.diagnostics.conflictReport.corrections.find(
   item => item.affectedFields.includes('lightingMode')
 );
 assert(phoneCorrection);
-assert.match(
-  String(phoneCorrection?.suggestedPatch?.lightingMode),
-  /ضوء نهاري/,
-  'Phone-only daytime correction must expose the resolved daylight patch'
+assert.equal(
+  phoneCorrection?.suggestedPatch?.lightingMode,
+  compatiblePhysicalLighting('bedroom', 'morning', false).find(o => o.model === 'window')?.labelAR,
+  'Phone-only daytime correction must select an actual approved daylight window source'
 );
 
 const identityConflict = compileUnifiedPromptPipeline({
