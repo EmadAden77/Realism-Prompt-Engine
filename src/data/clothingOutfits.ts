@@ -38,6 +38,25 @@ export const CLOTHING_CATEGORIES = [
 ];
 
 export const OUTFITS: OutfitItem[] = [
+  // Explicit regression outfit: the reference-facing 2022 L494 parked selfie.
+  {
+    id: 'lightblue_oxford_grey_trousers_black_belt',
+    fixedCompleteOutfit: true,
+    labelAR: 'قميص أوكسفورد أزرق فاتح + بنطال رمادي متوسط + حزام أسود',
+    labelAr: 'قميص أوكسفورد أزرق فاتح + بنطال رمادي متوسط + حزام أسود',
+    promptDescription: 'light-blue Oxford cotton button-up shirt with rolled forearm sleeves, medium-grey tailored trousers and black leather belt',
+    prompt: 'light-blue Oxford cotton shirt with sleeves naturally rolled to forearms and neatly tucked into medium-grey tailored trousers, a real black leather belt at the waistband',
+    category: ['smart_casual','car','saudi-outdoor','formal'],
+    categoryAR: 'كاجوال أنيق',
+    subCategoryAR: 'كاجوال أنيق',
+    physics: [
+      'oxford basket-weave cotton texture without uniform synthetic gloss',
+      'sleeve-roll stacking and elbow creases driven by actual arm position',
+      'shirt fabric compresses against any visible seatbelt and seatback contact',
+      'waist tucking and belt buckle only appear where camera framing permits',
+      'trouser drape follows seated thigh contact without invented fold measurements'
+    ]
+  },
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // 1. الكاجوال الأنيق (Smart Casual) - تتضمن الـ 15 تركيبة الأساسية
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
