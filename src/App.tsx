@@ -602,7 +602,12 @@ export default function PhysFrameApp() {
   const updateBedroomCapture = (patch: Partial<BedroomCaptureConfig>) => {
     setState(prev => ({
       ...prev,
-      bedroomCapture: {...DEFAULT_BEDROOM_CAPTURE, ...prev.bedroomCapture, ...patch}
+      bedroomCapture: {...DEFAULT_BEDROOM_CAPTURE, ...prev.bedroomCapture, ...patch},
+      ...(patch.lighting ? {
+        lightingMode: patch.lighting.mode === 'phone_screen_only'
+          ? 'إضاءة شاشة الهاتف فقط' : 'إضاءة سقف محايدة 4000K',
+        ...(patch.lighting.mode === 'phone_screen_only' ? {timeOfDay: 'night' as const} : {})
+      } : {})
     }));
   };
 
@@ -2496,7 +2501,11 @@ export default function PhysFrameApp() {
                     <h3 className="text-xs font-bold text-white">🧩 قيود السيلفي الدقيقة</h3>
                     <label className="flex items-center gap-2 text-xs">
                       <input type="checkbox" checked={!!state.bedroomCapture}
-                        onChange={e => setState(prev => ({...prev, bedroomCapture: e.target.checked ? {...DEFAULT_BEDROOM_CAPTURE} : undefined}))}/>
+                        onChange={e => setState(prev => ({
+                          ...prev,
+                          bedroomCapture: e.target.checked ? {...DEFAULT_BEDROOM_CAPTURE} : undefined,
+                          ...(e.target.checked ? {lightingMode:'إضاءة شاشة الهاتف فقط', timeOfDay:'night' as const} : {})
+                        }))}/>
                       تفعيل التحقق من اليدين والكاميرا والإضاءة لهذا المشهد
                     </label>
                     {state.bedroomCapture && (
