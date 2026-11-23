@@ -52,7 +52,7 @@ assert.match(oldSaved.outfit, /LOCKED COMPLETE OUTFIT/, 'Old saved states should
 console.log('✅ Complete fixed outfit keeps garment identity across scenes and ignores legacy per-piece controls');
 
 // The complete wardrobe must stay present and in a stable order for every scene.
-assert.ok(OUTFITS.length >= 99, 'The permanently available wardrobe must remain extensive');
+assert.equal(OUTFITS.length, 19, 'Wardrobe consists of 15 reference color combinations and four Saudi thobes');
 assert.equal(new Set(OUTFITS.map(item => item.id)).size, OUTFITS.length, 'Every outfit ID must be unique');
 assert.deepEqual(filterClothingOutfits().map(item => item.id), OUTFITS.map(item => item.id),
   'Opening the clothes list must show the entire static catalog, never a 12-item suggestion subset');
@@ -60,13 +60,22 @@ for (const category of CLOTHING_CATEGORIES.filter(item => item.id !== 'all')) {
   const matches = filterClothingOutfits(category.id);
   assert.ok(matches.length > 0, 'Category must be accessible at all times: ' + category.labelAR);
 }
-assert.ok(filterClothingOutfits('home', 'شورت').length >= 5,
-  'The home clothing list must expose several complete T-shirt and shorts sets');
+assert.equal(filterClothingOutfits('traditional').length, 4, 'The four Saudi thobes must be present');
 assert.deepEqual(filterClothingOutfits().map(item => item.id), OUTFITS.map(item => item.id),
   'Searching or filtering must not mutate the fixed wardrobe order');
-const stableOutfit = 'home_grey_tee_white_shorts';
+const stableOutfit = 'thobe_light_grey';
 for (const family of ['bedroom', 'gym', 'saudi-outdoor', 'car', 'military-base', 'living-room'] as const) {
   const scene = compile({ ...base, outfitId: stableOutfit, sceneFamily: family, subScene: '' });
-  assert.match(scene.outfit, /grey.*T-shirt.*white.*shorts/i, 'Selected home clothes stay unchanged in ' + family);
+  assert.match(scene.outfit, /light cool-grey traditional Saudi thobe/i, 'Selected Saudi thobe stays unchanged in ' + family);
 }
-console.log('✅ Permanent 99-outfit wardrobe, categories, search, and cross-scene locks');
+console.log('✅ Reference-only wardrobe, categories, search, and cross-scene locks');
+
+// Optional outerwear must stay separate from the selected base outfit.
+const withJacket = compile({ ...base, jacketId: 'long_black_puffer' });
+assert.match(withJacket.outfit, /long matte-black insulated puffer parka/i);
+assert.match(withJacket.outfit, /burgundy|wine/i);
+assert.match(withJacket.outfit, /grey/i);
+const withVest = compile({ ...base, jacketId: 'camel_quilted_vest' });
+assert.match(withVest.outfit, /camel-brown suede-like sleeveless padded vest/i);
+assert.match(compile({ ...base, jacketId: 'none' }).outfit, /NO OUTERWEAR/);
+assert.doesNotMatch(compile({ ...base, jacketId: 'none' }).outfit, /ADD SELECTED OUTERWEAR/);
