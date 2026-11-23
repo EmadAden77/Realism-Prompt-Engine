@@ -3,6 +3,7 @@ import { resolveBedroomCapture, type ResolutionResult, type BedroomResolved } fr
 import { describe2017RangeRoverSport } from './carReality';
 import { getMicroLocation } from '../data/microLocations';
 import { getPhysicalLightingOption } from '../data/physicalLighting';
+import { getJacket } from '../data/clothingOutfits';
 import { gazeInteractionPrompt } from '../data/gazeInteractions';
 import { exportCausalAttestationLedger, type CausalLedgerEntry } from './promptCompiler';
 import { planSpatialComposition, type SpatialCompositionPlan } from './spatialCompositionPlanner';
@@ -165,7 +166,14 @@ export function compileUltraShortPrompt(
   const bedContact = state.sceneFamily === 'bedroom' && /سرير|مرتبة|bed|mattress/i.test(state.pose)
     ? 'Mattress and pillow compress only where body weight contacts; naturally wrinkled bedding, supported hips/shoulders and real contact shadows.'
     : '';
+  // Base outfit is locked, but the optional outerwear is a separate required layer.
+  // The verbose semantic outfit includes the jacket AFTER LOCKED COMPLETE OUTFIT,
+  // so cutting at that marker must never remove the jacket from the export.
   const outfit = semantic.outfit.split(/\. LOCKED COMPLETE OUTFIT:/)[0];
+  const jacket = getJacket(state.jacketId);
+  const jacketStatement = jacket
+    ? `Mandatory outerwear: ${jacket.prompt}. The selected jacket/vest is visibly worn OVER the base outfit, not merely held nearby. Preserve the base garment colour and shape under the layer.`
+    : 'No jacket, coat, parka or vest over the selected outfit.';
   const wearControls = [
     ['tuck', state.shirtTuck],
     ['sleeves', state.sleeveStyle],
@@ -241,6 +249,7 @@ export function compileUltraShortPrompt(
       : state.glassesMode === 'wear_glasses' ? 'Black rectangular eyeglasses.'
         : state.referenceImageId ? 'Eyewear follows reference.' : '',
     'Outfit: ' + compact(outfit, 340) + '. Keep all chosen garments/colors; true seams, weave, gravity folds and contact creases.',
+    jacketStatement,
     wearControls ? 'Garment configuration: ' + wearControls + '.' : '',
     'Expression: ' + compact(expression, 105) + '.',
     gaze ? 'Gaze: ' + compact(gaze, 120) + '.' : '',
@@ -381,8 +390,14 @@ export function compileUnifiedPromptPipeline(
     manifest.knowledgeDecisions
   );
 
+  // A constrained bedroom uses its own short exporter: carry the jacket layer
+  // there too, rather than bypassing the standard short-prompt outfit logic.
+  const bedroomJacket = getJacket(resolved.state.jacketId);
   const shortPrompt = bedroomConstraints?.valid
-    ? bedroomConstraints.value.visualInstructions.join(' ')
+    ? [bedroomConstraints.value.visualInstructions.join(' '),
+       bedroomJacket
+         ? `Mandatory outerwear worn over the selected base outfit: ${bedroomJacket.prompt}. Keep underlying clothes unchanged.`
+         : 'No outerwear: no jacket, coat, parka or vest.'].join(' ')
     : compileUltraShortPrompt(resolved.state, semantic, resolved.physicalState);
 
   const chatgptAdapter = compilePlatformAdapter(
@@ -548,8 +563,18 @@ export function validateExternalPromptCandidate(
     candidatePrompt
   );
 
+  // AI enhancements are not allowed to silently delete an explicit wardrobe layer.
+  const mandatoryJacket = getJacket(pipeline.manifest.resolved.state.jacketId);
+  const jacketSignature: Record<string, RegExp> = {
+    long_black_puffer: /(?:puffer|quilted|padded).{0,65}(?:parka|coat)|(?:parka|coat).{0,65}(?:puffer|quilted|padded)/i,
+    short_black_puffer: /(?:puffer|quilted|padded).{0,65}jacket|jacket.{0,65}(?:puffer|quilted|padded)/i,
+    camel_quilted_vest: /(?:camel|brown).{0,100}(?:vest|waistcoat)|(?:vest|waistcoat).{0,100}(?:camel|brown)/i,
+  };
+  const safeCandidate = mandatoryJacket && !jacketSignature[mandatoryJacket.id]?.test(candidatePrompt)
+    ? `${candidatePrompt.trim()} Mandatory selected outerwear, visibly worn over the unchanged base outfit: ${mandatoryJacket.prompt}.`
+    : candidatePrompt;
   const validation = validatePrompt(
-    candidatePrompt,
+    safeCandidate,
     pipeline.manifest.resolved,
     negative.text
   );
