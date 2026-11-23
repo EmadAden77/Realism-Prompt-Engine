@@ -502,3 +502,38 @@ assert.doesNotMatch(noHairReference.semantic.hair, /Use the supplied reference t
 const referenceAwareHair = compileUnifiedPromptPipeline({...base, hairStyle:'h3'});
 assert.match(referenceAwareHair.semantic.hair, /If the chosen styling is incompatible/);
 assert.match(referenceAwareHair.semantic.hair, /existing hair only/);
+
+
+// Regression: selecting "with jacket" must survive EVERY compact export,
+// not just the internal semantic scene (previously the LOCKED marker removed it).
+const jacketCases = [
+  ['camel_quilted_vest', /camel-brown suede-like sleeveless padded vest/i],
+  ['short_black_puffer', /hip-length matte-black puffer jacket/i],
+  ['long_black_puffer', /long matte-black insulated puffer parka/i],
+] as const;
+for (const [jacketId, expected] of jacketCases) {
+  const withOuterwear = compileUnifiedPromptPipeline({
+    ...base, outfitId: 'thobe_black', jacketId,
+  });
+  assert.match(withOuterwear.semantic.outfit, expected);
+  for (const platform of ['chatgpt', 'gemini', 'midjourney'] as const) {
+    assert.match(withOuterwear.platforms[platform].prompt, expected, `Selected ${jacketId} must appear in ${platform} output`);
+    assert.match(withOuterwear.platforms[platform].prompt, /matte black traditional Saudi thobe/i);
+  }
+}
+const bareThobe = compileUnifiedPromptPipeline({
+  ...base, outfitId: 'thobe_black', jacketId: 'none',
+});
+assert.match(bareThobe.platforms.gemini.prompt, /No jacket, coat, parka or vest/i);
+assert.doesNotMatch(bareThobe.platforms.gemini.prompt, /Mandatory outerwear/i);
+
+const vestPipeline = compileUnifiedPromptPipeline({
+  ...base, outfitId: 'thobe_black', jacketId: 'camel_quilted_vest',
+});
+const strippedGeminiEnhancement = vestPipeline.platforms.gemini.prompt
+  .replace(/Mandatory outerwear:[\\s\\S]*?(?= Garment configuration:| Expression:)/i, '');
+const repairedEnhancement = validateExternalPromptCandidate(
+  vestPipeline, 'gemini', strippedGeminiEnhancement
+);
+assert.match(repairedEnhancement.prompt, /camel-brown suede-like sleeveless padded vest/i,
+  'AI enhancement must not delete the selected vest');
