@@ -97,6 +97,7 @@ export interface SceneState {
   cameraAngle: CameraAngle;
   pose: string;
   outfitId: string;
+  jacketId?: import('../data/clothingOutfits').JacketId;
   outfitLocked?: boolean;
   outfitWearStyle?: OutfitWearStyle;
   garmentWearContext?: GarmentWearContext;
