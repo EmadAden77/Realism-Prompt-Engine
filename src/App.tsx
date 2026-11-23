@@ -35,7 +35,7 @@ import {
 } from 'lucide-react';
 import { MICRO_LOCATIONS, getMicroLocation, MicroLocation } from './data/microLocations';
 import { LIGHTING_CATALOG, compatiblePhysicalLighting, getPhysicalLightingOption } from './data/physicalLighting';
-import { OUTFITS, CLOTHING_CATEGORIES, filterClothingOutfits, OutfitItem } from './data/clothingOutfits';
+import { OUTFITS, CLOTHING_CATEGORIES, JACKETS, getJacket, filterClothingOutfits, OutfitItem, type JacketId } from './data/clothingOutfits';
 import { resolveScene } from './engine/physicsEngine';
 import type { BedroomCaptureConfig } from './engine/bedroomConstraintResolver';
 import {
@@ -127,6 +127,7 @@ interface SceneState {
   cameraAngle: CameraAngle;
   pose: string;
   outfitId: string;
+  jacketId: JacketId;
   outfitLocked: boolean;
   outfitWearStyle: OutfitWearStyle;
   garmentWearContext: GarmentWearContext;
@@ -539,7 +540,8 @@ const DEFAULT_STATE: SceneState = {
   framing: 'chest-up',
   cameraAngle: 'eye-level',
   pose: '',
-  outfitId: 'mil_admin_tan_shirt',
+  outfitId: 'navy_shirt_grey_trousers',
+  jacketId: 'none',
   outfitLocked: true,
   outfitWearStyle: 'natural-neat',
   garmentWearContext: 'auto',
@@ -713,7 +715,8 @@ export default function PhysFrameApp() {
           if (!validOutfit) {
             parsed.outfitId = DEFAULT_STATE.outfitId;
           }
-          setState({ ...DEFAULT_STATE, ...parsed, outfitLocked: true });
+          const jacketId = parsed.jacketId === 'none' || JACKETS.some(j => j.id === parsed.jacketId) ? parsed.jacketId : 'none';
+          setState({ ...DEFAULT_STATE, ...parsed, jacketId, outfitLocked: true });
         }
 
         const savedPresets = localStorage.getItem('physframe_presets');
@@ -1790,7 +1793,7 @@ export default function PhysFrameApp() {
         state as unknown as Record<string, unknown>
       );
       const finalResolved = intelligence.finalResolved;
-      const finalState: SceneState = { ...(finalResolved.state as SceneState), outfitId: state.outfitId, outfitLocked: true };
+      const finalState: SceneState = { ...(finalResolved.state as SceneState), outfitId: state.outfitId, jacketId: state.jacketId, outfitLocked: true };
 
       setState(finalState);
       localStorage.setItem('physframe_current_state', JSON.stringify(finalState));
@@ -2040,7 +2043,7 @@ export default function PhysFrameApp() {
               aria-label="إعادة ضبط الإعدادات"
               className="text-xs text-[var(--text-muted)] hover:text-white rounded-lg p-1.5 hover:bg-white/5 transition-colors"
               onClick={() => {
-                setState(prev => ({ ...DEFAULT_STATE, outfitId: prev.outfitId, outfitLocked: true }));
+                setState(prev => ({ ...DEFAULT_STATE, outfitId: prev.outfitId, jacketId: prev.jacketId, outfitLocked: true }));
                 localStorage.removeItem('physframe_current_state');
                 showToast('تمت إعادة ضبط المشهد مع الاحتفاظ بالملابس');
               }}
@@ -3315,7 +3318,7 @@ export default function PhysFrameApp() {
                  <section className="bg-[var(--bg-card)] p-4 rounded-2xl border border-[var(--border)]">
                     <h3 className="font-bold text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2.5">الملابس والمظهر</h3>
                     <p className="text-[10px] text-[var(--text-muted)] mb-2">
-                      {OUTFITS.length} طقمًا ثابتًا، متاحة دائمًا في جميع المشاهد دون إخفاء أو استبدال تلقائي.
+                      {OUTFITS.length} طقمًا من الصور المرجعية، مع إمكانية إضافة جاكيت اختياري دون تغيير اللباس الأصلي.
                     </p>
                     <div className="grid grid-cols-2 gap-2 mb-2">
                       <label className="block min-w-0">
@@ -3333,7 +3336,7 @@ export default function PhysFrameApp() {
                         <span className="block text-[10px] text-[var(--text-muted)] mb-1">ابحث عن ملابس</span>
                         <input type="search" value={clothingSearch}
                           onChange={e => setClothingSearch(e.target.value)}
-                          aria-label="ابحث في الملابس" placeholder="تيشيرت، شورت..."
+                          aria-label="ابحث في الملابس" placeholder="قميص كحلي، ثوب أسود..."
                           className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-xl px-2 py-2 text-xs text-white"
                         />
                       </label>
@@ -3372,6 +3375,34 @@ export default function PhysFrameApp() {
                         ) : null;
                       })}
                     </select>
+                    <div className="rounded-xl border border-[var(--border)] p-3 mb-3 space-y-2">
+                      <div className="text-xs font-bold text-white">الجاكيت (اختياري مع أي لباس)</div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button type="button" aria-pressed={state.jacketId === 'none'}
+                          onClick={() => { setState(prev => ({ ...prev, jacketId: 'none' })); setUseEnhancedPrompt(false); setEnhancedPrompts({}); }}
+                          className={`rounded-lg border px-3 py-2 text-xs ${state.jacketId === 'none' ? 'border-[var(--accent)] text-white' : 'border-[var(--border)] text-[var(--text-muted)]'}`}>
+                          بدون جاكيت
+                        </button>
+                        <button type="button" aria-pressed={state.jacketId !== 'none'}
+                          onClick={() => { setState(prev => ({ ...prev, jacketId: prev.jacketId === 'none' ? 'short_black_puffer' : prev.jacketId })); setUseEnhancedPrompt(false); setEnhancedPrompts({}); }}
+                          className={`rounded-lg border px-3 py-2 text-xs ${state.jacketId !== 'none' ? 'border-[var(--accent)] text-white' : 'border-[var(--border)] text-[var(--text-muted)]'}`}>
+                          مع جاكيت
+                        </button>
+                      </div>
+                      {state.jacketId !== 'none' && (
+                        <label className="block text-[10px] text-[var(--text-muted)]">
+                          نوع الجاكيت
+                          <select value={state.jacketId} aria-label="نوع الجاكيت"
+                            onChange={e => { setState(prev => ({ ...prev, jacketId: e.target.value as JacketId })); setUseEnhancedPrompt(false); setEnhancedPrompts({}); }}
+                            className="mt-1 w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-xl px-3 py-2.5 text-xs text-white">
+                            {JACKETS.map(j => <option key={j.id} value={j.id}>{j.labelAR}</option>)}
+                          </select>
+                        </label>
+                      )}
+                      <p className="text-[10px] text-[var(--text-muted)]">
+                        {state.jacketId === 'none' ? 'البرومبت سيمنع إضافة أي جاكيت.' : `البرومبت سيضيف: ${getJacket(state.jacketId)?.labelAR || ''} فوق اللباس المحدد.`}
+                      </p>
+                    </div>
                     {visibleOutfits.length === 0 && (
                       <p role="status" className="text-[10px] text-[var(--text-muted)] mb-2">
                         لا توجد ملابس مطابقة. طقمك المختار محفوظ.
@@ -3380,7 +3411,7 @@ export default function PhysFrameApp() {
                     <div className="rounded-xl border border-[var(--accent)]/30 bg-[var(--accent)]/5 p-3 mb-3">
                       <div className="text-[11px] font-bold text-white">🔒 طقم كامل وثابت</div>
                       <p className="text-[10px] text-[var(--text-muted)] mt-1 leading-relaxed">
-                        يتغير الطقم فقط عند اختيارك له يدويًا. تغيير المكان أو الوقت أو المشهد الجاهز أو التصحيح التلقائي لا يبدّل ملابسك.
+                        يبقى اللباس الأساسي ثابتًا عند تغيير المشهد. يمكنك إضافة جاكيت أو إزالته بشكل مستقل، دون تغيير لون الثوب أو القميص.
                       </p>
                       <p className="text-[10px] text-[var(--accent)] mt-1">{selectedOutfit?.labelAR || 'اختر طقمًا كاملًا'}</p>
                     </div>
@@ -4411,7 +4442,7 @@ export default function PhysFrameApp() {
                     <div className="space-y-2.5">
                       {presets.map(preset => (
                         <div key={preset.id} className="bg-[var(--bg-hover)] border border-white/5 p-3.5 rounded-xl flex justify-between items-center hover:border-[var(--border-accent)] transition-all">
-                           <div className="flex-1 cursor-pointer" onClick={() => { setState(prev => ({ ...DEFAULT_STATE, ...preset.state, outfitId: prev.outfitId, outfitLocked: true })); setShowPresetsSheet(false); showToast(`تم تحميل: ${preset.name} مع الاحتفاظ بالملابس`); }}>
+                           <div className="flex-1 cursor-pointer" onClick={() => { setState(prev => ({ ...DEFAULT_STATE, ...preset.state, outfitId: prev.outfitId, jacketId: prev.jacketId, outfitLocked: true })); setShowPresetsSheet(false); showToast(`تم تحميل: ${preset.name} مع الاحتفاظ بالملابس`); }}>
                              <h4 className="font-bold text-xs text-white mb-0.5">{preset.name}</h4>
                              <p className="text-[11px] text-[var(--text-muted)]">
                                {preset.state.captureType} • {preset.state.subScene || 'عام'} • {preset.state.timeOfDay}
