@@ -456,7 +456,7 @@ export function resolveSelfieAngleGeometry(context: SelfieAngleContext): Resolve
     || !isCarInteriorSelfieContext(context)
     || !advisedPreset.carSeat
     || advisedPreset.carSeat === 'either'
-    || (requestedSeat === 'front-center' ? advisedPreset.carSeat === 'either' : advisedPreset.carSeat === requestedSeat);
+    || (requestedSeat !== 'front-center' && advisedPreset.carSeat === requestedSeat);
   const adviceAccepted = Boolean(advisedPreset && eligibleIds.has(advisedPreset.id) && adviceSeatCompatible);
   const preset = adviceAccepted ? advisedPreset! : fallback;
   const advice = adviceAccepted ? context.advice : undefined;
