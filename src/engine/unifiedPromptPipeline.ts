@@ -142,7 +142,8 @@ const reconcileSharedNegative = (
 export function compileUltraShortPrompt(
   state: SceneState,
   semantic: SemanticPromptScene,
-  physical?: DerivedPhysicalState
+  physical?: DerivedPhysicalState,
+  options: { omitCameraAndOcclusion?: boolean } = {}
 ): string {
   const compact = (value: string, limit = 180): string => {
     const normalized = value.replace(/\s+/g, ' ').trim();
@@ -267,8 +268,8 @@ export function compileUltraShortPrompt(
     microDetails ? 'Visible scene: ' + microDetails + '.' : '',
     carStatement,
     bedContact,
-    camera,
-    contact,
+    options.omitCameraAndOcclusion ? '' : camera,
+    options.omitCameraAndOcclusion ? '' : contact,
     group,
     homePeople,
     'Time: ' + state.timeOfDay + '. Lighting: ' + lighting,
@@ -428,9 +429,16 @@ export function compileUnifiedPromptPipeline(
     shortPrompt,
     manifest
   );
+  // The Gemini export is built without the generic camera and occlusion
+  // prose. Its dedicated compiler writes one authoritative capture geometry.
+  const geminiShortPrompt = bedroomConstraints?.valid
+    ? shortPrompt
+    : compileUltraShortPrompt(resolved.state, semantic, resolved.physicalState, {
+        omitCameraAndOcclusion: true,
+      });
   const geminiAdapter = compilePlatformAdapter(
     'gemini',
-    compileGeminiGeometryPrompt(shortPrompt, resolved, manifest.referencePlan),
+    compileGeminiGeometryPrompt(geminiShortPrompt, resolved, manifest.referencePlan),
     manifest
   );
   const midjourneyAdapter = compilePlatformAdapter(
