@@ -191,8 +191,16 @@ export function buildPlatformAdapterPlan(
 
   if (target === 'gemini') {
     const capability = PLATFORM_CAPABILITY_REGISTRY.gemini;
+    // The scene compiler already explicitly locks every facial feature.
+    // Do not prepend the generic identity sentence a second time.
+    const scopedReference = clean.includes('Reference photo fixes exact facial identity')
+      ? referenceDirective.replace(
+          'Use the provided image input only to preserve recognizable identity and stable subject features.\n',
+          ''
+        )
+      : referenceDirective;
     const prompt = hasReference
-      ? `${referenceDirective}\n\n${clean}`
+      ? `${scopedReference}\n\n${clean}`.trim()
       : clean;
 
     return {
