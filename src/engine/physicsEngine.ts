@@ -1447,24 +1447,20 @@ export function validatePrompt(
     }
   }
 
-  // 5. Duplicate Phrase / Sentence Deduplication
-  const lines = cleanPrompt.split('\n');
-  const seenLines = new Set<string>();
-  const dedupedLines: string[] = [];
-
-  for (const line of lines) {
+  // 5. Remove exact duplicate instructions even inside long single-line prompts.
+  // Semantic similarity is deliberately NOT used: repeated-looking sentences can
+  // describe physically distinct people, light sources or layers of clothing.
+  const seenSentences = new Set<string>();
+  cleanPrompt = cleanPrompt.split('\n').map(line => {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('[') || trimmed.endsWith(']')) {
-      dedupedLines.push(line);
-      continue;
-    }
-    if (seenLines.has(trimmed)) {
-      continue;
-    }
-    seenLines.add(trimmed);
-    dedupedLines.push(line);
-  }
-  cleanPrompt = dedupedLines.join('\n');
+    if (!trimmed || trimmed.startsWith('[') || trimmed.endsWith(']')) return line;
+    return line.split(/(?<=[.!?])\s+(?=[A-Z])/).filter(sentence => {
+      const key = sentence.trim().replace(/\s+/g, ' ').toLowerCase();
+      if (seenSentences.has(key)) return false;
+      seenSentences.add(key);
+      return true;
+    }).join(' ');
+  }).filter(line => line.trim()).join('\n');
 
   return {
     isValid: contradictions.length === 0,
