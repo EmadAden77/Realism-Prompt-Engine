@@ -269,7 +269,7 @@ assert.match(pipeline.platforms.chatgpt.prompt, /connected phone-holding arm/);
 assert.match(pipeline.platforms.chatgpt.prompt, /true seams, weave, gravity folds and contact creases/);
 assert.match(pipeline.platforms.chatgpt.prompt, /Same camera exposure and noise across face, clothing and background/);
 
-assert.match(phoneOnly.platforms.gemini.prompt, /Only the phone screen lights face and near fingers/);
+assert.match(phoneOnly.platforms.gemini.prompt, /only the phone screen lights face and near fingers/i);
 assert.match(phoneOnly.platforms.gemini.prompt, /rapid falloff below upper chest/);
 assert.match(phoneOnly.platforms.gemini.prompt, /no ceiling\/bedside\/vehicle\/flash or invisible fill/);
 assert.doesNotMatch(phoneOnly.platforms.gemini.prompt, /actual overhead streetlight/i);
@@ -700,7 +700,7 @@ assert.doesNotMatch(driverGeminiText, /Action: جالس في مقعد السائ
 assert.doesNotMatch(driverGeminiText, /Supply the image as an actual Gemini image input/);
 assert.doesNotMatch(driverGeminiText, /GEMINI CAMERA GEOMETRY|MANDATORY RESOLVED GEOMETRY/);
 assert.match(driverGeminiText, /The resolved viewpoint has/);
-assert.match(driverGeminiText, /Nearby streetlamp spills through side glass of parked car/);
+assert.match(driverGeminiText, /nearby streetlamp spills through side glass of parked car/i);
 assert.match(driverGeminiText, /Over the selected base clothing, he wears/);
 assert.equal((driverGeminiText.match(/The outerwear is visibly worn on the body over the unchanged base garment/g) || []).length, 1);
 assert.doesNotMatch(geminiDriver.platforms.chatgpt.prompt, /The resolved viewpoint has/);
@@ -744,3 +744,34 @@ assert.doesNotMatch(canopyOutput, /The selected light source is/);
 assert.match(canopyOutput, /hip-length matte-black puffer jacket/i);
 assert.match(canopyOutput, /Fuji White/i);
 assert.match(canopyOutput, /Through the actually visible car glass/i);
+
+// Single-source Gemini: camera and occlusion must be compiled exactly once,
+// never appended after the generic exporter has already described them.
+const singleCameraSelfie = compileUnifiedPromptPipeline({
+  ...base,
+  sceneFamily: 'car',
+  subScene: 'مقعد السائق والسيارة متوقفة',
+  pose: 'جالس في مقعد السائق',
+  activity: 'جالس في مقعد السائق',
+  lightingMode: 'إضاءة الشارع عبر زجاج السيارة',
+  timeOfDay: 'night',
+  outfitId: 'thobe_navy',
+  jacketId: 'short_black_puffer',
+});
+const singleCameraText = singleCameraSelfie.platforms.gemini.prompt;
+assert.equal((singleCameraText.match(/Xiaomi 15 Ultra front camera/g) || []).length, 1,
+  'Gemini front camera specification should occur once');
+assert.equal((singleCameraText.match(/phone-holding arm/g) || []).length, 1,
+  'Gemini handheld anatomy should occur once');
+assert.equal((singleCameraText.match(/camera-to-subject distance/g) || []).length, 1,
+  'Gemini selfie reach should occur once');
+assert.doesNotMatch(singleCameraText, /One connected phone-holding arm, camera outside the frame/);
+assert.doesNotMatch(singleCameraText, /Late at night, Nearby/);
+assert.match(singleCameraText, /Late at night, nearby streetlamp/i);
+assert.equal((singleCameraText.match(/He is seated in the left driver seat of the parked vehicle/g) || []).length, 1);
+assert.doesNotMatch(singleCameraText, /Seated in the LEFT driver seat with the steering wheel on the LEFT/);
+assert.match(singleCameraText, /hip-length matte-black puffer jacket/);
+assert.match(singleCameraText, /2017 Range Rover Sport L494 pre-facelift/);
+assert.doesNotMatch(singleCameraText, /[\u0600-\u06ff]/u);
+assert.match(singleCameraSelfie.platforms.chatgpt.prompt, /Xiaomi 15 Ultra front camera/);
+assert.match(singleCameraSelfie.platforms.midjourney.prompt, /Xiaomi 15 Ultra front camera/);
