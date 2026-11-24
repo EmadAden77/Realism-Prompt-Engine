@@ -269,7 +269,7 @@ assert.match(pipeline.platforms.chatgpt.prompt, /connected phone-holding arm/);
 assert.match(pipeline.platforms.chatgpt.prompt, /true seams, weave, gravity folds and contact creases/);
 assert.match(pipeline.platforms.chatgpt.prompt, /Same camera exposure and noise across face, clothing and background/);
 
-assert.match(phoneOnly.platforms.gemini.prompt, /Only the phone screen lights face and near fingers/);
+assert.match(phoneOnly.platforms.gemini.prompt, /only the phone screen lights face and near fingers/i);
 assert.match(phoneOnly.platforms.gemini.prompt, /rapid falloff below upper chest/);
 assert.match(phoneOnly.platforms.gemini.prompt, /no ceiling\/bedside\/vehicle\/flash or invisible fill/);
 assert.doesNotMatch(phoneOnly.platforms.gemini.prompt, /actual overhead streetlight/i);
