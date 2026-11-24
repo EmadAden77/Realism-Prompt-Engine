@@ -300,7 +300,7 @@ assert.doesNotMatch(opticalMirror.platforms.gemini.prompt, /Xiaomi 15 Ultra fron
 
 const outfitChanged = compileUnifiedPromptPipeline({
   ...base,
-  outfitId: 'navy_shirt_grey_trousers',
+  outfitId: 'burgundy_shirt_grey_trousers',
 });
 assert.equal(
   outfitChanged.manifest.resolved.physicalState.cameraDistance,
