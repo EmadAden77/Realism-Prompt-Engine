@@ -118,9 +118,12 @@ export function compileGeminiGeometryPrompt(
   const reference = referencePlan.hasReference
     ? 'Identity reference: preserve the photographed person’s recognizable features and natural asymmetry; the reference does not set the new clothing, camera, lighting, or setting.'
     : '';
-  const lighting = p.shadowBehavior
-    ? `Light and shadows: ${p.shadowBehavior}. Every highlight and reflection must come from the specified visible or plausibly off-frame source.`
-    : 'Light and shadows follow only the scene’s specified physical light sources.';
+  const source = translateKnown(state.lightingMode, KNOWN_LIGHTING);
+  const lighting = [
+    `Light source: ${source}.`,
+    p.shadowBehavior ? `Shadow direction: ${p.shadowBehavior}.` : '',
+    'Exposure, shadows and reflections must follow only that source and its physically possible bounce.',
+  ].filter(Boolean).join(' ');
 
   return [
     base,
