@@ -373,6 +373,9 @@ export function compileUnifiedPromptPipeline(
   semantic.hair = [semantic.hair, ...hairExpression.hair].join(' ');
   semantic.expression = [semantic.expression, ...hairExpression.expression].join(' ');
 
+  // Preserve the selected wardrobe as the single source of truth, even when
+  // the bedroom-specific capture form contains older, independent clothing text.
+  const canonicalBaseOutfit = semantic.outfit.split(/\. LOCKED COMPLETE OUTFIT:/)[0];
   // For explicitly configured bedroom captures, override legacy contradictory
   // text sections with a single resolved source of truth before compilation.
   if (bedroomConstraints?.valid) {
@@ -383,7 +386,7 @@ export function compileUnifiedPromptPipeline(
     semantic.cameraRealism = 'Natural phone-camera noise and computational processing; no fabricated sensor measurements.';
     semantic.lighting = instructions.find(line => line.includes('OLED display') || line.startsWith('Light comes only')) || semantic.lighting;
     semantic.visibleEnvironment = 'Ordinary bedroom with physically supported furniture and bedding; no floating objects.';
-    semantic.outfit = instructions.find(line => line.includes('cloth wrinkles follow')) || semantic.outfit;
+    semantic.outfit = [semantic.outfit, 'In bedroom poses, fabric creases and folds follow actual support contacts.'].join(' ');
   }
   const neutral = compileNeutralPrompt(
     semantic,
@@ -394,10 +397,15 @@ export function compileUnifiedPromptPipeline(
   // there too, rather than bypassing the standard short-prompt outfit logic.
   const bedroomJacket = getJacket(resolved.state.jacketId);
   const shortPrompt = bedroomConstraints?.valid
-    ? [bedroomConstraints.value.visualInstructions.join(' '),
-       bedroomJacket
-         ? `Mandatory outerwear worn over the selected base outfit: ${bedroomJacket.prompt}. Keep underlying clothes unchanged.`
-         : 'No outerwear: no jacket, coat, parka or vest.'].join(' ')
+    ? [
+        ...bedroomConstraints.value.visualInstructions.filter(
+          line => !line.includes('cloth wrinkles follow gravity')
+        ),
+        `Outfit: ${canonicalBaseOutfit}. Keep every selected garment and color unchanged; fabric drapes with gravity and mattress contact.`,
+        bedroomJacket
+          ? `Mandatory outerwear: ${bedroomJacket.prompt}. The jacket or vest must be visibly worn OVER the unchanged base outfit.`
+          : 'No jacket, coat, parka or vest over the selected outfit.',
+      ].join(' ')
     : compileUltraShortPrompt(resolved.state, semantic, resolved.physicalState);
 
   const chatgptAdapter = compilePlatformAdapter(
