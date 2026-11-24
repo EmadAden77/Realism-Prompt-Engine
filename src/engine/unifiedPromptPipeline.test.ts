@@ -580,6 +580,49 @@ for (const target of ['chatgpt', 'gemini', 'midjourney'] as const) {
 }
 assert.match(canonicalBedroom.semantic.outfit, /matte black traditional Saudi thobe/i);
 
+// Historical bedroom presets may still contain an iPhone device. They must
+// export only the canonical Xiaomi front camera, preserving identity, outfit,
+// and optional outerwear across every platform.
+const legacyCameraBedroom = compileUnifiedPromptPipeline({
+  ...base,
+  sceneFamily: 'bedroom',
+  subScene: 'على السرير',
+  pose: 'مستلقي على السرير',
+  activity: 'مستلقي',
+  lightingMode: 'إضاءة شاشة الهاتف فقط',
+  timeOfDay: 'night',
+  outfitId: 'thobe_black',
+  jacketId: 'camel_quilted_vest',
+  bedroomCapture: {
+    ...bedroomCapture,
+    camera: { deviceId: 'iPhone 15 Pro', module: 'front', lensToFaceCm: 55 }
+  }
+});
+assert.equal(legacyCameraBedroom.diagnostics.bedroomConstraints?.valid, true);
+for (const target of ['chatgpt', 'gemini', 'midjourney'] as const) {
+  const output = legacyCameraBedroom.platforms[target].prompt;
+  assert.match(output, /Xiaomi 15 Ultra front-camera perspective/i);
+  assert.doesNotMatch(output, /iPhone 15 Pro/i);
+  assert.match(output, /matte black traditional Saudi thobe/i);
+  assert.match(output, /camel-brown suede-like sleeveless padded vest/i);
+}
+const invalidBedroomModule = compileUnifiedPromptPipeline({
+  ...base,
+  sceneFamily: 'bedroom',
+  subScene: 'على السرير',
+  pose: 'مستلقي على السرير',
+  activity: 'مستلقي',
+  lightingMode: 'إضاءة شاشة الهاتف فقط',
+  timeOfDay: 'night',
+  bedroomCapture: {
+    ...bedroomCapture,
+    camera: { deviceId: 'iPhone 15 Pro', module: 'rear_main', lensToFaceCm: 55 }
+  }
+});
+assert.equal(invalidBedroomModule.diagnostics.bedroomConstraints?.valid, false);
+assert.equal(invalidBedroomModule.diagnostics.isValid, false);
+
+
 // Refined text must not silently recolor attire, replace illumination or
 // change camera geometry, even when it still mentions the right jacket.
 const sceneRewrite = vestPipeline.platforms.gemini.prompt
