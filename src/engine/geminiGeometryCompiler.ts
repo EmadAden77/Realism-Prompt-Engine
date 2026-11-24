@@ -2,10 +2,88 @@ import type { ResolvedScene } from './physicsEngine';
 import type { ReferencePlan } from './referenceRouter';
 
 /**
- * Gemini Image geometry contract. Never reconstruct camera facts from UI labels,
- * infer undocumented measurements, or modify the physics engine's decisions.
- * This adds a platform-specific instruction layer only to Gemini exports.
+ * Gemini-native image prompt presentation. The neutral engine owns scene facts;
+ * this layer may format and deduplicate them but never infer a new camera,
+ * identity, garment, light source, or viewpoint.
  */
+
+const KNOWN_SCENE_PHRASES: Record<string, string> = {
+  'جالس في مقعد السائق': 'seated in the left driver seat',
+  'جالس في مقعد الراكب': 'seated in the front passenger seat',
+  'مقعد السائق والسيارة متوقفة': 'driver seat of the safely parked vehicle',
+  'مقعد الراكب والسيارة متوقفة': 'front passenger seat of the safely parked vehicle',
+  'واقف بجانب سيارة متوقفة': 'standing beside a safely parked vehicle',
+  'ينتظر السيارة': 'waiting beside the parked vehicle',
+  'موقف سيارات مفتوح': 'ordinary open-air parking area',
+  'واقف بثبات': 'standing naturally',
+  'واقف بشكل طبيعي': 'standing naturally',
+  'على السرير': 'on a bed',
+  'مستلقي على السرير': 'lying on a bed with physical support',
+  'مستلقي': 'lying down',
+  'بجانب السرير': 'beside the bed',
+  'شارع فلل سكني': 'ordinary residential villa street',
+};
+
+const KNOWN_LIGHTING: Record<string, string> = {
+  'إضاءة الشارع عبر زجاج السيارة': 'street lighting entering through the vehicle glazing',
+  'إنارة موقف ليلي بجانب السيارة': 'parking-lot fixtures lighting the parked vehicle',
+  'إنارة شارع دافئة': 'warm street lighting',
+  'إضاءة شاشة الهاتف فقط': 'the phone screen as the sole active light source',
+  'ضوء نهاري طبيعي': 'natural daylight',
+  'إضاءة أباجورة دافئة': 'a warm bedside lamp',
+};
+
+const cleanText = (value: string): string => value.trim().replace(/\s+/g, ' ');
+const translateKnown = (value: string, dictionary: Record<string, string>): string =>
+  dictionary[cleanText(value)] || cleanText(value);
+
+const describePosition = (state: ResolvedScene['state'], physical: ResolvedScene['physicalState']): string => {
+  if (state.sceneFamily === 'car' && /السائق|driver/i.test(state.subScene + ' ' + state.pose))
+    return 'seated in the left driver seat of the parked vehicle';
+  if (state.sceneFamily === 'car' && /الراكب|للراكب|passenger/i.test(state.subScene + ' ' + state.pose))
+    return 'seated in the passenger seat of the parked vehicle';
+  return translateKnown(state.pose, KNOWN_SCENE_PHRASES) || physical.bodyOrientation;
+};
+
+/** Deduplicate pose/action when both select the same movement or position. */
+function normalizeSceneLabels(prompt: string, resolved: ResolvedScene): string {
+  const { state, physicalState } = resolved;
+  const pose = describePosition(state, physicalState);
+  const action = translateKnown(state.activity || '', KNOWN_SCENE_PHRASES);
+  const location = translateKnown(state.subScene || '', KNOWN_SCENE_PHRASES);
+  const sameAction = !action || action === pose
+    || (state.sceneFamily === 'car' && /السائق|الراكب|driver|passenger/i.test(state.activity)
+      && /السائق|الراكب|driver|passenger/i.test(state.pose));
+
+  let result = prompt.replace(
+    /Pose:\s*[^.]*\.\s*(?:Action:\s*[^.]*\.\s*)?Setting:\s*[^.]*\./u,
+    [
+      `Pose: ${pose}.`,
+      !sameAction ? `Action: ${action}.` : '',
+      state.sceneFamily !== 'car' && location ? `Setting: ${location}.` : '',
+    ].filter(Boolean).join(' '),
+  );
+
+  const lighting = translateKnown(state.lightingMode, KNOWN_LIGHTING);
+  result = result.replace(
+    /Time:\s*(morning|midday|afternoon|sunset|night)\.\s*Lighting:/i,
+    (_match, time: string) => `Time: ${time}. Lighting:`,
+  );
+  // Only replace the exact source label; preserve its surrounding causal
+  // lighting instructions (which contain the physically verified details).
+  if (state.lightingMode !== lighting)
+    result = result.replace(`Light source: ${state.lightingMode}`, `Light source: ${lighting}`)
+      .replace(`Lighting: ${state.lightingMode}`, `Lighting: ${lighting}`);
+
+  // This was emitted by the generic exporter twice, and has no additional
+  // garment information beyond the already mandatory outerwear description.
+  result = result.replace(
+    /The selected jacket\/vest is visibly worn OVER the base outfit, not merely held nearby\. Preserve the base garment colour and shape under the layer\./g,
+    'The jacket is visibly worn over the unchanged base outfit.',
+  );
+  return result;
+}
+
 export function compileGeminiGeometryPrompt(
   basePrompt: string,
   resolved: ResolvedScene,
@@ -14,68 +92,44 @@ export function compileGeminiGeometryPrompt(
   const { state, physicalState: p } = resolved;
   const front = state.captureType === 'front-selfie';
   const mirror = state.captureType === 'mirror-selfie';
-  const facts = [
-    ['Camera position', p.cameraPosition],
-    ['Camera-to-subject distance', p.cameraDistance],
-    ['Camera direction', p.cameraDirection],
-    ['Pitch', p.cameraPitch],
-    ['Yaw', p.cameraYaw],
-    ['Roll', p.cameraRoll],
-    ['Framing / visible body', p.visibleBodyRegion],
-    ['Field of view', p.fieldOfView],
-    ['Optical perspective', p.opticalPerspective],
-    ['Body orientation', p.bodyOrientation],
-    ['Background depth', p.backgroundDepth],
-  ].filter(([, value]) => typeof value === 'string' && value.trim())
-    .map(([label, value]) => `${label}: ${value}.`);
 
-  const captureRules = front
-    ? [
-      'Capture method: genuine handheld Xiaomi 15 Ultra FRONT camera, approximately 21mm equivalent and f/2.0.',
-      'Anatomy: one continuous connected phone-holding arm, shoulder-to-elbow-to-wrist; reachable handheld camera position.',
-      'Projection: authentic near-to-far wide-angle size relationships and foreshortening. The capturing phone stays outside the direct frame.',
-    ]
+  const base = normalizeSceneLabels(basePrompt, resolved).trim();
+  const capture = front
+    ? 'Xiaomi 15 Ultra front-camera selfie, 21mm-equivalent perspective; one anatomically continuous shoulder-to-wrist phone-holding arm at reachable distance; phone remains outside the captured frame.'
     : mirror
-      ? [
-        'Capture method: one smartphone photographed through one physically consistent flat mirror; the phone is visible only as its true reflection.',
-        'Mirror geometry: viewpoint, reflection, handedness and occlusion all obey one reflective plane; do not simulate a front-camera direct selfie.',
-      ]
-      : [
-        'Capture method: a third-person observer photograph; no implied selfie arm or invisible mirror.',
-        'Projection: subject and background scales follow the resolved observer camera position and depth.',
-      ];
+      ? 'One physically consistent flat-mirror reflection with the real phone visible, correct reflection angles and one continuous arm; no direct front-camera viewpoint.'
+      : 'Third-person observer photograph with physically consistent perspective; no selfie arm or mirror reflection.';
 
-  const occlusion = p.occlusions.length
-    ? `Occlusion order: ${p.occlusions.join('; ')}.`
-    : 'Occlusion order: preserve overlap only for objects actually inside the resolved frame.';
-  const sources = p.lightSources.filter(Boolean);
-  const light = [
-    `Time and lighting selection: ${state.timeOfDay}; ${state.lightingMode}.`,
-    sources.length ? `Resolved light sources: ${sources.join('; ')}.` : '',
-    p.shadowBehavior ? `Shadow behaviour: ${p.shadowBehavior}.` : '',
-    p.exposureBehavior ? `Exposure behaviour: ${p.exposureBehavior}.` : '',
-    'Do not invent a second source, rim light or independent facial exposure; reflections, shadows and noise must agree with the physical sources.',
+  const angleParts = [
+    p.cameraPitch ? `pitch ${p.cameraPitch}` : '',
+    p.cameraYaw ? `yaw ${p.cameraYaw}` : '',
+    p.cameraRoll ? `roll ${p.cameraRoll}` : '',
+  ].filter(Boolean);
+
+  const geometry = [
+    p.cameraDistance ? `Camera distance: ${p.cameraDistance}.` : '',
+    angleParts.length ? `Camera orientation: ${angleParts.join('; ')}.` : '',
+    p.fieldOfView ? `Field of view: ${p.fieldOfView}.` : '',
+    p.visibleBodyRegion ? `Crop: ${p.visibleBodyRegion}.` : '',
+    p.bodyOrientation ? `Body support: ${p.bodyOrientation}.` : '',
+    p.occlusions.length ? `Visible occlusion: ${p.occlusions[0]}.` : '',
   ].filter(Boolean);
 
   const reference = referencePlan.hasReference
-    ? 'The supplied identity reference controls recognizable facial features only; scene camera, outfit, lighting and composition come from the validated scene, not from the reference photo. Supply the image as an actual Gemini image input.'
-    : 'No identity reference image is attached: do not claim one exists.';
-  const invariants = [
-    'Keep the exact base outfit, selected worn outerwear, face and eyewear settings from the main scene description. Do not reinterpret these as optional styling.',
-    'Apply geometry as a single coherent camera solution, not separate unrelated cinematic effects.',
-    'Every scene fact above comes from the validated local geometry; do not invent extra numeric camera measurements or extra objects.',
-  ];
+    ? 'Identity reference: preserve the photographed person’s recognizable features and natural asymmetry; the reference does not set the new clothing, camera, lighting, or setting.'
+    : '';
+  const lighting = p.shadowBehavior
+    ? `Light and shadows: ${p.shadowBehavior}. Every highlight and reflection must come from the specified visible or plausibly off-frame source.`
+    : 'Light and shadows follow only the scene’s specified physical light sources.';
 
   return [
-    basePrompt.trim(),
+    base,
     '',
-    'GEMINI IMAGE — MANDATORY RESOLVED GEOMETRY',
+    'GEMINI CAMERA GEOMETRY',
     reference,
-    ...captureRules,
-    ...facts,
-    p.armReach && front ? `Handheld reach: ${p.armReach}.` : '',
-    occlusion,
-    ...light,
-    ...invariants,
+    `Capture: ${capture}`,
+    ...geometry,
+    lighting,
+    'Keep the chosen outfit, outerwear and facial appearance exactly as described above. Preserve natural smartphone exposure and perspective without invented lights or objects.',
   ].filter(Boolean).join('\n');
 }
