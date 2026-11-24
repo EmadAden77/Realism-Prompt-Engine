@@ -1892,7 +1892,7 @@ export default function PhysFrameApp() {
     try {
       setIsEnhancingPrompt(true);
       const enhancePipeline = compileUnifiedPromptPipeline(state as any);
-      if (!enhancePipeline.diagnostics.anglePromptReady) {
+      if (!enhancePipeline.diagnostics.isValid) {
         throw new Error('لا يمكن تعزيز أو إرسال برومبت دون أدلة هندسية كافية للكاميرا.');
       }
       const base = enhancePipeline.platforms[targetEngine].prompt;
@@ -1907,7 +1907,10 @@ export default function PhysFrameApp() {
         }),
       });
 
-      if (!res.ok) throw new Error('فشل تعزيز البرومبت');
+      if (!res.ok) {
+        const problem = await res.json().catch(() => null);
+        throw new Error(typeof problem?.error === 'string' ? problem.error : `تعذر تحسين البرومبت (HTTP ${res.status})`);
+      }
       const data = await res.json();
       if (data.source !== 'gemini' || typeof data.enhancedPrompt !== 'string' || !data.enhancedPrompt.trim()) {
         throw new Error('لم يُرجع Gemini برومبت محسنًا صالحًا.');
@@ -1967,7 +1970,7 @@ export default function PhysFrameApp() {
   if (currentPromptPipeline) {
     // Memoized authoritative engine path; modal changes cannot recompute scene physics.
     const pipeline = currentPromptPipeline;
-    angleExportReady = pipeline.diagnostics.anglePromptReady && verifyCausalFingerprint(pipeline);
+    angleExportReady = pipeline.diagnostics.isValid && verifyCausalFingerprint(pipeline);
     chatGPTPrompt = pipeline.platforms.chatgpt.prompt;
     geminiPrompt = pipeline.platforms.gemini.prompt;
     negativePrompt = pipeline.platforms.chatgpt.negativePrompt || pipeline.negative.text;
@@ -4081,6 +4084,12 @@ export default function PhysFrameApp() {
                  </div>
                )}
 
+               {!angleExportReady && (
+                 <div role="alert" className="px-4 py-2 text-[11px] text-amber-200 bg-amber-900/20">
+                   التصدير متوقف حتى حل التعارضات: {currentPromptPipeline?.diagnostics.conflictReport.errors.map(issue => issue.message).slice(0, 2).join('؛ ') || currentPromptPipeline?.diagnostics.angleBlockingReasons.join('؛ ') || 'المشهد غير صالح'}
+                 </div>
+               )}
+
                {/* Textarea Viewport */}
                <div className="flex-1 overflow-y-auto p-4 relative" dir="ltr">
                   <textarea
@@ -4093,7 +4102,8 @@ export default function PhysFrameApp() {
                {/* Action Footer */}
                <div className="p-4 border-t border-white/10 pb-[calc(1.25rem+env(safe-area-inset-bottom))] flex gap-2">
                   <button
-                    onClick={() => angleExportReady ? copyToClipboard(currentDisplayPrompt) : showToast('تعذر نسخ البرومبت: أدلة زاوية الكاميرا غير كافية')}
+                    disabled={!angleExportReady || !currentDisplayPrompt}
+                    onClick={() => angleExportReady ? copyToClipboard(currentDisplayPrompt) : showToast('لا يمكن النسخ قبل حل التعارضات')}
                     className="flex-1 py-3 bg-[var(--accent)] hover:bg-[#d6b783] text-black rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md active:scale-98"
                   >
                     <Copy className="w-4 h-4" />
