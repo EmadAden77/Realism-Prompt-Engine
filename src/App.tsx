@@ -4041,7 +4041,7 @@ export default function PhysFrameApp() {
                        onClick={() => { setActiveTab('gemini'); setUseEnhancedPrompt(false); }}
                        className={`text-xs font-bold pb-1.5 border-b-2 transition-colors ${activeTab === 'gemini' ? 'border-[var(--accent)] text-white' : 'border-transparent text-[var(--text-muted)]'}`}
                      >
-                       Gemini / Imagen
+                       Gemini Image
                      </button>
                      <button
                        onClick={() => setActiveTab('negative')}
