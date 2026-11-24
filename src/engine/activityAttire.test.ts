@@ -1,4 +1,4 @@
-import { OUTFITS } from '../data/clothingOutfits';
+import { OUTFITS, type OutfitItem } from '../data/clothingOutfits';
 import { MICRO_LOCATIONS } from '../data/microLocations';
 import {
   describeAttireControls,
@@ -34,7 +34,14 @@ assert(inferGarmentWearContext('جالس على حافة السرير') === 'aft
 
 console.log('▶ Activity/Attire Test 4: shirt-specific controls are capability-gated');
 const shirt = OUTFITS.find(item => item.id === 'navy_shirt_grey_trousers');
-const tee = OUTFITS.find(item => /white_tee|black_tee/.test(item.id)) || OUTFITS.find(item => /t-shirt|tee/i.test(item.prompt));
+// Historical T-shirts were intentionally removed from the live wardrobe.
+ // Keep capability coverage using a synthetic fixture, not a resurrected outfit.
+const tee: OutfitItem = {
+  id: 'test_only_white_tee', labelAR: 'تيشيرت أبيض اختباري',
+  labelAr: 'تيشيرت أبيض اختباري', promptDescription: 'plain white cotton T-shirt',
+  prompt: 'plain white cotton T-shirt', category: 'casual',
+  categoryAR: 'اختبار', subCategoryAR: 'اختبار', physics: [],
+};
 const thobe = OUTFITS.find(item => item.id === 'thobe_white_summer') || OUTFITS.find(item => /thobe/i.test(item.prompt));
 
 assert(Boolean(shirt), 'Expected canonical button-up shirt fixture');
@@ -80,7 +87,15 @@ assert(!teeDescription.prompt.includes('top two buttons'), 'T-shirt prompt must 
 assert(!teeDescription.prompt.includes('half-tuck'), 'T-shirt prompt must ignore stale shirt tuck state');
 
 console.log('▶ Activity/Attire Test 7: explicit button control removes contradictory base wording');
-const suit = OUTFITS.find(item => item.id === 'suit_navy_white_shirt');
+// Synthetic legacy jacket test fixture: not part of the 19-outfit catalog.
+const suit: OutfitItem = {
+  id: 'test_only_navy_suit', labelAR: 'بدلة اختبار',
+  labelAr: 'بدلة اختبار',
+  promptDescription: 'navy suit with open-collar white dress shirt',
+  prompt: 'navy suit with open-collar white dress shirt unbuttoned at neck',
+  category: 'formal', categoryAR: 'اختبار', subCategoryAR: 'اختبار',
+  physics: [],
+};
 assert(Boolean(suit), 'Expected suit fixture');
 const strictClosed = getAttireAwareOutfitPrompt(suit, { shirtButtons: 'fully-buttoned' });
 assert(!/open-collar|unbuttoned at neck/i.test(strictClosed), 'Explicit button state must remove conflicting open-collar wording');
