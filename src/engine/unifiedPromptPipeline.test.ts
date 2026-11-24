@@ -321,7 +321,7 @@ assert.equal(
 );
 assert.equal(pipeline.spatialPlan.regions[0].role, 'subject');
 assert.match(pipeline.semantic.visibleEnvironment, /Spatial composition:/);
-assert.match(pipeline.platforms.gemini.prompt, /Photorealistic vertical 9:16/);
+assert.match(pipeline.platforms.gemini.prompt, /A candid, photorealistic vertical 9:16 smartphone photograph/);
 
 const closeSpatial = compileUnifiedPromptPipeline({
   ...base,
