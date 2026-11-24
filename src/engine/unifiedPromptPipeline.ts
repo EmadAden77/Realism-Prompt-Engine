@@ -4,6 +4,7 @@ import { describe2017RangeRoverSport } from './carReality';
 import { getMicroLocation } from '../data/microLocations';
 import { getPhysicalLightingOption } from '../data/physicalLighting';
 import { getJacket } from '../data/clothingOutfits';
+import { compileGeminiGeometryPrompt } from './geminiGeometryCompiler';
 import { gazeInteractionPrompt } from '../data/gazeInteractions';
 import { exportCausalAttestationLedger, type CausalLedgerEntry } from './promptCompiler';
 import { planSpatialComposition, type SpatialCompositionPlan } from './spatialCompositionPlanner';
@@ -429,7 +430,7 @@ export function compileUnifiedPromptPipeline(
   );
   const geminiAdapter = compilePlatformAdapter(
     'gemini',
-    shortPrompt,
+    compileGeminiGeometryPrompt(shortPrompt, resolved, manifest.referencePlan),
     manifest
   );
   const midjourneyAdapter = compilePlatformAdapter(

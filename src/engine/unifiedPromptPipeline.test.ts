@@ -650,3 +650,35 @@ const duplicateResult = validatePrompt(
   vestPipeline.manifest.resolved,
 );
 assert.equal((duplicateResult.cleanPrompt.match(/Keep realistic skin pores/g) || []).length, 1);
+
+// Gemini-native geometry is compiled from the resolved physical scene; it must
+// never leak into the ChatGPT/Midjourney platform prompts.
+assert.match(pipeline.platforms.gemini.prompt, /GEMINI IMAGE — MANDATORY RESOLVED GEOMETRY/);
+assert.match(pipeline.platforms.gemini.prompt, /Camera-to-subject distance:/);
+assert.match(pipeline.platforms.gemini.prompt, /Pitch:/);
+assert.match(pipeline.platforms.gemini.prompt, /Yaw:/);
+assert.match(pipeline.platforms.gemini.prompt, /Roll:/);
+assert.match(pipeline.platforms.gemini.prompt, /Field of view:/);
+assert.match(pipeline.platforms.gemini.prompt, /one continuous connected phone-holding arm/i);
+assert.match(pipeline.platforms.gemini.prompt, /actual Gemini image input/);
+assert.match(pipeline.platforms.gemini.prompt, /matte|burgundy/i);
+assert.doesNotMatch(pipeline.platforms.chatgpt.prompt, /MANDATORY RESOLVED GEOMETRY/);
+assert.doesNotMatch(pipeline.platforms.midjourney.prompt, /MANDATORY RESOLVED GEOMETRY/);
+assert.match(withoutReference.platforms.gemini.prompt, /No identity reference image is attached/);
+assert.doesNotMatch(withoutReference.platforms.gemini.prompt, /The supplied identity reference controls/);
+
+const geminiMirrorGeometry = compileUnifiedPromptPipeline({
+  ...base, sceneFamily: 'bedroom', subScene: 'بجانب السرير',
+  captureType: 'mirror-selfie', lightingMode: 'إضاءة أباجورة دافئة',
+});
+assert.match(geminiMirrorGeometry.platforms.gemini.prompt, /one smartphone photographed through one physically consistent flat mirror/);
+assert.doesNotMatch(geminiMirrorGeometry.platforms.gemini.prompt, /genuine handheld Xiaomi 15 Ultra FRONT camera/);
+
+const geminiObserverGeometry = compileUnifiedPromptPipeline({
+  ...base, captureType: 'third-person-candid',
+});
+assert.match(geminiObserverGeometry.platforms.gemini.prompt, /third-person observer photograph/);
+assert.doesNotMatch(geminiObserverGeometry.platforms.gemini.prompt, /one continuous connected phone-holding arm/);
+assert.match(canonicalBedroom.platforms.gemini.prompt, /GEMINI IMAGE — MANDATORY RESOLVED GEOMETRY/);
+assert.match(canonicalBedroom.platforms.gemini.prompt, /phone screen|phone OLED display/i);
+assert.match(vestPipeline.platforms.gemini.prompt, /camel-brown suede-like sleeveless padded vest/i);
