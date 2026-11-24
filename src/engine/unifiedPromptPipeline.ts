@@ -146,10 +146,13 @@ export function compileUltraShortPrompt(
   const compact = (value: string, limit = 180): string => {
     const normalized = value.replace(/\s+/g, ' ').trim();
     if (normalized.length <= limit) return normalized;
-    const cut = normalized.slice(0, limit);
-    const boundary = cut.lastIndexOf(' ');
-    return cut.slice(0, boundary > limit * 0.65 ? boundary : limit)
-      .trim().replace(/[,;:.]$/, '');
+    // Never cut a mandatory garment, source, or camera fact mid-phrase.
+    // Prefer complete short clauses; retain longer atomic facts verbatim.
+    const prefix = normalized.slice(0, limit);
+    const boundaries = [...prefix.matchAll(/[.!?;](?=\s|$)/g)]
+      .map(match => (match.index ?? 0) + 1);
+    const end = boundaries.filter(index => index >= limit * 0.6).pop();
+    return end ? normalized.slice(0, end).trim() : normalized;
   };
 
   const micro = getMicroLocation(state.sceneFamily, state.subScene);
@@ -373,6 +376,9 @@ export function compileUnifiedPromptPipeline(
   semantic.hair = [semantic.hair, ...hairExpression.hair].join(' ');
   semantic.expression = [semantic.expression, ...hairExpression.expression].join(' ');
 
+  // Preserve the selected wardrobe as the single source of truth, even when
+  // the bedroom-specific capture form contains older, independent clothing text.
+  const canonicalBaseOutfit = semantic.outfit.split(/\. LOCKED COMPLETE OUTFIT:/)[0];
   // For explicitly configured bedroom captures, override legacy contradictory
   // text sections with a single resolved source of truth before compilation.
   if (bedroomConstraints?.valid) {
@@ -383,7 +389,7 @@ export function compileUnifiedPromptPipeline(
     semantic.cameraRealism = 'Natural phone-camera noise and computational processing; no fabricated sensor measurements.';
     semantic.lighting = instructions.find(line => line.includes('OLED display') || line.startsWith('Light comes only')) || semantic.lighting;
     semantic.visibleEnvironment = 'Ordinary bedroom with physically supported furniture and bedding; no floating objects.';
-    semantic.outfit = instructions.find(line => line.includes('cloth wrinkles follow')) || semantic.outfit;
+    semantic.outfit = [semantic.outfit, 'In bedroom poses, fabric creases and folds follow actual support contacts.'].join(' ');
   }
   const neutral = compileNeutralPrompt(
     semantic,
@@ -394,10 +400,15 @@ export function compileUnifiedPromptPipeline(
   // there too, rather than bypassing the standard short-prompt outfit logic.
   const bedroomJacket = getJacket(resolved.state.jacketId);
   const shortPrompt = bedroomConstraints?.valid
-    ? [bedroomConstraints.value.visualInstructions.join(' '),
-       bedroomJacket
-         ? `Mandatory outerwear worn over the selected base outfit: ${bedroomJacket.prompt}. Keep underlying clothes unchanged.`
-         : 'No outerwear: no jacket, coat, parka or vest.'].join(' ')
+    ? [
+        ...bedroomConstraints.value.visualInstructions.filter(
+          line => !line.includes('cloth wrinkles follow gravity')
+        ),
+        `Outfit: ${canonicalBaseOutfit}. Keep every selected garment and color unchanged; fabric drapes with gravity and mattress contact.`,
+        bedroomJacket
+          ? `Mandatory outerwear: ${bedroomJacket.prompt}. The jacket or vest must be visibly worn OVER the unchanged base outfit.`
+          : 'No jacket, coat, parka or vest over the selected outfit.',
+      ].join(' ')
     : compileUltraShortPrompt(resolved.state, semantic, resolved.physicalState);
 
   const chatgptAdapter = compilePlatformAdapter(
@@ -557,18 +568,23 @@ export function validateExternalPromptCandidate(
   if (!pipeline.diagnostics.anglePromptReady || !verifyCausalFingerprint(pipeline)) {
     throw new Error('Camera evidence insufficient: prompt export blocked');
   }
-  // Normalize the enhanced text before compiling its negative constraints.
-  // Otherwise constraints can be based on text that is not actually exported.
-  // AI enhancements are not allowed to silently delete an explicit wardrobe layer.
-  const mandatoryJacket = getJacket(pipeline.manifest.resolved.state.jacketId);
-  const jacketSignature: Record<string, RegExp> = {
-    long_black_puffer: /(?:puffer|quilted|padded).{0,65}(?:parka|coat)|(?:parka|coat).{0,65}(?:puffer|quilted|padded)/i,
-    short_black_puffer: /(?:puffer|quilted|padded).{0,65}jacket|jacket.{0,65}(?:puffer|quilted|padded)/i,
-    camel_quilted_vest: /(?:camel|brown).{0,100}(?:vest|waistcoat)|(?:vest|waistcoat).{0,100}(?:camel|brown)/i,
-  };
-  const safeCandidate = mandatoryJacket && !jacketSignature[mandatoryJacket.id]?.test(candidatePrompt)
-    ? `${candidatePrompt.trim()} Mandatory selected outerwear, visibly worn over the unchanged base outfit: ${mandatoryJacket.prompt}.`
-    : candidatePrompt;
+  // A generative rewrite cannot be trusted to preserve dozens of independent
+  // scene locks. Only allow a short additive photographic-quality note after the
+  // complete canonical prompt; otherwise use the exact proven export.
+  const canonical = pipeline.platforms[target].prompt;
+  const proposal = candidatePrompt.trim();
+  const addition = proposal.startsWith(canonical) ? proposal.slice(canonical.length).trim() : '';
+  const isSafeAddition = addition.length > 0
+    && addition.length <= 320
+    && /(?:skin texture|pores|sensor|noise|grain|compression|highlight roll-off|microtexture|natural texture)/i.test(addition)
+    && !/\b(?:wear|wearing|replace|remove|omit|instead|switch|change|alter|add a|add an|must|only|never|without|camera|lens|thobe|shirt|vest|jacket|coat|light source|lighting|pose|background|location|glasses|hairline|face shape|identity)\b/i.test(addition);
+  const safeCandidate = isSafeAddition
+    ? `${canonical}\n${addition}`
+    : canonical;
+  const originalCandidateValidation = proposal === safeCandidate
+    ? null
+    : validatePrompt(proposal, pipeline.manifest.resolved);
+
   const negative = compileNegativeConstraints(
     pipeline.manifest.resolved.state,
     pipeline.semantic,
@@ -579,6 +595,10 @@ export function validateExternalPromptCandidate(
     pipeline.manifest.resolved,
     negative.text
   );
+  if (proposal !== safeCandidate) {
+    validation.warnings.push('AI enhancement was rejected because it changed protected scene text; canonical prompt restored.');
+    validation.contradictionsFound.push(...(originalCandidateValidation?.contradictionsFound || []));
+  }
 
   const adapter = buildPlatformAdapterPlan(
     pipeline.neutral.text,
