@@ -675,7 +675,7 @@ assert.match(geminiMirrorGeometry.platforms.gemini.prompt, /one smartphone photo
 assert.doesNotMatch(geminiMirrorGeometry.platforms.gemini.prompt, /genuine handheld Xiaomi 15 Ultra FRONT camera/);
 
 const geminiObserverGeometry = compileUnifiedPromptPipeline({
-  ...base, captureType: 'third-person',
+  ...base, captureType: 'third-person-candid',
 });
 assert.match(geminiObserverGeometry.platforms.gemini.prompt, /third-person observer photograph/);
 assert.doesNotMatch(geminiObserverGeometry.platforms.gemini.prompt, /one continuous connected phone-holding arm/);
