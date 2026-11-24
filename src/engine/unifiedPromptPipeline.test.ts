@@ -154,10 +154,10 @@ assert(
   )
 );
 assert.match(externalConflict.prompt, /no glasses|not wearing glasses/i);
-assert.doesNotMatch(
+assert.match(
   externalConflict.negativePrompt,
   /eyeglasses, spectacles/,
-  'Contradictory negative fragment must be omitted while repairing the external positive candidate'
+  'When the canonical scene forbids glasses, its negative constraint must remain present'
 );
 
 const repeated = compileUnifiedPromptPipeline(base);
