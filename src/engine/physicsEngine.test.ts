@@ -794,6 +794,7 @@ const passengerState: SceneState = {
   }
 };
 const resolvedPassenger = resolveScene(passengerState);
+console.log('SEAT_DIAGNOSTIC', JSON.stringify({ subScene: resolvedPassenger.state.subScene, pose: resolvedPassenger.state.pose, angle: resolvedPassenger.physicalState.selfieAngle, requestedAdvice: passengerState.selfieAngleAdvice, sceneFamily: resolvedPassenger.state.sceneFamily }));
 assert(
   resolvedPassenger.physicalState.selfieAngle?.source === 'local-fallback',
   'Passenger scene must reject a driver-only Gemini angle'
