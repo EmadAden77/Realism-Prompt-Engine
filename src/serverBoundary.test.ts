@@ -39,7 +39,7 @@ assert(
   'prompt enhancement must reject prompt text not derived from the validated scene'
 );
 assert(
-  serverSource.indexOf("!pipeline.diagnostics.anglePromptReady") < serverSource.indexOf("Refine this prompt for"),
+  serverSource.indexOf("!pipeline.diagnostics.anglePromptReady") < serverSource.indexOf("Keep the original prompt below EXACTLY unchanged"),
   'readiness check must run before AI enhancement'
 );
 
