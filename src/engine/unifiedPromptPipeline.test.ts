@@ -48,7 +48,7 @@ assert.match(
 );
 assert.match(
   pipeline.platforms.gemini.rawPrompt,
-  /provided image input only to preserve/i
+  /Reference photo fixes exact facial identity/i
 );
 assert.match(pipeline.platforms.chatgpt.prompt, /Photorealistic vertical 9:16/);
 assert.match(pipeline.platforms.gemini.prompt, /A candid, photorealistic vertical 9:16 smartphone photograph/);
@@ -659,13 +659,13 @@ assert.match(pipeline.platforms.gemini.prompt, /pitch /);
 assert.match(pipeline.platforms.gemini.prompt, /yaw /);
 assert.match(pipeline.platforms.gemini.prompt, /roll /);
 assert.match(pipeline.platforms.gemini.prompt, /field of view/i);
-assert.match(pipeline.platforms.gemini.prompt, /One anatomically connected arm holds the phone/i);
-assert.match(pipeline.platforms.gemini.prompt, /attached photo supplies facial identity only/i);
+assert.match(pipeline.platforms.gemini.prompt, /one naturally connected phone-holding arm/i);
+assert.match(pipeline.platforms.gemini.prompt, /Reference photo fixes exact facial identity/i);
 assert.match(pipeline.platforms.gemini.prompt, /matte|burgundy/i);
 assert.doesNotMatch(pipeline.platforms.chatgpt.prompt, /The resolved viewpoint has/);
 assert.doesNotMatch(pipeline.platforms.midjourney.prompt, /The resolved viewpoint has/);
 assert.match(withoutReference.platforms.gemini.prompt, /Natural unretouched face/);
-assert.doesNotMatch(withoutReference.platforms.gemini.prompt, /The attached photo supplies facial identity only/);
+assert.doesNotMatch(withoutReference.platforms.gemini.prompt, /Reference photo fixes exact facial identity/);
 
 const geminiMirrorGeometry = compileUnifiedPromptPipeline({
   ...base, sceneFamily: 'bedroom', subScene: 'بجانب السرير',
@@ -719,3 +719,28 @@ assert.match(pipeline.platforms.gemini.prompt, /natural hair and beard texture/)
 assert.match(geminiDriver.platforms.gemini.prompt, /Over the selected base clothing, he wears/);
 assert.doesNotMatch(geminiDriver.platforms.gemini.prompt, /GEMINI CAMERA GEOMETRY/);
 assert.match(canonicalBedroom.platforms.gemini.prompt, /phone screen|phone OLED display/i);
+
+const canopyGemini = compileUnifiedPromptPipeline({
+  ...base,
+  sceneFamily: 'car',
+  subScene: 'مقعد السائق والسيارة متوقفة',
+  pose: 'جالس في مقعد السائق',
+  activity: 'جالس في مقعد السائق',
+  lightingMode: 'إنارة سقف موقف عبر الزجاج',
+  timeOfDay: 'night',
+  outfitId: 'thobe_navy',
+  jacketId: 'short_black_puffer',
+});
+const canopyOutput = canopyGemini.platforms.gemini.prompt;
+assert.doesNotMatch(canopyOutput, /[\u0600-\u06ff]/u, 'Gemini output must not leak Arabic lighting or pose labels');
+assert.match(canopyOutput, /Overhead parking-canopy lamp enters windshield and windows/i);
+assert.equal((canopyOutput.match(/Xiaomi 15 Ultra front camera/g) || []).length, 1);
+assert.equal((canopyOutput.match(/camera-to-subject distance/g) || []).length, 1);
+assert.equal((canopyOutput.match(/pitch -?\d+(?:\.\d+)?°/g) || []).length, 1);
+assert.doesNotMatch(canopyOutput, /pitch -?\d+(?:\.\d+)?° pitch/);
+assert.equal((canopyOutput.match(/Reference photo fixes exact facial identity/g) || []).length, 1);
+assert.doesNotMatch(canopyOutput, /Use the provided image input only to preserve recognizable identity/);
+assert.doesNotMatch(canopyOutput, /The selected light source is/);
+assert.match(canopyOutput, /hip-length matte-black puffer jacket/i);
+assert.match(canopyOutput, /Fuji White/i);
+assert.match(canopyOutput, /Through the actually visible car glass/i);
