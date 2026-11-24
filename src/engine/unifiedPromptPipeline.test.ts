@@ -531,7 +531,7 @@ const vestPipeline = compileUnifiedPromptPipeline({
   ...base, outfitId: 'thobe_black', jacketId: 'camel_quilted_vest',
 });
 const strippedGeminiEnhancement = vestPipeline.platforms.gemini.prompt
-  .replace(/Mandatory outerwear:[\\s\\S]*?(?= Garment configuration:| Expression:)/i, '');
+  .replace(/Mandatory outerwear:[\s\S]*?(?= Garment configuration:| Expression:)/i, '');
 const repairedEnhancement = validateExternalPromptCandidate(
   vestPipeline, 'gemini', strippedGeminiEnhancement
 );
