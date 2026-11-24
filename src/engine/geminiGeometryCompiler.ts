@@ -1,5 +1,6 @@
 import type { ResolvedScene } from './physicsEngine';
 import type { ReferencePlan } from './referenceRouter';
+import { getPhysicalLightingOption } from '../data/physicalLighting';
 
 /**
  * Gemini-native image prompt presentation. The neutral engine owns scene facts;
@@ -31,26 +32,40 @@ const KNOWN_LIGHTING: Record<string, string> = {
   'إضاءة شاشة الهاتف فقط': 'the phone screen as the sole active light source',
   'ضوء نهاري طبيعي': 'natural daylight',
   'إضاءة أباجورة دافئة': 'a warm bedside lamp',
+  'إنارة سقف موقف عبر الزجاج': 'an overhead parking-canopy lamp entering through the windshield and side windows',
 };
 
 const cleanText = (value: string): string => value.trim().replace(/\s+/g, ' ');
+const hasArabic = (value: string): boolean => /[\u0600-\u06ff]/u.test(value);
 const translateKnown = (value: string, dictionary: Record<string, string>): string =>
   dictionary[cleanText(value)] || cleanText(value);
+const englishOrEmpty = (value: string): string => hasArabic(value) ? '' : value;
+const resolveEnglishLight = (state: ResolvedScene['state']): string => {
+  const known = KNOWN_LIGHTING[cleanText(state.lightingMode)];
+  if (known) return known;
+  const option = state.sceneFamily
+    ? getPhysicalLightingOption(state.sceneFamily, state.lightingMode)
+    : undefined;
+  // All selectable physical light modes already have English fixture details.
+  // For an unknown free-text Arabic source, never leak untranslated labels.
+  return option?.detail || englishOrEmpty(state.lightingMode) ||
+    'the selected scene fixture, with source direction fixed by the resolved lighting';
+};
 
 const describePosition = (state: ResolvedScene['state'], physical: ResolvedScene['physicalState']): string => {
   if (state.sceneFamily === 'car' && /السائق|driver/i.test(state.subScene + ' ' + state.pose))
     return 'seated in the left driver seat of the parked vehicle';
   if (state.sceneFamily === 'car' && /الراكب|للراكب|passenger/i.test(state.subScene + ' ' + state.pose))
     return 'seated in the passenger seat of the parked vehicle';
-  return translateKnown(state.pose, KNOWN_SCENE_PHRASES) || physical.bodyOrientation;
+  return englishOrEmpty(translateKnown(state.pose, KNOWN_SCENE_PHRASES)) || physical.bodyOrientation;
 };
 
 /** Deduplicate pose/action when both select the same movement or position. */
 function normalizeSceneLabels(prompt: string, resolved: ResolvedScene): string {
   const { state, physicalState } = resolved;
   const pose = describePosition(state, physicalState);
-  const action = translateKnown(state.activity || '', KNOWN_SCENE_PHRASES);
-  const location = translateKnown(state.subScene || '', KNOWN_SCENE_PHRASES);
+  const action = englishOrEmpty(translateKnown(state.activity || '', KNOWN_SCENE_PHRASES));
+  const location = englishOrEmpty(translateKnown(state.subScene || '', KNOWN_SCENE_PHRASES));
   const sameAction = !action || action === pose
     || (state.sceneFamily === 'car' && /السائق|الراكب|driver|passenger/i.test(state.activity)
       && /السائق|الراكب|driver|passenger/i.test(state.pose));
@@ -64,7 +79,7 @@ function normalizeSceneLabels(prompt: string, resolved: ResolvedScene): string {
     ].filter(Boolean).join(' '),
   );
 
-  const lighting = translateKnown(state.lightingMode, KNOWN_LIGHTING);
+  const lighting = resolveEnglishLight(state);
   result = result.replace(
     /Time:\s*(morning|midday|afternoon|sunset|night)\.\s*Lighting:/i,
     (_match, time: string) => `Time: ${time}. Lighting:`,
@@ -74,6 +89,12 @@ function normalizeSceneLabels(prompt: string, resolved: ResolvedScene): string {
   if (state.lightingMode !== lighting)
     result = result.replace(`Light source: ${state.lightingMode}`, `Light source: ${lighting}`)
       .replace(`Lighting: ${state.lightingMode}`, `Lighting: ${lighting}`);
+
+  // Replace the selected light's original Arabic label everywhere, including
+  // the generic fallback, before the final English-only Gemini export.
+  if (hasArabic(state.lightingMode)) {
+    result = result.split(state.lightingMode).join(lighting);
+  }
 
   // This was emitted by the generic exporter twice, and has no additional
   // garment information beyond the already mandatory outerwear description.
@@ -91,6 +112,12 @@ function normalizeSceneLabels(prompt: string, resolved: ResolvedScene): string {
  */
 function asPhotographNarrative(base: string): string {
   return base
+    // Remove generic capture/occlusion paragraphs. The resolved geometry
+    // paragraph below is their single authoritative final rendering.
+    .replace(/Xiaomi 15 Ultra front camera, 21mm equivalent, f\/2\.0, [^.]*\. One connected phone-holding arm, camera outside the frame; natural wide-angle foreshortening, no floating viewpoint\./g, '')
+    .replace(/Single real phone visible in one flat-mirror reflection, correct hand and reflection geometry; no duplicate phone\./g, '')
+    .replace(/Eye-level candid observer camera, no raised selfie arm or impossible perspective\./g, '')
+    .replace(/\bOcclusion: [^.]*\./g, '')
     .replace(/^Photorealistic vertical 9:16, unedited smartphone photograph\./,
       'A candid, photorealistic vertical 9:16 smartphone photograph, straight out of the camera.')
     .replace(/\bMale, 193cm, 83kg, lean-athletic\./,
@@ -150,20 +177,21 @@ export function compileGeminiGeometryPrompt(
   const mirror = state.captureType === 'mirror-selfie';
 
   const base = asPhotographNarrative(normalizeSceneLabels(basePrompt, resolved));
-  const reference = referencePlan.hasReference
-    ? 'The attached photo supplies facial identity only; the new location, clothing, expression, lighting and viewpoint follow the selected scene.'
-    : '';
+  // The reference-role directive is already emitted once by platformAdapter.
+  // Do not repeat identity instructions in a second paragraph.
+  void referencePlan;
   const capture = front
-    ? 'The picture is taken with the Xiaomi 15 Ultra front camera (approximately 21mm equivalent, f/2.0). One anatomically connected arm holds the phone at a reachable distance outside the photographed frame; the handheld wide-angle perspective remains natural.'
+    ? 'Shot on the Xiaomi 15 Ultra front camera, approximately 21mm equivalent at f/2.0, with one naturally connected phone-holding arm and the handset outside the frame.'
     : mirror
       ? 'The photograph shows one real flat-mirror reflection, with a single visible phone and consistent reflected angles and hand placement rather than a direct front-camera view.'
       : 'A third-person smartphone photograph captures the subject from a physically reachable observer viewpoint, without a selfie arm or a mirror reflection.';
 
+  const angle = (value: string): string => value.match(/-?\d+(?:\.\d+)?°/)?.[0] || value;
   const position = [
     p.cameraDistance ? 'camera-to-subject distance ' + p.cameraDistance : '',
-    p.cameraPitch ? 'pitch ' + p.cameraPitch : '',
-    p.cameraYaw ? 'yaw ' + p.cameraYaw : '',
-    p.cameraRoll ? 'roll ' + p.cameraRoll : '',
+    p.cameraPitch ? 'pitch ' + angle(p.cameraPitch) : '',
+    p.cameraYaw ? 'yaw ' + angle(p.cameraYaw) : '',
+    p.cameraRoll ? 'roll ' + angle(p.cameraRoll) : '',
   ].filter(Boolean).join(', ');
   const frame = [
     p.visibleBodyRegion ? 'Framing includes ' + p.visibleBodyRegion : '',
@@ -176,19 +204,13 @@ export function compileGeminiGeometryPrompt(
   ].filter(Boolean).join(' ');
 
   const reality = appendVisibleSaudiContext(resolved);
-  const lighting = [
-    'The selected light source is ' + translateKnown(state.lightingMode, KNOWN_LIGHTING) + '.',
-    p.shadowBehavior ? 'Shadows behave as follows: ' + p.shadowBehavior + '.' : '',
-    'All illumination, subtle bounce, skin highlights, reflections and low-light noise follow those physical sources without invented fill lights.',
-  ].join(' ');
+  // Lighting is already described with a real fixture and shadow falloff
+  // in the canonical photographic narrative. Do not state it twice.
 
   return [
     base,
-    reference,
     capture,
     geometry,
     reality,
-    lighting,
-    'Keep facial pores, natural hair and beard texture, genuine fabric layering and slight smartphone processing imperfections. Preserve the chosen wardrobe and the real camera geometry without beautification, artificial bokeh or staged background activity.',
   ].filter(Boolean).join('\n\n');
 }
