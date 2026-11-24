@@ -715,7 +715,7 @@ for (const scene of [pipeline, carOutsideById, insideCar]) {
   if (!physics.backgroundRealism.allowsVehicles || physics.visibleVehicles.length === 0)
     assert.doesNotMatch(text, /ordinary parked or passing vehicles with varied realistic spacing/);
 }
-assert.match(pipeline.platforms.gemini.prompt, /natural hair and beard texture/);
+assert.match(pipeline.platforms.gemini.prompt, /real skin microtexture/);
 assert.match(geminiDriver.platforms.gemini.prompt, /Over the selected base clothing, he wears/);
 assert.doesNotMatch(geminiDriver.platforms.gemini.prompt, /GEMINI CAMERA GEOMETRY/);
 assert.match(canonicalBedroom.platforms.gemini.prompt, /phone screen|phone OLED display/i);
