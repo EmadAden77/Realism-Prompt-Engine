@@ -186,7 +186,7 @@ const insideCar = compileUnifiedPromptPipeline({
   ...base, sceneFamily: 'car', subScene: 'داخل السيارة',
   pose: 'جالس في مقعد السائق', activity: 'السيارة متوقفة'
 });
-assert.match(insideCar.platforms.gemini.prompt, /Inside the vehicle:/);
+assert.match(insideCar.platforms.gemini.prompt, /Inside the parked vehicle:/);
 assert.doesNotMatch(insideCar.platforms.gemini.prompt, /Outside beside the parked vehicle:/);
 const besideCar = compileUnifiedPromptPipeline({
   ...base, sceneFamily: 'car', subScene: 'بجانب السيارة في المواقف',
@@ -218,7 +218,7 @@ const carOutsideById = compileUnifiedPromptPipeline({
   pose: 'واقف بجانب باب السائق',
   lightingMode: 'إنارة موقف ليلي بجانب السيارة',
 });
-assert.match(carOutsideById.platforms.gemini.prompt, /Outside beside the parked vehicle:/);
+assert.match(carOutsideById.platforms.gemini.prompt, /Beside the parked vehicle:/);
 assert.doesNotMatch(carOutsideById.platforms.gemini.prompt, /Inside the vehicle:/);
 assert.match(carOutsideById.platforms.gemini.prompt, /parking fixture/);
 
@@ -261,7 +261,7 @@ assert.match(rangeRoverRear.platforms.gemini.prompt, /era-correct tailgate/);
 assert.doesNotMatch(rangeRoverRear.platforms.gemini.prompt, /front grille appearing behind the person as a feature/);
 assert.doesNotMatch(rangeRoverRear.platforms.gemini.prompt, /trunk lid/);
 
-assert.match(carOutsideFreeText.platforms.gemini.prompt, /Outside beside the parked vehicle:/);
+assert.match(carOutsideFreeText.platforms.gemini.prompt, /Beside the parked vehicle:/);
 
 assert.match(pipeline.platforms.chatgpt.prompt, /21mm equivalent, f\/2\.0/);
 assert.match(pipeline.platforms.chatgpt.prompt, /pitch\/yaw\/roll/);
@@ -653,33 +653,33 @@ assert.equal((duplicateResult.cleanPrompt.match(/Keep realistic skin pores/g) ||
 
 // Gemini-native geometry is compiled from the resolved physical scene; it must
 // never leak into the ChatGPT/Midjourney platform prompts.
-assert.match(pipeline.platforms.gemini.prompt, /GEMINI CAMERA GEOMETRY/);
-assert.match(pipeline.platforms.gemini.prompt, /Camera distance:/);
-assert.match(pipeline.platforms.gemini.prompt, /Camera orientation: pitch/);
+assert.match(pipeline.platforms.gemini.prompt, /A candid, photorealistic vertical 9:16 smartphone photograph/);
+assert.match(pipeline.platforms.gemini.prompt, /camera-to-subject distance/);
+assert.match(pipeline.platforms.gemini.prompt, /pitch /);
 assert.match(pipeline.platforms.gemini.prompt, /yaw /);
 assert.match(pipeline.platforms.gemini.prompt, /roll /);
-assert.match(pipeline.platforms.gemini.prompt, /Field of view:/);
-assert.match(pipeline.platforms.gemini.prompt, /one anatomically continuous shoulder-to-wrist phone-holding arm/i);
-assert.match(pipeline.platforms.gemini.prompt, /Identity reference: preserve/);
+assert.match(pipeline.platforms.gemini.prompt, /field of view/i);
+assert.match(pipeline.platforms.gemini.prompt, /One anatomically connected arm holds the phone/i);
+assert.match(pipeline.platforms.gemini.prompt, /attached photo supplies facial identity only/i);
 assert.match(pipeline.platforms.gemini.prompt, /matte|burgundy/i);
-assert.doesNotMatch(pipeline.platforms.chatgpt.prompt, /GEMINI CAMERA GEOMETRY/);
-assert.doesNotMatch(pipeline.platforms.midjourney.prompt, /GEMINI CAMERA GEOMETRY/);
+assert.doesNotMatch(pipeline.platforms.chatgpt.prompt, /The resolved viewpoint has/);
+assert.doesNotMatch(pipeline.platforms.midjourney.prompt, /The resolved viewpoint has/);
 assert.match(withoutReference.platforms.gemini.prompt, /Natural unretouched face/);
-assert.doesNotMatch(withoutReference.platforms.gemini.prompt, /Identity reference: preserve/);
+assert.doesNotMatch(withoutReference.platforms.gemini.prompt, /The attached photo supplies facial identity only/);
 
 const geminiMirrorGeometry = compileUnifiedPromptPipeline({
   ...base, sceneFamily: 'bedroom', subScene: 'بجانب السرير',
   captureType: 'mirror-selfie', lightingMode: 'إضاءة أباجورة دافئة',
 });
-assert.match(geminiMirrorGeometry.platforms.gemini.prompt, /One physically consistent flat-mirror reflection/);
+assert.match(geminiMirrorGeometry.platforms.gemini.prompt, /one real flat-mirror reflection/);
 assert.doesNotMatch(geminiMirrorGeometry.platforms.gemini.prompt, /Xiaomi 15 Ultra front-camera selfie/);
 
 const geminiObserverGeometry = compileUnifiedPromptPipeline({
   ...base, captureType: 'third-person-candid',
 });
-assert.match(geminiObserverGeometry.platforms.gemini.prompt, /Third-person observer photograph/);
+assert.match(geminiObserverGeometry.platforms.gemini.prompt, /third-person smartphone photograph/i);
 assert.doesNotMatch(geminiObserverGeometry.platforms.gemini.prompt, /one continuous connected phone-holding arm/);
-assert.match(canonicalBedroom.platforms.gemini.prompt, /GEMINI CAMERA GEOMETRY/);
+assert.match(canonicalBedroom.platforms.gemini.prompt, /The resolved viewpoint has/);
 assert.match(canonicalBedroom.platforms.gemini.prompt, /phone screen|phone OLED display/i);
 assert.match(vestPipeline.platforms.gemini.prompt, /camel-brown suede-like sleeveless padded vest/i);
 
@@ -695,12 +695,27 @@ const geminiDriver = compileUnifiedPromptPipeline({
   jacketId: 'short_black_puffer',
 });
 const driverGeminiText = geminiDriver.platforms.gemini.prompt;
-assert.match(driverGeminiText, /Pose: seated in the left driver seat of the parked vehicle/);
+assert.match(driverGeminiText, /He is seated in the left driver seat of the parked vehicle/);
 assert.doesNotMatch(driverGeminiText, /Action: جالس في مقعد السائق|Setting: مقعد السائق/);
 assert.doesNotMatch(driverGeminiText, /Supply the image as an actual Gemini image input/);
-assert.doesNotMatch(driverGeminiText, /MANDATORY RESOLVED GEOMETRY/);
-assert.match(driverGeminiText, /GEMINI CAMERA GEOMETRY/);
+assert.doesNotMatch(driverGeminiText, /GEMINI CAMERA GEOMETRY|MANDATORY RESOLVED GEOMETRY/);
+assert.match(driverGeminiText, /The resolved viewpoint has/);
 assert.match(driverGeminiText, /street lighting entering through the vehicle glazing/);
-assert.match(driverGeminiText, /Mandatory outerwear:/);
-assert.equal((driverGeminiText.match(/The jacket is visibly worn over the unchanged base outfit/g) || []).length, 1);
-assert.doesNotMatch(geminiDriver.platforms.chatgpt.prompt, /GEMINI CAMERA GEOMETRY/);
+assert.match(driverGeminiText, /Over the selected base clothing, he wears/);
+assert.equal((driverGeminiText.match(/The outerwear is visibly worn on the body over the unchanged base garment/g) || []).length, 1);
+assert.doesNotMatch(geminiDriver.platforms.chatgpt.prompt, /The resolved viewpoint has/);
+
+// Approved narrative: external people and vehicles appear only when the physical
+// visibility solver permits them. Never force a crowd or traffic through a wall.
+for (const scene of [pipeline, carOutsideById, insideCar]) {
+  const text = scene.platforms.gemini.prompt;
+  const physics = scene.manifest.resolved.physicalState;
+  if (!physics.backgroundRealism.allowsHumans || physics.visiblePeople.length === 0)
+    assert.doesNotMatch(text, /a few naturally occupied background people at believable scale and distance/);
+  if (!physics.backgroundRealism.allowsVehicles || physics.visibleVehicles.length === 0)
+    assert.doesNotMatch(text, /ordinary parked or passing vehicles with varied realistic spacing/);
+}
+assert.match(pipeline.platforms.gemini.prompt, /natural hair and beard texture/);
+assert.match(geminiDriver.platforms.gemini.prompt, /Over the selected base clothing, he wears/);
+assert.doesNotMatch(geminiDriver.platforms.gemini.prompt, /GEMINI CAMERA GEOMETRY/);
+assert.match(canonicalBedroom.platforms.gemini.prompt, /phone screen|phone OLED display/i);
