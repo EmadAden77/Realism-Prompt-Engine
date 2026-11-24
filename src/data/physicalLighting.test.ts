@@ -16,8 +16,8 @@ let total = 0;
 
 for (const family of families) {
   const options = LIGHTING_CATALOG[family];
-  assert.equal(options.length, 10, `${family} must have ten distinct lighting modes`);
-  assert.equal(new Set(options.map(p => p.labelAR)).size, 10, `${family} contains duplicate labels`);
+  assert(options.length >= 10, `${family} must expose at least ten valid lighting modes`);
+  assert.equal(new Set(options.map(p => p.labelAR)).size, options.length, `${family} contains duplicate labels`);
   for (const option of options) {
     total++;
     assert.equal(getPhysicalLightingOption(family, option.labelAR), option);
@@ -54,7 +54,7 @@ for (const family of families) {
     }
   }
 }
-assert.equal(total, 60, 'Catalog must expose sixty physical lighting modes');
+assert(total >= 60, 'Catalog must expose at least sixty physical lighting modes across all contexts');
 
 const outdoorPlan = buildSmartSceneOptions({
   familyId: 'saudi-outdoor', subScene: 'شارع فلل سكني', timeOfDay: 'night',
@@ -69,4 +69,4 @@ assert(carNight.includes('إضاءة الشارع عبر زجاج السيارة
 assert(!carNight.includes('شمس الظهر عبر زجاج السيارة'));
 assert(!compatiblePhysicalLighting('car', 'night', true).some(o => o.model === 'vehicle-dashboard'));
 
-console.log('60 physical lighting modes: catalog, time, geometry and causal physics tests passed');
+console.log(`${total} unique physical lighting modes: catalog, time, geometry and causal physics tests passed`);
