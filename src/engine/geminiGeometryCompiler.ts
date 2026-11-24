@@ -186,11 +186,12 @@ export function compileGeminiGeometryPrompt(
       ? 'The photograph shows one real flat-mirror reflection, with a single visible phone and consistent reflected angles and hand placement rather than a direct front-camera view.'
       : 'A third-person smartphone photograph captures the subject from a physically reachable observer viewpoint, without a selfie arm or a mirror reflection.';
 
+  const angle = (value: string): string => value.match(/-?\d+(?:\.\d+)?°/)?.[0] || value;
   const position = [
     p.cameraDistance ? 'camera-to-subject distance ' + p.cameraDistance : '',
-    p.cameraPitch ? 'pitch ' + p.cameraPitch : '',
-    p.cameraYaw ? 'yaw ' + p.cameraYaw : '',
-    p.cameraRoll ? 'roll ' + p.cameraRoll : '',
+    p.cameraPitch ? 'pitch ' + angle(p.cameraPitch) : '',
+    p.cameraYaw ? 'yaw ' + angle(p.cameraYaw) : '',
+    p.cameraRoll ? 'roll ' + angle(p.cameraRoll) : '',
   ].filter(Boolean).join(', ');
   const frame = [
     p.visibleBodyRegion ? 'Framing includes ' + p.visibleBodyRegion : '',
