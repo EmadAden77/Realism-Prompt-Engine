@@ -446,7 +446,18 @@ export function resolveSelfieAngleGeometry(context: SelfieAngleContext): Resolve
     ? SELFIE_ANGLE_LIBRARY.find(x => x.id === context.advice?.angleId)
     : undefined;
 
-  const adviceAccepted = Boolean(advisedPreset && eligibleIds.has(advisedPreset.id));
+  // Seat compatibility is a hard constraint for externally suggested angles.
+  // Check the literal requested seat independently of catalog eligibility so
+  // a driver-only recommendation cannot leak into a passenger composition.
+  const requestedSeat = context.sceneFamily === 'car' && isCarInteriorSelfieContext(context)
+    ? carSeatView(context.subScene, context.pose)
+    : 'front-center';
+  const adviceSeatCompatible = !advisedPreset || context.sceneFamily !== 'car'
+    || !isCarInteriorSelfieContext(context)
+    || !advisedPreset.carSeat
+    || advisedPreset.carSeat === 'either'
+    || (requestedSeat === 'front-center' ? advisedPreset.carSeat === 'either' : advisedPreset.carSeat === requestedSeat);
+  const adviceAccepted = Boolean(advisedPreset && eligibleIds.has(advisedPreset.id) && adviceSeatCompatible);
   const preset = adviceAccepted ? advisedPreset! : fallback;
   const advice = adviceAccepted ? context.advice : undefined;
 
