@@ -591,7 +591,7 @@ const DEFAULT_BEDROOM_CAPTURE: BedroomCaptureConfig = {
   holdingHand: 'right',
   hands: {right: 'holding_phone', left: 'touching_hair'},
   microGesture: 'hair_touch',
-  camera: {deviceId: 'iPhone 15 Pro', module: 'front', lensToFaceCm: 55},
+  camera: {deviceId: 'Xiaomi 15 Ultra', module: 'front', lensToFaceCm: 55},
   body: {heightCm: 193, weightKg: 83, type: 'lean_athletic'},
   pose: 'pillow_supported', pillow: 'fiber', mattress: 'soft',
   lighting: {mode: 'phone_screen_only', activeSources: ['phone_screen'], lampVisible: true, lampOn: false, dustBeam: false},
@@ -1927,10 +1927,18 @@ export default function PhysFrameApp() {
         targetEngine,
         enhancedCandidate
       );
+      const acceptedEnhancement = enhancedValidated.prompt.trim() !== base.trim()
+        && !enhancedValidated.validation.warnings.some(w => /canonical prompt restored/i.test(w));
+      if (!acceptedEnhancement) {
+        setEnhancedPrompts(prev => ({ ...prev, [targetEngine]: undefined }));
+        setUseEnhancedPrompt(false);
+        showToast('لم يُعتمد تحسين Gemini لأنه لم يضف تفصيلًا آمنًا، وتم الاحتفاظ بالبرومبت الأصلي دون تغيير.');
+        return;
+      }
       enhancedPromptBasesRef.current[targetEngine] = base;
       setEnhancedPrompts(prev => ({ ...prev, [targetEngine]: enhancedValidated.prompt }));
       setUseEnhancedPrompt(true);
-      showToast('تم تعزيز البرومبت بميكرو-فيزياء العدسة ومسام البشرة');
+      showToast('تم قبول تحسين Gemini الآمن وإضافته إلى البرومبت');
     } catch (err: any) {
       console.error(err);
       showToast(err.message || 'خطأ أثناء تعزيز البرومبت');

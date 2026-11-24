@@ -83,3 +83,16 @@ assert(
 );
 
 console.log('✓ Server runtime boundary: no client-engine imports and all relative ESM imports are explicit.');
+
+assert(
+  serverSource.includes('const deadline = now + 24_000') &&
+  serverSource.includes('if (remainingMs <= 0) break') &&
+  serverSource.includes('timeout: Math.min(9_000, remainingMs)'),
+  'Gemini fallback must have a shared finite deadline across all model attempts'
+);
+assert(
+  appSource.includes('const acceptedEnhancement =') &&
+  appSource.includes('لم يُعتمد تحسين Gemini') &&
+  appSource.includes('تم قبول تحسين Gemini الآمن'),
+  'UI must distinguish rejected Gemini rewrites from accepted enhancements'
+);

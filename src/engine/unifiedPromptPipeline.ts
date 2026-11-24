@@ -355,13 +355,24 @@ export function verifyCausalFingerprint(pipeline: UnifiedPromptPipelineResult): 
 export function compileUnifiedPromptPipeline(
   rawState: SceneState
 ): UnifiedPromptPipelineResult {
-  const bedroomConstraints = rawState.sceneFamily === 'bedroom' && rawState.captureType === 'front-selfie' && rawState.bedroomCapture
-    ? resolveBedroomCapture(rawState.bedroomCapture)
-    : null;
   const inputValidation = validateScene(rawState);
   const manifest = createSceneManifest(rawState, 'neutral');
   const resolved = manifest.resolved;
   const resolvedValidation = validateScene(resolved);
+  // The front-camera hardware is fixed by the canonical scene resolver. A
+  // persisted legacy bedroom form may mention an iPhone; never let that device
+  // override the Xiaomi front-camera identity in any platform export.
+  const bedroomConstraints = resolved.state.sceneFamily === 'bedroom'
+    && resolved.state.captureType === 'front-selfie'
+    && resolved.state.bedroomCapture
+    ? resolveBedroomCapture({
+        ...resolved.state.bedroomCapture,
+        camera: {
+          ...resolved.state.bedroomCapture.camera,
+          deviceId: 'Xiaomi 15 Ultra',
+        },
+      })
+    : null;
 
   const semantic = buildSemanticScene(
     resolved.state,

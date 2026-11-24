@@ -148,6 +148,9 @@ async function callGeminiWithFallback(params: {
   const ai = createGeminiClient();
   let lastError: any = null;
   const now = Date.now();
+  // One deadline across all fallback models, not 12 seconds per model
+  // multiplied by three. The SDK applies the smaller per-attempt timeout.
+  const deadline = now + 24_000;
 
   const activeModels = models.filter(model => (geminiModelCooldownUntil.get(model) || 0) <= now);
   const candidates = activeModels.length
@@ -157,11 +160,19 @@ async function callGeminiWithFallback(params: {
       ).slice(0, 1);
 
   for (const model of candidates) {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) break;
     try {
       const response = await ai.models.generateContent({
         model,
         contents: params.contents,
-        config: params.config,
+        config: {
+          ...params.config,
+          httpOptions: {
+            ...params.config?.httpOptions,
+            timeout: Math.min(9_000, remainingMs),
+          },
+        },
       });
 
       if (response && response.text) {
