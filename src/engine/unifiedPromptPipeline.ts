@@ -565,18 +565,23 @@ export function validateExternalPromptCandidate(
   if (!pipeline.diagnostics.anglePromptReady || !verifyCausalFingerprint(pipeline)) {
     throw new Error('Camera evidence insufficient: prompt export blocked');
   }
-  // Normalize the enhanced text before compiling its negative constraints.
-  // Otherwise constraints can be based on text that is not actually exported.
-  // AI enhancements are not allowed to silently delete an explicit wardrobe layer.
-  const mandatoryJacket = getJacket(pipeline.manifest.resolved.state.jacketId);
-  const jacketSignature: Record<string, RegExp> = {
-    long_black_puffer: /(?:puffer|quilted|padded).{0,65}(?:parka|coat)|(?:parka|coat).{0,65}(?:puffer|quilted|padded)/i,
-    short_black_puffer: /(?:puffer|quilted|padded).{0,65}jacket|jacket.{0,65}(?:puffer|quilted|padded)/i,
-    camel_quilted_vest: /(?:camel|brown).{0,100}(?:vest|waistcoat)|(?:vest|waistcoat).{0,100}(?:camel|brown)/i,
-  };
-  const safeCandidate = mandatoryJacket && !jacketSignature[mandatoryJacket.id]?.test(candidatePrompt)
-    ? `${candidatePrompt.trim()} Mandatory selected outerwear, visibly worn over the unchanged base outfit: ${mandatoryJacket.prompt}.`
-    : candidatePrompt;
+  // A generative rewrite cannot be trusted to preserve dozens of independent
+  // scene locks. Only allow a short additive photographic-quality note after the
+  // complete canonical prompt; otherwise use the exact proven export.
+  const canonical = pipeline.platforms[target].prompt;
+  const proposal = candidatePrompt.trim();
+  const addition = proposal.startsWith(canonical) ? proposal.slice(canonical.length).trim() : '';
+  const isSafeAddition = addition.length > 0
+    && addition.length <= 320
+    && /(?:skin texture|pores|sensor|noise|grain|compression|highlight roll-off|microtexture|natural texture)/i.test(addition)
+    && !/\b(?:wear|wearing|replace|remove|omit|instead|switch|change|alter|add a|add an|must|only|never|without|camera|lens|thobe|shirt|vest|jacket|coat|light source|lighting|pose|background|location|glasses|hairline|face shape|identity)\b/i.test(addition);
+  const safeCandidate = isSafeAddition
+    ? `${canonical}\n${addition}`
+    : canonical;
+  const originalCandidateValidation = proposal === safeCandidate
+    ? null
+    : validatePrompt(proposal, pipeline.manifest.resolved);
+
   const negative = compileNegativeConstraints(
     pipeline.manifest.resolved.state,
     pipeline.semantic,
@@ -587,6 +592,10 @@ export function validateExternalPromptCandidate(
     pipeline.manifest.resolved,
     negative.text
   );
+  if (proposal !== safeCandidate) {
+    validation.warnings.push('AI enhancement was rejected because it changed protected scene text; canonical prompt restored.');
+    validation.contradictionsFound.push(...(originalCandidateValidation?.contradictionsFound || []));
+  }
 
   const adapter = buildPlatformAdapterPlan(
     pipeline.neutral.text,
