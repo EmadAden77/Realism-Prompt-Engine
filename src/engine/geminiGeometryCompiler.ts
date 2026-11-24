@@ -84,6 +84,62 @@ function normalizeSceneLabels(prompt: string, resolved: ResolvedScene): string {
   return result;
 }
 
+/**
+ * Approved Gemini narrative: describe the actual photograph rather than
+ * sending the model a second, repetitive engineering checklist. The local
+ * physics solver remains authoritative for what can be seen.
+ */
+function asPhotographNarrative(base: string): string {
+  return base
+    .replace(/^Photorealistic vertical 9:16, unedited smartphone photograph\./,
+      'A candid, photorealistic vertical 9:16 smartphone photograph, straight out of the camera.')
+    .replace(/\bMale, 193cm, 83kg, lean-athletic\./,
+      'The man has a lean-athletic build (193 cm, 83 kg).')
+    .replace(/\bEyewear follows reference\./, 'His eyewear matches the identity reference.')
+    .replace(/\bNo glasses\./, 'He is not wearing glasses.')
+    .replace(/\bBlack rectangular eyeglasses\./, 'He wears black rectangular eyeglasses.')
+    .replace(/\bOutfit:\s*/g, 'He wears ')
+    .replace(/\bMandatory outerwear:\s*/g, 'Over the selected base clothing, he wears ')
+    .replace(/\bExpression:\s*/g, 'His expression is ')
+    .replace(/\bHair:\s*/g, 'His hair is ')
+    .replace(/\bPose:\s*/g, 'He is ')
+    .replace(/\bInside the vehicle:\s*/g, 'Inside the parked vehicle: ')
+    .replace(/\bOutside beside the parked vehicle:\s*/g, 'Beside the parked vehicle: ')
+    .replace(/\bTime:\s*night\.\s*Lighting:\s*/g, 'Late at night, ')
+    .replace(/\bTime:\s*(morning|midday|afternoon|sunset)\.\s*Lighting:\s*/g,
+      (_full, time: string) => 'During the ' + time + ', ')
+    // The resolved lens orientation is written only once in the final capture paragraph.
+    .replace(/,\s*pitch\/yaw\/roll\s*-?\d+(?:\.\d+)?°\/-?\d+(?:\.\d+)?°\/-?\d+(?:\.\d+)?°(?=\.)/g, '')
+    .replace(/\s+The jacket is visibly worn over the unchanged base outfit\./g,
+      ' The outerwear is visibly worn on the body over the unchanged base garment.')
+    .replace(/\s+/g, ' ').trim();
+}
+
+function appendVisibleSaudiContext(resolved: ResolvedScene): string {
+  const { state, physicalState: p } = resolved;
+  const environment = p.backgroundRealism;
+  const outdoors = state.sceneFamily === 'saudi-outdoor'
+    || (state.sceneFamily === 'car' && /خارج|بجانب|outside|beside|parking|car_outside|car_beside/i.test(state.subScene));
+  const vehicleSeen = environment.allowsVehicles && p.visibleVehicles.length > 0;
+  const peopleSeen = environment.allowsHumans && p.visiblePeople.length > 0;
+  const bits = [
+    vehicleSeen ? 'ordinary parked or passing vehicles with varied realistic spacing' : '',
+    peopleSeen ? 'a few naturally occupied background people at believable scale and distance' : '',
+  ].filter(Boolean);
+  if (!outdoors && state.sceneFamily !== 'car') return '';
+  if (state.sceneFamily === 'car' && !outdoors) {
+    return bits.length
+      ? 'Through the actually visible car glass, the subdued Saudi street includes ' + bits.join(' and ') +
+        '; their size, visibility, reflections and illumination stay consistent with the camera angle and tinted windows.'
+      : 'Any glimpse beyond the car windows stays dim and physically consistent with the selected street, glazing, and camera viewpoint; no extra vehicles or people are inserted outside the permitted field of view.';
+  }
+  if (!bits.length) {
+    return 'The ordinary Saudi surroundings have credible ground contact, materials, street depth and natural irregularities only where visible; do not add background traffic or pedestrians outside the resolved field of view.';
+  }
+  return 'The visible everyday Saudi surroundings naturally include ' + bits.join(' and ') +
+    ', with believable scale, grounding, depth, varied poses and lighting. They remain secondary to the subject and appear only where the selected camera view permits.';
+}
+
 export function compileGeminiGeometryPrompt(
   basePrompt: string,
   resolved: ResolvedScene,
@@ -93,46 +149,46 @@ export function compileGeminiGeometryPrompt(
   const front = state.captureType === 'front-selfie';
   const mirror = state.captureType === 'mirror-selfie';
 
-  const base = normalizeSceneLabels(basePrompt, resolved).trim();
-  const capture = front
-    ? 'Xiaomi 15 Ultra front-camera selfie, 21mm-equivalent perspective; one anatomically continuous shoulder-to-wrist phone-holding arm at reachable distance; phone remains outside the captured frame.'
-    : mirror
-      ? 'One physically consistent flat-mirror reflection with the real phone visible, correct reflection angles and one continuous arm; no direct front-camera viewpoint.'
-      : 'Third-person observer photograph with physically consistent perspective; no selfie arm or mirror reflection.';
-
-  const angleParts = [
-    p.cameraPitch ? `pitch ${p.cameraPitch}` : '',
-    p.cameraYaw ? `yaw ${p.cameraYaw}` : '',
-    p.cameraRoll ? `roll ${p.cameraRoll}` : '',
-  ].filter(Boolean);
-
-  const geometry = [
-    p.cameraDistance ? `Camera distance: ${p.cameraDistance}.` : '',
-    angleParts.length ? `Camera orientation: ${angleParts.join('; ')}.` : '',
-    p.fieldOfView ? `Field of view: ${p.fieldOfView}.` : '',
-    p.visibleBodyRegion ? `Crop: ${p.visibleBodyRegion}.` : '',
-    p.bodyOrientation ? `Body support: ${p.bodyOrientation}.` : '',
-    p.occlusions.length ? `Visible occlusion: ${p.occlusions[0]}.` : '',
-  ].filter(Boolean);
-
+  const base = asPhotographNarrative(normalizeSceneLabels(basePrompt, resolved));
   const reference = referencePlan.hasReference
-    ? 'Identity reference: preserve the photographed person’s recognizable features and natural asymmetry; the reference does not set the new clothing, camera, lighting, or setting.'
+    ? 'The attached photo supplies facial identity only; the new location, clothing, expression, lighting and viewpoint follow the selected scene.'
     : '';
-  const source = translateKnown(state.lightingMode, KNOWN_LIGHTING);
-  const lighting = [
-    `Light source: ${source}.`,
-    p.shadowBehavior ? `Shadow direction: ${p.shadowBehavior}.` : '',
-    'Exposure, shadows and reflections must follow only that source and its physically possible bounce.',
+  const capture = front
+    ? 'The picture is taken with the Xiaomi 15 Ultra front camera (approximately 21mm equivalent, f/2.0). One anatomically connected arm holds the phone at a reachable distance outside the photographed frame; the handheld wide-angle perspective remains natural.'
+    : mirror
+      ? 'The photograph shows one real flat-mirror reflection, with a single visible phone and consistent reflected angles and hand placement rather than a direct front-camera view.'
+      : 'A third-person smartphone photograph captures the subject from a physically reachable observer viewpoint, without a selfie arm or a mirror reflection.';
+
+  const position = [
+    p.cameraDistance ? 'camera-to-subject distance ' + p.cameraDistance : '',
+    p.cameraPitch ? 'pitch ' + p.cameraPitch : '',
+    p.cameraYaw ? 'yaw ' + p.cameraYaw : '',
+    p.cameraRoll ? 'roll ' + p.cameraRoll : '',
+  ].filter(Boolean).join(', ');
+  const frame = [
+    p.visibleBodyRegion ? 'Framing includes ' + p.visibleBodyRegion : '',
+    p.fieldOfView ? 'with ' + p.fieldOfView : '',
   ].filter(Boolean).join(' ');
+  const geometry = [
+    position ? 'The resolved viewpoint has ' + position + '.' : '',
+    frame ? frame + '.' : '',
+    p.occlusions.length ? 'Foreground overlap follows the real camera sightline: ' + p.occlusions[0] + '.' : '',
+  ].filter(Boolean).join(' ');
+
+  const reality = appendVisibleSaudiContext(resolved);
+  const lighting = [
+    'The selected light source is ' + translateKnown(state.lightingMode, KNOWN_LIGHTING) + '.',
+    p.shadowBehavior ? 'Shadows behave as follows: ' + p.shadowBehavior + '.' : '',
+    'All illumination, subtle bounce, skin highlights, reflections and low-light noise follow those physical sources without invented fill lights.',
+  ].join(' ');
 
   return [
     base,
-    '',
-    'GEMINI CAMERA GEOMETRY',
     reference,
-    `Capture: ${capture}`,
-    ...geometry,
+    capture,
+    geometry,
+    reality,
     lighting,
-    'Keep the chosen outfit, outerwear and facial appearance exactly as described above. Preserve natural smartphone exposure and perspective without invented lights or objects.',
-  ].filter(Boolean).join('\n');
+    'Keep facial pores, natural hair and beard texture, genuine fabric layering and slight smartphone processing imperfections. Preserve the chosen wardrobe and the real camera geometry without beautification, artificial bokeh or staged background activity.',
+  ].filter(Boolean).join('\n\n');
 }
