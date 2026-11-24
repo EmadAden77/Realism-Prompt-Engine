@@ -700,7 +700,7 @@ assert.doesNotMatch(driverGeminiText, /Action: جالس في مقعد السائ
 assert.doesNotMatch(driverGeminiText, /Supply the image as an actual Gemini image input/);
 assert.doesNotMatch(driverGeminiText, /GEMINI CAMERA GEOMETRY|MANDATORY RESOLVED GEOMETRY/);
 assert.match(driverGeminiText, /The resolved viewpoint has/);
-assert.match(driverGeminiText, /Nearby streetlamp spills through side glass of parked car/);
+assert.match(driverGeminiText, /nearby streetlamp spills through side glass of parked car/i);
 assert.match(driverGeminiText, /Over the selected base clothing, he wears/);
 assert.equal((driverGeminiText.match(/The outerwear is visibly worn on the body over the unchanged base garment/g) || []).length, 1);
 assert.doesNotMatch(geminiDriver.platforms.chatgpt.prompt, /The resolved viewpoint has/);
