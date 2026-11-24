@@ -361,7 +361,7 @@ export function deriveLightingCausality(input: LightingCausalityInput): Lighting
   if (causalPreset) {
     const physics = PHYSICAL_LIGHT_BEHAVIOR[causalPreset.model];
     primarySource = {
-      name: causalPreset.labelAR + (causalPreset.model === 'fluorescent' ? ' (real overhead fluorescent fixture)' : causalPreset.model === 'vehicle-day' ? ' (daylight through vehicle glazing)' : causalPreset.labelAR.includes('5000K') ? ' (5000K neutral-cool white)' : ''),
+      name: causalPreset.model === 'phone-screen' ? 'smartphone display glow' : causalPreset.labelAR + (causalPreset.model === 'fluorescent' ? ' (real overhead fluorescent fixture)' : causalPreset.model === 'vehicle-day' ? ' (daylight through vehicle glazing)' : causalPreset.labelAR.includes('5000K') ? ' (5000K neutral-cool white)' : ''),
       role: 'primary',
       direction: physics.direction,
       distanceBehavior: physics.falloff,
@@ -433,12 +433,12 @@ export function deriveLightingCausality(input: LightingCausalityInput): Lighting
       ? 'direction remains consistent across the visible scene; local brightness changes come mainly from angle, occlusion, and surface reflectance'
       : 'brightness decreases with source distance and occlusion; secondary surfaces receive visibly weaker illumination than the subject-facing planes';
 
-  const inverseSquareBehavior = causalPreset
+  const inverseSquareBehavior = phoneOnly
+    ? 'apply strong near-field inverse-square intuition: small changes in phone-to-face distance materially change facial brightness, while room-scale illumination stays weak'
+    : causalPreset
     ? (causalPreset.model === 'sun-hard' || causalPreset.model === 'sun-low' || causalPreset.model === 'sky-shade'
       ? 'solar and sky rays are distant and directional; do not impose lamp inverse-square falloff on the sun'
       : 'local practical/reflected illumination follows geometric distance, occlusion, source size and actual surface reflectance')
-    : phoneOnly
-    ? 'apply strong near-field inverse-square intuition: small changes in phone-to-face distance materially change facial brightness, while room-scale illumination stays weak'
     : isIndoorWhiteCeiling
       ? 'apply physically plausible local-source distance falloff to the ceiling fixture and weaker reflected bounce; do not claim uniform brightness independent of distance'
     : isNight && !isOutdoor
