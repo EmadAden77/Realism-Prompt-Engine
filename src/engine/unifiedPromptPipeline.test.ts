@@ -537,3 +537,5 @@ const repairedEnhancement = validateExternalPromptCandidate(
 );
 assert.match(repairedEnhancement.prompt, /camel-brown suede-like sleeveless padded vest/i,
   'AI enhancement must not delete the selected vest');
+assert.match(repairedEnhancement.rawPrompt, /camel-brown suede-like sleeveless padded vest/i,
+  'Raw enhanced prompt and validated export must describe the same selected jacket');
