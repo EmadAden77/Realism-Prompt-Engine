@@ -146,10 +146,13 @@ export function compileUltraShortPrompt(
   const compact = (value: string, limit = 180): string => {
     const normalized = value.replace(/\s+/g, ' ').trim();
     if (normalized.length <= limit) return normalized;
-    const cut = normalized.slice(0, limit);
-    const boundary = cut.lastIndexOf(' ');
-    return cut.slice(0, boundary > limit * 0.65 ? boundary : limit)
-      .trim().replace(/[,;:.]$/, '');
+    // Never cut a mandatory garment, source, or camera fact mid-phrase.
+    // Prefer complete short clauses; retain longer atomic facts verbatim.
+    const prefix = normalized.slice(0, limit);
+    const boundaries = [...prefix.matchAll(/[.!?;](?=\s|$)/g)]
+      .map(match => (match.index ?? 0) + 1);
+    const end = boundaries.filter(index => index >= limit * 0.6).pop();
+    return end ? normalized.slice(0, end).trim() : normalized;
   };
 
   const micro = getMicroLocation(state.sceneFamily, state.subScene);
