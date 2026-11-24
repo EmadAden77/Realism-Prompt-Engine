@@ -4,8 +4,10 @@ import {
   causalFingerprint,
   verifyCausalFingerprint,
   validateExternalPromptCandidate,
+  compileUltraShortPrompt,
 } from './unifiedPromptPipeline';
-import type { SceneState } from './physicsEngine';
+import { validatePrompt, type SceneState } from './physicsEngine';
+import type { BedroomCaptureConfig } from './bedroomConstraintResolver';
 
 const base: SceneState = {
   referenceImageId: 'face-reference.jpg',
@@ -539,3 +541,69 @@ assert.match(repairedEnhancement.prompt, /camel-brown suede-like sleeveless padd
   'AI enhancement must not delete the selected vest');
 assert.match(repairedEnhancement.rawPrompt, /camel-brown suede-like sleeveless padded vest/i,
   'Raw enhanced prompt and validated export must describe the same selected jacket');
+
+// Regression: specialized bedroom exporter must not substitute form clothing
+// for the user's canonical selected outfit (including optional outerwear).
+const bedroomCapture: BedroomCaptureConfig = {
+  holdingHand: 'right',
+  hands: { right: 'holding_phone', left: 'resting' },
+  microGesture: 'none',
+  camera: { deviceId: 'Xiaomi 15 Ultra', module: 'front', lensToFaceCm: 52 },
+  body: { heightCm: 193, weightKg: 83, type: 'lean_athletic' },
+  pose: 'reclined', pillow: 'fiber', mattress: 'soft',
+  lighting: { mode: 'phone_screen_only', activeSources: ['phone_screen'],
+    lampVisible: false, lampOn: false, dustBeam: false },
+  clothing: { top: 'bright red T-shirt', bottom: 'purple shorts',
+    fabric: 'polyester', fit: 'loose' },
+  framing: 'chest-up'
+};
+const canonicalBedroom = compileUnifiedPromptPipeline({
+  ...base,
+  sceneFamily: 'bedroom',
+  subScene: 'على السرير',
+  pose: 'مستلقي على السرير',
+  activity: 'مستلقي',
+  lightingMode: 'إضاءة شاشة الهاتف فقط',
+  timeOfDay: 'night',
+  outfitId: 'thobe_black',
+  jacketId: 'camel_quilted_vest',
+  bedroomCapture,
+});
+assert.equal(canonicalBedroom.diagnostics.bedroomConstraints?.valid, true);
+for (const target of ['chatgpt', 'gemini', 'midjourney'] as const) {
+  const output = canonicalBedroom.platforms[target].prompt;
+  assert.match(output, /matte black traditional Saudi thobe/i,
+    'Bedroom mode must retain selected black thobe on ' + target);
+  assert.match(output, /camel-brown suede-like sleeveless padded vest/i);
+  assert.doesNotMatch(output, /bright red T-shirt|purple shorts/i,
+    'Legacy bedroom clothing form must not replace selected wardrobe');
+}
+assert.match(canonicalBedroom.semantic.outfit, /matte black traditional Saudi thobe/i);
+
+// Refined text must not silently recolor attire, replace illumination or
+// change camera geometry, even when it still mentions the right jacket.
+const sceneRewrite = vestPipeline.platforms.gemini.prompt
+  .replace('matte black traditional Saudi thobe', 'bright red shirt');
+const rejectedRewrite = validateExternalPromptCandidate(vestPipeline, 'gemini', sceneRewrite);
+assert.equal(rejectedRewrite.prompt, vestPipeline.platforms.gemini.prompt);
+assert(rejectedRewrite.validation.warnings.some(w => /canonical prompt restored/i.test(w)));
+const safeAddition = vestPipeline.platforms.gemini.prompt +
+  '\nSubtle natural skin texture with restrained sensor grain.';
+const acceptedAddition = validateExternalPromptCandidate(vestPipeline, 'gemini', safeAddition);
+assert.match(acceptedAddition.prompt, /Subtle natural skin texture with restrained sensor grain/);
+
+// Sentence-aware compaction must never truncate an important atomic garment
+// description, and exact duplicated clauses must be removed even in one line.
+const longOutfit = 'matte black traditional Saudi thobe with ' +
+  Array.from({ length: 60 }, (_, i) => 'fabric-detail-' + i).join(' ');
+const longExport = compileUltraShortPrompt(
+  vestPipeline.manifest.resolved.state,
+  { ...vestPipeline.semantic, outfit: longOutfit },
+  vestPipeline.manifest.resolved.physicalState,
+);
+assert.match(longExport, /fabric-detail-59/);
+const duplicateResult = validatePrompt(
+  'Keep realistic skin pores. Keep realistic skin pores. Retain real fabric seams.',
+  vestPipeline.manifest.resolved,
+);
+assert.equal((duplicateResult.cleanPrompt.match(/Keep realistic skin pores/g) || []).length, 1);
