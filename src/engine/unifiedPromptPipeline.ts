@@ -557,12 +557,8 @@ export function validateExternalPromptCandidate(
   if (!pipeline.diagnostics.anglePromptReady || !verifyCausalFingerprint(pipeline)) {
     throw new Error('Camera evidence insufficient: prompt export blocked');
   }
-  const negative = compileNegativeConstraints(
-    pipeline.manifest.resolved.state,
-    pipeline.semantic,
-    candidatePrompt
-  );
-
+  // Normalize the enhanced text before compiling its negative constraints.
+  // Otherwise constraints can be based on text that is not actually exported.
   // AI enhancements are not allowed to silently delete an explicit wardrobe layer.
   const mandatoryJacket = getJacket(pipeline.manifest.resolved.state.jacketId);
   const jacketSignature: Record<string, RegExp> = {
@@ -573,6 +569,11 @@ export function validateExternalPromptCandidate(
   const safeCandidate = mandatoryJacket && !jacketSignature[mandatoryJacket.id]?.test(candidatePrompt)
     ? `${candidatePrompt.trim()} Mandatory selected outerwear, visibly worn over the unchanged base outfit: ${mandatoryJacket.prompt}.`
     : candidatePrompt;
+  const negative = compileNegativeConstraints(
+    pipeline.manifest.resolved.state,
+    pipeline.semantic,
+    safeCandidate
+  );
   const validation = validatePrompt(
     safeCandidate,
     pipeline.manifest.resolved,
@@ -587,7 +588,7 @@ export function validateExternalPromptCandidate(
 
   return {
     target,
-    rawPrompt: candidatePrompt,
+    rawPrompt: safeCandidate,
     prompt: validation.cleanPrompt,
     negativePrompt: validation.cleanNegativePrompt || negative.text,
     validation,

@@ -40,7 +40,7 @@ assert.match(bedroom.outfit, /LOCKED COMPLETE OUTFIT/);
 assert.match(bedroom.outfit, /burgundy|wine/i);
 assert.match(bedroom.outfit, /grey/i);
 assert.doesNotMatch(bedroom.outfit, /half.tuck|rolled.forearm|top two buttons|post.workout|sporty look/i);
-assert.match(bedroom.outfit, /No additions, omissions, swaps, recoloring/);
+assert.match(bedroom.outfit, /No unauthorized additions, omissions, swaps, recoloring/);
 
 for (const family of ['gym', 'saudi-outdoor', 'car', 'military-base', 'living-room'] as const) {
   const scene = compile({ ...base, sceneFamily: family, subScene: '', pose: 'واقف بثبات' });
@@ -79,3 +79,8 @@ const withVest = compile({ ...base, jacketId: 'camel_quilted_vest' });
 assert.match(withVest.outfit, /camel-brown suede-like sleeveless padded vest/i);
 assert.match(compile({ ...base, jacketId: 'none' }).outfit, /NO OUTERWEAR/);
 assert.doesNotMatch(compile({ ...base, jacketId: 'none' }).outfit, /ADD SELECTED OUTERWEAR/);
+
+assert.match(withVest.outfit, /separately selected optional outerwear is allowed/i,
+  'Locked outfit instructions must explicitly permit the selected jacket');
+assert.doesNotMatch(withVest.outfit, /No additions, omissions, swaps/i,
+  'Old blanket prohibition conflicts with an explicitly selected jacket');

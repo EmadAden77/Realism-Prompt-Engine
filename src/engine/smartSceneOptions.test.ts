@@ -1,5 +1,6 @@
 import { buildSmartSceneOptions, isLightingCompatible, smartDependentPatch } from './smartSceneOptions';
 import type { BackgroundViewGeometry } from './backgroundRealism';
+import { OUTFITS } from '../data/clothingOutfits';
 
 const assert = (condition: boolean, message: string) => {
   if (!condition) throw new Error('Smart scene controls: ' + message);
@@ -61,8 +62,9 @@ const gym = buildSmartSceneOptions({
   allowedLighting: ['إضاءة النادي الرياضي', 'ضوء نهاري طبيعي'],
   viewGeometry: wallView
 });
-assert(gym.recommendedOutfits.some(item => item.categoryAR.includes('رياضي')),
-  'Gym wardrobe should suggest complete sports outfits');
+assert(gym.recommendedOutfits.length > 0 &&
+  gym.recommendedOutfits.every(item => OUTFITS.some(available => available.id === item.id)),
+  'Gym recommendations must come exclusively from the new user-approved wardrobe');
 assert(!gym.compatibleLighting.includes('ضوء نهاري طبيعي'),
   'Indoor gym at night cannot have daylight as its source');
 

@@ -531,9 +531,11 @@ const vestPipeline = compileUnifiedPromptPipeline({
   ...base, outfitId: 'thobe_black', jacketId: 'camel_quilted_vest',
 });
 const strippedGeminiEnhancement = vestPipeline.platforms.gemini.prompt
-  .replace(/Mandatory outerwear:[\\s\\S]*?(?= Garment configuration:| Expression:)/i, '');
+  .replace(/Mandatory outerwear:[\s\S]*?(?= Garment configuration:| Expression:)/i, '');
 const repairedEnhancement = validateExternalPromptCandidate(
   vestPipeline, 'gemini', strippedGeminiEnhancement
 );
 assert.match(repairedEnhancement.prompt, /camel-brown suede-like sleeveless padded vest/i,
   'AI enhancement must not delete the selected vest');
+assert.match(repairedEnhancement.rawPrompt, /camel-brown suede-like sleeveless padded vest/i,
+  'Raw enhanced prompt and validated export must describe the same selected jacket');

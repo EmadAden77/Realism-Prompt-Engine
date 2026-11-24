@@ -60,7 +60,7 @@ function outfitScore(outfit: OutfitItem, family: SceneFamilyId, activity: string
     'car': ['smart_casual', 'casual', 'traditional', 'formal'],
     'living-room': ['home', 'casual', 'smart_casual', 'traditional'],
     'bedroom': ['home', 'casual', 'smart_casual'],
-    'gym': ['sport', 'casual']
+    'gym': ['smart_casual', 'traditional']
   };
   const preference = familyPreferences[family].findIndex(c => category.includes(c));
   if (preference >= 0) score += 12 - preference * 2;

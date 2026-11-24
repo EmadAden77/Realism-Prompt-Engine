@@ -446,6 +446,7 @@ export function resolveSelfieAngleGeometry(context: SelfieAngleContext): Resolve
     ? SELFIE_ANGLE_LIBRARY.find(x => x.id === context.advice?.angleId)
     : undefined;
 
+  // Seat classification and eligible-angle filtering share carSeatView as the single source of truth.
   const adviceAccepted = Boolean(advisedPreset && eligibleIds.has(advisedPreset.id));
   const preset = adviceAccepted ? advisedPreset! : fallback;
   const advice = adviceAccepted ? context.advice : undefined;

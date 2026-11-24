@@ -2,7 +2,7 @@ import { resolveBedroomSelfieActivity } from './bedroomSelfieAffordances';
 import { describe2017RangeRoverSport, isCarExteriorSubScene } from './carReality';
 import { buildBedroomRealismPrompt } from './bedroomRealismStudio';
 import { getMicroLocation } from '../data/microLocations';
-import { OUTFITS , getJacket } from '../data/clothingOutfits';
+import { OUTFITS, getJacket } from '../data/clothingOutfits';
 import {
   ADVANCED_FACIAL_EXPRESSIONS,
   type FacialExpressionDefinition,
@@ -374,7 +374,7 @@ export const buildSemanticScene = (
   const jacketPrompt = selectedJacket ? ` ADD SELECTED OUTERWEAR: ${selectedJacket.prompt}. Keep the base garment and its color unchanged beneath it. Outerwear is the sole permitted intentional addition to the locked base outfit.` : ' NO OUTERWEAR: Wear only the selected base outfit, without any jacket, coat, parka or vest.';
   const attireBasePhysics = getAttireAwareBasePhysics(outfit, outfitControls);
   const fixedCompleteOutfit = state.outfitLocked !== false
-    ? 'LOCKED COMPLETE OUTFIT: The selected garments are one indivisible full outfit. Keep every listed piece, its color, fabric, neckline, collar, sleeves, waist arrangement, trouser/shorts type and matching accessories exactly as described in this outfit. No additions, omissions, swaps, recoloring, retucking, opening buttons, restyling, or wardrobe reinterpretations. Crop may conceal pieces without deleting them. Permit only normal gravity folds, contact creases and physically caused illumination differences.'
+    ? 'LOCKED COMPLETE OUTFIT: The selected garments are one indivisible full outfit. Keep every listed piece, its color, fabric, neckline, collar, sleeves, waist arrangement, trouser/shorts type and matching accessories exactly as described in this outfit. No unauthorized additions, omissions, swaps, recoloring, retucking, opening buttons, restyling, or wardrobe reinterpretations. The separately selected optional outerwear is allowed only when explicitly present in the scene state. Crop may conceal pieces without deleting them. Permit only normal gravity folds, contact creases and physically caused illumination differences.'
     : '';
   const activityDefinition = getActivityDefinition(state.activity);
   const interactiveSelfie = resolveBedroomSelfieActivity(state);
