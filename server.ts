@@ -75,6 +75,7 @@ function createGeminiClient() {
   return new GoogleGenAI({
     apiKey,
     httpOptions: {
+      timeout: 12000, // milliseconds per Gemini HTTP attempt; SDK cancels expired requests
       headers: {
         'User-Agent': 'aistudio-build',
       },
@@ -1056,7 +1057,7 @@ app.post('/api/ai/enhance-prompt', async (req, res) => {
     const response = await callGeminiWithFallback({
       preferredModels: ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'],
       contents: `You are a master prompt engineering specialist for photorealistic AI imagery.
-Refine this prompt for ${targetEngine} to improve natural photographic realism without changing any physical facts already resolved by the local engine.
+Keep the original prompt below EXACTLY unchanged, byte for byte. You may append ONE short sentence (at most 220 characters) containing only natural skin microtexture, realistic exposure noise, or restrained sensor detail. Do not rewrite, remove, paraphrase or reorder any original sentence. If nothing appropriate can be added, return the original unchanged. Refine for ${targetEngine} without changing any physical facts already resolved by the local engine.
 Preserve all core identity restrictions, eyeglasses rules, outfit, location, camera geometry, lighting causality, and focal-length constraints exactly.
 CAMERA HARD LOCK: if this is a direct front-camera selfie, the camera remains the Xiaomi 15 Ultra front camera at approximately 21mm equivalent, fixed f/2.0, with its wide smartphone perspective. Never substitute iPhone, generic Android, 24-28mm, DSLR, or another camera profile.
 Only add details that are causally supported by the scene:
