@@ -112,12 +112,8 @@ function normalizeSceneLabels(prompt: string, resolved: ResolvedScene): string {
  */
 function asPhotographNarrative(base: string): string {
   return base
-    // Remove generic capture/occlusion paragraphs. The resolved geometry
-    // paragraph below is their single authoritative final rendering.
-    .replace(/Xiaomi 15 Ultra front camera, 21mm equivalent, f\/2\.0, [^.]*\. One connected phone-holding arm, camera outside the frame; natural wide-angle foreshortening, no floating viewpoint\./g, '')
-    .replace(/Single real phone visible in one flat-mirror reflection, correct hand and reflection geometry; no duplicate phone\./g, '')
-    .replace(/Eye-level candid observer camera, no raised selfie arm or impossible perspective\./g, '')
-    .replace(/\bOcclusion: [^.]*\./g, '')
+    // Bedroom-only constrained exports have their own capture language;
+    // ordinary Gemini exports omit generic camera prose at the source.
     .replace(/^Photorealistic vertical 9:16, unedited smartphone photograph\./,
       'A candid, photorealistic vertical 9:16 smartphone photograph, straight out of the camera.')
     .replace(/\bMale, 193cm, 83kg, lean-athletic\./,
@@ -133,12 +129,25 @@ function asPhotographNarrative(base: string): string {
     .replace(/\bInside the vehicle:\s*/g, 'Inside the parked vehicle: ')
     .replace(/\bOutside beside the parked vehicle:\s*/g, 'Beside the parked vehicle: ')
     .replace(/\bTime:\s*night\.\s*Lighting:\s*/g, 'Late at night, ')
+    .replace(/Late at night,\s+([A-Z])/g, (_match, initial: string) =>
+      'Late at night, ' + initial.toLowerCase())
     .replace(/\bTime:\s*(morning|midday|afternoon|sunset)\.\s*Lighting:\s*/g,
       (_full, time: string) => 'During the ' + time + ', ')
     // The resolved lens orientation is written only once in the final capture paragraph.
     .replace(/,\s*pitch\/yaw\/roll\s*-?\d+(?:\.\d+)?°\/-?\d+(?:\.\d+)?°\/-?\d+(?:\.\d+)?°(?=\.)/g, '')
     .replace(/\s+The jacket is visibly worn over the unchanged base outfit\./g,
       ' The outerwear is visibly worn on the body over the unchanged base garment.')
+    // The seat and steering-side fact is introduced once in the main scene pose.
+    // The vehicle spec still identifies the correct factory interior.
+    .replace(/Seated in the LEFT driver seat with the steering wheel on the LEFT, seatback\/headrest behind; steering wheel can occlude the lower frame\./g,
+      'The driver seatback and headrest sit behind him.')
+    // A mid-sternum selfie cannot be forced to reveal lower torso, dashboard
+    // or steering-wheel surfaces outside its optical field of view.
+    .replace(/Correct windshield, dashboard, A\/B-pillars, tinted window and seatbelt occlusion only where actually in frame\./g,
+      'Only the windshield, pillars, tinted glass and interior surfaces naturally intersecting this close-up are visible.')
+    .replace(/Show only vehicle surfaces in this real camera field of view, at consistent scale and perspective; no floating camera, impossible full-car view or repeated parts\./g,
+      'Any visible controls must be era-correct and at a consistent perspective.')
+    .replace(/\s+/g, ' ').trim();
     .replace(/\s+/g, ' ').trim();
 }
 
@@ -194,13 +203,15 @@ export function compileGeminiGeometryPrompt(
     p.cameraRoll ? 'roll ' + angle(p.cameraRoll) : '',
   ].filter(Boolean).join(', ');
   const frame = [
-    p.visibleBodyRegion ? 'Framing includes ' + p.visibleBodyRegion : '',
+    p.visibleBodyRegion ? 'The frame extends over ' + p.visibleBodyRegion : '',
     p.fieldOfView ? 'with ' + p.fieldOfView : '',
   ].filter(Boolean).join(' ');
   const geometry = [
     position ? 'The resolved viewpoint has ' + position + '.' : '',
     frame ? frame + '.' : '',
-    p.occlusions.length ? 'Foreground overlap follows the real camera sightline: ' + p.occlusions[0] + '.' : '',
+    p.occlusions.length
+      ? 'Only foreground elements that actually enter this crop can overlap the subject; ' + p.occlusions[0] + '.'
+      : '',
   ].filter(Boolean).join(' ');
 
   const reality = appendVisibleSaudiContext(resolved);
