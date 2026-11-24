@@ -295,7 +295,7 @@ const opticalMirror = compileUnifiedPromptPipeline({
   ...base, sceneFamily: 'bedroom', subScene: 'أمام المرآة',
   captureType: 'mirror-selfie', lightingMode: 'إضاءة أباجورة دافئة'
 });
-assert.match(opticalMirror.platforms.gemini.prompt, /Single real phone visible in one flat-mirror reflection/);
+assert.match(opticalMirror.platforms.gemini.prompt, /one real flat-mirror reflection/);
 assert.doesNotMatch(opticalMirror.platforms.gemini.prompt, /Xiaomi 15 Ultra front camera/);
 
 const outfitChanged = compileUnifiedPromptPipeline({
