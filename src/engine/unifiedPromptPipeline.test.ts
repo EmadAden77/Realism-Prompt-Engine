@@ -51,7 +51,7 @@ assert.match(
   /provided image input only to preserve/i
 );
 assert.match(pipeline.platforms.chatgpt.prompt, /Photorealistic vertical 9:16/);
-assert.match(pipeline.platforms.gemini.prompt, /Photorealistic vertical 9:16/);
+assert.match(pipeline.platforms.gemini.prompt, /A candid, photorealistic vertical 9:16 smartphone photograph/);
 assert.match(pipeline.platforms.midjourney.prompt, /Photorealistic vertical 9:16/);
 assert.match(pipeline.platforms.midjourney.prompt, /--v 8\.2 --raw$/);
 assert(pipeline.platforms.gemini.prompt.length < pipeline.neutral.text.length / 2, 'export must be substantially shorter than audited internal prompt');
