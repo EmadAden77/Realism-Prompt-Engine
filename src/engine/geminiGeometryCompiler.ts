@@ -148,7 +148,6 @@ function asPhotographNarrative(base: string): string {
     .replace(/Show only vehicle surfaces in this real camera field of view, at consistent scale and perspective; no floating camera, impossible full-car view or repeated parts\./g,
       'Any visible controls must be era-correct and at a consistent perspective.')
     .replace(/\s+/g, ' ').trim();
-    .replace(/\s+/g, ' ').trim();
 }
 
 function appendVisibleSaudiContext(resolved: ResolvedScene): string {
