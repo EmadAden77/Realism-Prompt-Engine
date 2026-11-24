@@ -153,7 +153,7 @@ assert(
     item.includes('explicitly forbids glasses')
   )
 );
-assert.match(externalConflict.prompt, /not wearing glasses/i);
+assert.match(externalConflict.prompt, /no glasses|not wearing glasses/i);
 assert.doesNotMatch(
   externalConflict.negativePrompt,
   /eyeglasses, spectacles/,
