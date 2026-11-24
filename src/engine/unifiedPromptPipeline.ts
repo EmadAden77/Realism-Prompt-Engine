@@ -370,7 +370,6 @@ export function compileUnifiedPromptPipeline(
         camera: {
           ...resolved.state.bedroomCapture.camera,
           deviceId: 'Xiaomi 15 Ultra',
-          module: 'front',
         },
       })
     : null;
