@@ -750,6 +750,17 @@ export default function PhysFrameApp() {
   }, [state, isLoaded]);
 
   const activeFamily = state.sceneFamily ? SCENE_FAMILIES[state.sceneFamily] : null;
+  const selectCompleteOutfit = (outfitId: string) => {
+    if (!OUTFITS.some(o => o.id === outfitId)) return;
+    setState(prev => ({
+      ...prev, outfitId, outfitLocked: true, outfitWearStyle: 'natural-neat',
+      garmentWearContext: 'neutral', shirtTuck: 'auto', sleeveStyle: 'auto',
+      shirtButtons: 'auto', collarStyle: 'auto',
+      outerwearClosure: 'auto', hoodPosition: 'auto', thobeCollar: 'auto'
+    }));
+    setUseEnhancedPrompt(false);
+    setEnhancedPrompts({});
+  };
   const selectedOutfit = OUTFITS.find(o => o.id === state.outfitId);
   const visibleOutfits = useMemo(() => filterClothingOutfits(clothingCategory, clothingSearch), [clothingCategory, clothingSearch]);
   const selectedBedroomSelfie = getBedroomSelfieActivity(state.bedroomSelfieActionId);
@@ -2464,6 +2475,21 @@ export default function PhysFrameApp() {
                         </div>
                       ))}
                     </div>
+                    <div className="space-y-1.5">
+                      <label className="block text-[11px] font-semibold text-white">ملابس النوم والمنزل</label>
+                      <p className="text-[9px] text-[var(--text-muted)]">اختر طقمًا قطنيًا مريحًا؛ ينعكس الاختيار مباشرة في البرومبت دون تغيير الهوية أو المشهد. الجاكيت اختياري من قسم الملابس.</p>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {filterClothingOutfits('sleepwear').map(outfit => (
+                          <button key={outfit.id} type="button" aria-pressed={state.outfitId === outfit.id}
+                            onClick={() => selectCompleteOutfit(outfit.id)}
+                            className={`text-right rounded-lg border px-2.5 py-2 text-[10px] ${state.outfitId === outfit.id
+                              ? 'border-[var(--accent)] bg-[var(--accent)]/10 text-white font-bold'
+                              : 'border-[var(--border)] text-[var(--text-muted)]'}`}>
+                            {outfit.labelAR}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     <p className="text-[11px] text-white font-semibold">مشاهد جاهزة بواقعية تلقائية</p>
                     <div className="grid grid-cols-2 gap-2">
                       {BEDROOM_REALISM_PRESETS.map(preset => (
@@ -3329,7 +3355,7 @@ export default function PhysFrameApp() {
                  <section className="bg-[var(--bg-card)] p-4 rounded-2xl border border-[var(--border)]">
                     <h3 className="font-bold text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2.5">الملابس والمظهر</h3>
                     <p className="text-[10px] text-[var(--text-muted)] mb-2">
-                      {OUTFITS.length} طقمًا من الصور المرجعية، مع إمكانية إضافة جاكيت اختياري دون تغيير اللباس الأصلي.
+                      {OUTFITS.length} طقمًا من الملابس المرجعية وملابس النوم والمنزل، مع إمكانية إضافة جاكيت اختياري دون تغيير اللباس الأصلي.
                     </p>
                     <div className="grid grid-cols-2 gap-2 mb-2">
                       <label className="block min-w-0">
@@ -3360,15 +3386,7 @@ export default function PhysFrameApp() {
                       value={state.outfitId}
                       onChange={e => {
                         const outfitId = e.target.value;
-                        if (!OUTFITS.some(o => o.id === outfitId)) return;
-                        setState(prev => ({
-                          ...prev, outfitId, outfitLocked: true, outfitWearStyle: 'natural-neat',
-                          garmentWearContext: 'neutral', shirtTuck: 'auto', sleeveStyle: 'auto',
-                          shirtButtons: 'auto', collarStyle: 'auto',
-                          outerwearClosure: 'auto', hoodPosition: 'auto', thobeCollar: 'auto'
-                        }));
-                        setUseEnhancedPrompt(false);
-                        setEnhancedPrompts({});
+                        selectCompleteOutfit(outfitId);
                       }}
                       className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[var(--accent)] mb-2"
                     >

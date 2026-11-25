@@ -1,5 +1,5 @@
-// Reference-based wardrobe: 15 colour pairings + 4 Saudi thobes; optional outerwear is independent.
-export type ClothingCategory = 'smart_casual' | 'traditional';
+// Wardrobe: 15 reference colour pairings, 4 Saudi thobes and bedroom sleepwear; optional outerwear is independent.
+export type ClothingCategory = 'smart_casual' | 'traditional' | 'sleepwear';
 
 export interface OutfitItem {
   id: string;
@@ -40,7 +40,8 @@ export const getJacket = (id: string | undefined): JacketItem | undefined => JAC
 export const CLOTHING_CATEGORIES = [
   { id: 'all', labelAR: 'الكل' },
   { id: 'smart_casual', labelAR: 'قمصان وبناطيل' },
-  { id: 'traditional', labelAR: 'ثياب سعودية' }
+  { id: 'traditional', labelAR: 'ثياب سعودية' },
+  { id: 'sleepwear', labelAR: 'ملابس نوم ومنزل' }
 ];
 
 export const OUTFITS: OutfitItem[] = [
@@ -238,6 +239,133 @@ export const OUTFITS: OutfitItem[] = [
     category: ['traditional', 'saudi-outdoor', 'car', 'living-room', 'bedroom'],
     categoryAR: 'ثياب سعودية', subCategoryAR: 'ثوب سعودي',
     physics: ['natural long thobe fabric gravity folds', 'accurate full-length drape with no trousers substituted', 'visible collar and cuff seams']
+  },
+  // Bedroom and home lounge outfits, locked as complete sets.
+  {
+    "id": "sleep_white_tee_black_shorts",
+    "fixedCompleteOutfit": true,
+    "labelAR": "تيشيرت أبيض + شورت أسود",
+    "labelAr": "تيشيرت أبيض + شورت أسود",
+    "promptDescription": "plain white short-sleeve crew-neck cotton T-shirt paired with black knee-length cotton lounge shorts with an elastic waistband",
+    "prompt": "plain white short-sleeve crew-neck cotton T-shirt paired with black knee-length cotton lounge shorts with an elastic waistband",
+    "category": [
+      "sleepwear",
+      "home",
+      "bedroom"
+    ],
+    "categoryAR": "ملابس نوم ومنزل",
+    "subCategoryAR": "طقم نوم",
+    "physics": [
+      "soft matte opaque cotton knit with visible seams",
+      "natural relaxed fit, gravity folds and contact creases at shoulders, waist and supported body areas",
+      "realistic elastic waistband and shorts hems above or around the knees",
+      "short sleeves follow arm position without distortion"
+    ]
+  },
+  {
+    "id": "sleep_white_tee_navy_shorts",
+    "fixedCompleteOutfit": true,
+    "labelAR": "تيشيرت أبيض + شورت كحلي",
+    "labelAr": "تيشيرت أبيض + شورت كحلي",
+    "promptDescription": "plain white short-sleeve crew-neck cotton T-shirt paired with dark navy knee-length cotton lounge shorts with an elastic waistband",
+    "prompt": "plain white short-sleeve crew-neck cotton T-shirt paired with dark navy knee-length cotton lounge shorts with an elastic waistband",
+    "category": [
+      "sleepwear",
+      "home",
+      "bedroom"
+    ],
+    "categoryAR": "ملابس نوم ومنزل",
+    "subCategoryAR": "طقم نوم",
+    "physics": [
+      "soft matte opaque cotton knit with visible seams",
+      "natural relaxed fit, gravity folds and contact creases at shoulders, waist and supported body areas",
+      "realistic elastic waistband and shorts hems above or around the knees",
+      "short sleeves follow arm position without distortion"
+    ]
+  },
+  {
+    "id": "sleep_white_tank_white_pants",
+    "fixedCompleteOutfit": true,
+    "labelAR": "تيشيرت علاقي أبيض + بنطال منزلي أبيض",
+    "labelAr": "تيشيرت علاقي أبيض + بنطال منزلي أبيض",
+    "promptDescription": "plain white sleeveless cotton tank top with natural shoulder straps and a round neckline paired with opaque white relaxed-fit cotton lounge trousers with an elastic waistband",
+    "prompt": "plain white sleeveless cotton tank top with natural shoulder straps and a round neckline paired with opaque white relaxed-fit cotton lounge trousers with an elastic waistband",
+    "category": [
+      "sleepwear",
+      "home",
+      "bedroom"
+    ],
+    "categoryAR": "ملابس نوم ومنزل",
+    "subCategoryAR": "طقم نوم",
+    "physics": [
+      "soft matte opaque cotton knit with visible seams",
+      "natural relaxed fit, gravity folds and contact creases at shoulders, waist and supported body areas",
+      "realistic elastic waistband and loose full-length trouser drape",
+      "natural sleeveless armholes and strap tension"
+    ]
+  },
+  {
+    "id": "sleep_white_tank_beige_pants",
+    "fixedCompleteOutfit": true,
+    "labelAR": "تيشيرت علاقي أبيض + بنطال منزلي بيج",
+    "labelAr": "تيشيرت علاقي أبيض + بنطال منزلي بيج",
+    "promptDescription": "plain white sleeveless cotton tank top with natural shoulder straps and a round neckline paired with light beige relaxed-fit cotton lounge trousers with an elastic waistband",
+    "prompt": "plain white sleeveless cotton tank top with natural shoulder straps and a round neckline paired with light beige relaxed-fit cotton lounge trousers with an elastic waistband",
+    "category": [
+      "sleepwear",
+      "home",
+      "bedroom"
+    ],
+    "categoryAR": "ملابس نوم ومنزل",
+    "subCategoryAR": "طقم نوم",
+    "physics": [
+      "soft matte opaque cotton knit with visible seams",
+      "natural relaxed fit, gravity folds and contact creases at shoulders, waist and supported body areas",
+      "realistic elastic waistband and loose full-length trouser drape",
+      "natural sleeveless armholes and strap tension"
+    ]
+  },
+  {
+    "id": "sleep_black_tank_white_pants",
+    "fixedCompleteOutfit": true,
+    "labelAR": "تيشيرت علاقي أسود + بنطال منزلي أبيض",
+    "labelAr": "تيشيرت علاقي أسود + بنطال منزلي أبيض",
+    "promptDescription": "plain black sleeveless cotton tank top with natural shoulder straps and a round neckline paired with opaque white relaxed-fit cotton lounge trousers with an elastic waistband",
+    "prompt": "plain black sleeveless cotton tank top with natural shoulder straps and a round neckline paired with opaque white relaxed-fit cotton lounge trousers with an elastic waistband",
+    "category": [
+      "sleepwear",
+      "home",
+      "bedroom"
+    ],
+    "categoryAR": "ملابس نوم ومنزل",
+    "subCategoryAR": "طقم نوم",
+    "physics": [
+      "soft matte opaque cotton knit with visible seams",
+      "natural relaxed fit, gravity folds and contact creases at shoulders, waist and supported body areas",
+      "realistic elastic waistband and loose full-length trouser drape",
+      "natural sleeveless armholes and strap tension"
+    ]
+  },
+  {
+    "id": "sleep_black_tank_beige_pants",
+    "fixedCompleteOutfit": true,
+    "labelAR": "تيشيرت علاقي أسود + بنطال منزلي بيج",
+    "labelAr": "تيشيرت علاقي أسود + بنطال منزلي بيج",
+    "promptDescription": "plain black sleeveless cotton tank top with natural shoulder straps and a round neckline paired with light beige relaxed-fit cotton lounge trousers with an elastic waistband",
+    "prompt": "plain black sleeveless cotton tank top with natural shoulder straps and a round neckline paired with light beige relaxed-fit cotton lounge trousers with an elastic waistband",
+    "category": [
+      "sleepwear",
+      "home",
+      "bedroom"
+    ],
+    "categoryAR": "ملابس نوم ومنزل",
+    "subCategoryAR": "طقم نوم",
+    "physics": [
+      "soft matte opaque cotton knit with visible seams",
+      "natural relaxed fit, gravity folds and contact creases at shoulders, waist and supported body areas",
+      "realistic elastic waistband and loose full-length trouser drape",
+      "natural sleeveless armholes and strap tension"
+    ]
   }
 ];
 

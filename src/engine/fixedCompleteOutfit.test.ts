@@ -52,7 +52,7 @@ assert.match(oldSaved.outfit, /LOCKED COMPLETE OUTFIT/, 'Old saved states should
 console.log('✅ Complete fixed outfit keeps garment identity across scenes and ignores legacy per-piece controls');
 
 // The complete wardrobe must stay present and in a stable order for every scene.
-assert.equal(OUTFITS.length, 19, 'Wardrobe consists of 15 reference color combinations and four Saudi thobes');
+assert.equal(OUTFITS.length, 25, 'Wardrobe includes 15 reference color combinations, four Saudi thobes and six sleepwear outfits');
 assert.equal(new Set(OUTFITS.map(item => item.id)).size, OUTFITS.length, 'Every outfit ID must be unique');
 assert.deepEqual(filterClothingOutfits().map(item => item.id), OUTFITS.map(item => item.id),
   'Opening the clothes list must show the entire static catalog, never a 12-item suggestion subset');
@@ -84,3 +84,20 @@ assert.match(withVest.outfit, /separately selected optional outerwear is allowed
   'Locked outfit instructions must explicitly permit the selected jacket');
 assert.doesNotMatch(withVest.outfit, /No additions, omissions, swaps/i,
   'Old blanket prohibition conflicts with an explicitly selected jacket');
+
+// Bedroom sleepwear uses the same canonical complete-outfit compiler as the main wardrobe.
+const sleepwear = filterClothingOutfits('sleepwear');
+assert.equal(sleepwear.length, 6);
+assert.equal(filterClothingOutfits('sleepwear', 'علاقي').length, 4);
+for (const item of sleepwear) {
+  assert.ok(Array.isArray(item.category) && item.category.includes('bedroom'));
+  assert.equal(item.fixedCompleteOutfit, true);
+  const scene = compile({ ...base, outfitId: item.id, jacketId: 'none' });
+  assert.ok(scene.outfit.includes(item.prompt), 'Exact selected sleepwear must reach the prompt: ' + item.id);
+  assert.match(scene.outfit, /LOCKED COMPLETE OUTFIT/);
+  assert.match(scene.outfit, /NO OUTERWEAR/);
+  assert.doesNotMatch(scene.outfit, /half.tuck|rolled.forearm|top two buttons/i);
+}
+assert.match(compile({ ...base, outfitId: 'sleep_white_tee_black_shorts', jacketId: 'none' }).outfit, /white short-sleeve.*black knee-length cotton lounge shorts/);
+assert.match(compile({ ...base, outfitId: 'sleep_black_tank_beige_pants', jacketId: 'none' }).outfit, /black sleeveless.*light beige relaxed-fit cotton lounge trousers/);
+console.log('✅ Bedroom sleepwear catalog, search and locked prompt compilation');
