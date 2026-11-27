@@ -139,6 +139,29 @@ const reconcileSharedNegative = (
  * light facts. Brief visual constraints must never contradict those facts.
  * The verbose causal audit is kept in neutral/diagnostics, not sent to models.
  */
+/**
+ * UGC phone-photo aesthetics adapted from apimageorg/apimage-skills
+ * (ugc-selfie-style-photos). Appearance only: the resolved scene still owns
+ * framing, illumination, contact, focus, motion and visible objects.
+ */
+export function compileUgcPhonePhotoStyle(state: SceneState): string {
+  if (state.realismStyle !== 'raw-candid' && state.realismStyle !== 'anti-ai-raw') return '';
+  const handheld = state.captureType === 'front-selfie'
+    ? 'Keep the selected handheld framing and the natural perspective of the phone; the capturing handset stays outside the image.'
+    : state.captureType === 'mirror-selfie'
+      ? 'Keep the selected mirror crop, with a single reflected handset and a natural one-handed grip where visible.'
+      : 'Keep the selected observer framing and natural candid posture; no artificial selfie arm.';
+  return [
+    'Everyday, unstaged phone snapshot rather than commercial studio photography; retain the resolved framing and roll instead of forcing perfect symmetry.',
+    handheld,
+    'Use natural smartphone depth of field: recognizable surroundings where distance, illumination, focus and the selected crop permit; no artificial background separation.',
+    'Keep existing objects in their plausible everyday positions and preserve the selected level of tidiness; do not introduce props, clutter or people just for the aesthetic.',
+    'Retain uneven illumination and local color differences only when supported by the selected light sources; do not add fill, fixtures or mixed light.',
+    'Faint shadow noise only when supported by exposure; no intentional blur, exaggerated optical defects or fake grain overlays.',
+    'Unretouched natural skin and fabric texture; avoid commercial styling and studio polish.'
+  ].join(' ');
+}
+
 export function compileUltraShortPrompt(
   state: SceneState,
   semantic: SemanticPromptScene,
@@ -274,7 +297,8 @@ export function compileUltraShortPrompt(
     homePeople,
     'Time: ' + state.timeOfDay + '. Lighting: ' + lighting,
     screenOnly ? 'Expose for the near face without raising distant background; deep natural shadows remain.' : 'Real-source direction, occlusion, distance falloff and weaker bounce; no unexplained rim/fill light.',
-    'Same camera exposure and noise across face, clothing and background; real skin microtexture, restrained HDR, imperfect white balance, natural sensor grain, no fake bokeh, CGI or skin smoothing.'
+    'Same camera exposure and noise across face, clothing and background; real skin microtexture, restrained HDR, imperfect white balance, natural sensor grain, no fake bokeh, CGI or skin smoothing.',
+    compileUgcPhonePhotoStyle(state)
   ];
   return pieces.filter(Boolean).join(' ');
 }
@@ -404,6 +428,8 @@ export function compileUnifiedPromptPipeline(
     semantic.visibleEnvironment = 'Ordinary bedroom with physically supported furniture and bedding; no floating objects.';
     semantic.outfit = [semantic.outfit, 'In bedroom poses, fabric creases and folds follow actual support contacts.'].join(' ');
   }
+  const ugcStyle = compileUgcPhonePhotoStyle(resolved.state);
+  if (ugcStyle) semantic.styleConstraints = [semantic.styleConstraints, ugcStyle].filter(Boolean).join(' ');
   const neutral = compileNeutralPrompt(
     semantic,
     manifest.knowledgeDecisions
@@ -421,7 +447,8 @@ export function compileUnifiedPromptPipeline(
         bedroomJacket
           ? `Mandatory outerwear: ${bedroomJacket.prompt}. The jacket or vest must be visibly worn OVER the unchanged base outfit.`
           : 'No jacket, coat, parka or vest over the selected outfit.',
-      ].join(' ')
+        ugcStyle,
+      ].filter(Boolean).join(' ')
     : compileUltraShortPrompt(resolved.state, semantic, resolved.physicalState);
 
   const chatgptAdapter = compilePlatformAdapter(
