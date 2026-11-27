@@ -42,6 +42,7 @@ import {
   buildSmartSceneOptions,
   smartDependentPatch,
   isLightingCompatible,
+  contextOptionBlock,
 } from './engine/smartSceneOptions';
 import {
   HAIRSTYLES,
@@ -2469,7 +2470,12 @@ export default function PhysFrameApp() {
                       <Wand2 className="w-3.5 h-3.5 inline-block ml-1" />
                       ضبط النشاط والوضعية والإضاءة والخلفية بذكاء
                     </button>
-                    <p className="text-[9px] text-[var(--text-muted)]">الخيارات المقترحة تظهر أولًا؛ يمكنك كشف كل المكتبة وتعديل أي اختيار يدويًا.</p>
+                    <p className="text-[9px] text-[var(--text-muted)]">V4 · تظهر الخيارات المناسبة أولًا، ويظل التحكم المتقدم متاحًا. الخيارات المتعارضة صراحة مع المقعد أو النشاط معطلة.</p>
+                     {(smartSceneOptions?.blockedActivities[state.activity] || smartSceneOptions?.blockedPoses[state.pose]) && (
+                       <p role="alert" className="text-[10px] text-amber-300 leading-relaxed">
+                         {smartSceneOptions?.blockedActivities[state.activity] || smartSceneOptions?.blockedPoses[state.pose]} اختر خيارًا متوافقًا أو استخدم الضبط الذكي.
+                       </p>
+                     )}
                   </div>
                   <label className="text-[11px] text-[var(--text-muted)] block mb-2 font-bold">الزاوية الفرعية الدقيقة:</label>
                   {state.sceneFamily === 'military-base' ? (
@@ -2747,12 +2753,25 @@ export default function PhysFrameApp() {
                   <label className="text-[11px] text-[var(--text-muted)] block mb-1 font-semibold">ماذا يفعل؟</label>
                   <select
                     value={state.activity}
-                    onChange={e => setState({
-                      ...state,
-                      activity: e.target.value,
-                      bedroomSelfieActionId: undefined,
-                      selfieAngleAdvice: undefined
-                    })}
+                    onChange={e => {
+                      const activity = e.target.value;
+                      setState(prev => {
+                        if (!prev.sceneFamily) return { ...prev, activity };
+                        const context = {
+                          familyId: prev.sceneFamily, subScene: prev.subScene,
+                          captureType: prev.captureType, timeOfDay: prev.timeOfDay,
+                          activity, selectedOutfitId: prev.outfitId,
+                          allowedLighting: SCENE_FAMILIES[prev.sceneFamily].allowedLighting
+                        };
+                        if (contextOptionBlock(context, activity, 'activity')) return prev;
+                        const plan = buildSmartSceneOptions(context);
+                        const pose = contextOptionBlock(context, prev.pose, 'pose', activity)
+                          ? (plan.recommendedPoses[0] || '') : prev.pose;
+                        return { ...prev, activity, pose, bedroomSelfieActionId: undefined,
+                          selfieAngleAdvice: undefined };
+                      });
+                      setUseEnhancedPrompt(false);
+                    }}
                     className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-xs text-[#F3EFE7] focus:outline-none focus:border-[var(--accent)] mb-3"
                   >
                     {!!state.activity && !smartActivitySet.has(state.activity) && (!showAllSceneOptions || !activityOptions.some(item => item.labelAR === state.activity)) && (
@@ -2766,7 +2785,10 @@ export default function PhysFrameApp() {
                     {showAllSceneOptions && (
                       <optgroup label="بقية الأنشطة (تحكم متقدم)">
                         {activityOptions.filter(item => !smartActivitySet.has(item.labelAR))
-                          .map(item => <option key={item.labelAR} value={item.labelAR}>{item.labelAR}</option>)}
+                          .map(item => <option key={item.labelAR} value={item.labelAR}
+                            disabled={Boolean(smartSceneOptions?.blockedActivities[item.labelAR])}>
+                            {item.labelAR}{smartSceneOptions?.blockedActivities[item.labelAR] ? ' · غير متوافق' : ''}
+                          </option>)}
                       </optgroup>
                     )}
                   </select>
@@ -2793,7 +2815,10 @@ export default function PhysFrameApp() {
                     {showAllSceneOptions && (
                       <optgroup label="بقية الوضعيات (تحكم متقدم)">
                         {poseOptions.filter(p => !smartPoseSet.has(p))
-                          .map(p => <option key={p} value={p}>{p}</option>)}
+                          .map(p => <option key={p} value={p}
+                            disabled={Boolean(smartSceneOptions?.blockedPoses[p])}>
+                            {p}{smartSceneOptions?.blockedPoses[p] ? ' · غير متوافق' : ''}
+                          </option>)}
                       </optgroup>
                     )}
                   </select>
