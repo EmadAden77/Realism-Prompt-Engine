@@ -60,7 +60,7 @@ const describePosition = (state: ResolvedScene['state'], physical: ResolvedScene
   if (state.sceneFamily === 'car' && !micro?.isOutdoor) {
     const id = micro?.id || state.subScene;
     if (/car_driver_|^مقعد السائق/i.test(id))
-      return 'seated in the left driver seat of the parked left-hand-drive vehicle';
+      return 'seated in the left driver seat of the parked vehicle (left-hand drive)';
     if (/car_front_passenger|المقعد الأمامي للراكب/i.test(id))
       return 'seated in the front right passenger seat of the parked left-hand-drive vehicle';
     if (/car_rear_seat|المقعد الخلفي/i.test(id))
@@ -103,14 +103,12 @@ function normalizeSceneLabels(prompt: string, resolved: ResolvedScene): string {
     || (state.sceneFamily === 'car' && /السائق|الراكب|driver|passenger/i.test(state.activity)
       && /السائق|الراكب|driver|passenger/i.test(state.pose));
 
-  let result = prompt.replace(
-    /Pose:\s*[^.]*\.\s*(?:Action:\s*[^.]*\.\s*)?Setting:\s*[^.]*\./u,
-    [
-      `Pose: ${pose}.`,
-      !sameAction ? `Action: ${action}.` : '',
-      state.sceneFamily !== 'car' && location ? `Setting: ${location}.` : '',
-    ].filter(Boolean).join(' '),
-  );
+  // Replace fields separately: hand/prop contact may sit between action
+  // and setting and must not prevent the selected pose from being compiled.
+  let result = prompt
+    .replace(/\bPose:\s*[^.]*\./u, () => `Pose: ${pose}.`)
+    .replace(/\bAction:\s*[^.]*\./u, () => !sameAction ? `Action: ${action}.` : '')
+    .replace(/\bSetting:\s*[^.]*\./u, () => state.sceneFamily !== 'car' && location ? `Setting: ${location}.` : '');
 
   const lighting = resolveEnglishLight(state);
   result = result.replace(
