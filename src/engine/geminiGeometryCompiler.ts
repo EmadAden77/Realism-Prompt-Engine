@@ -1,6 +1,9 @@
 import type { ResolvedScene } from './physicsEngine';
 import type { ReferencePlan } from './referenceRouter';
 import { getPhysicalLightingOption } from '../data/physicalLighting';
+import { getMicroLocation } from '../data/microLocations';
+import { getActivityDefinition } from './activityAttire';
+import { resolveStructuredPoseSuggestion } from './sceneAffordances';
 
 /**
  * Gemini-native image prompt presentation. The neutral engine owns scene facts;
@@ -53,20 +56,50 @@ const resolveEnglishLight = (state: ResolvedScene['state']): string => {
 };
 
 const describePosition = (state: ResolvedScene['state'], physical: ResolvedScene['physicalState']): string => {
-  if (state.sceneFamily === 'car' && /السائق|driver/i.test(state.subScene + ' ' + state.pose))
-    return 'seated in the left driver seat of the parked vehicle';
-  if (state.sceneFamily === 'car' && /الراكب|للراكب|passenger/i.test(state.subScene + ' ' + state.pose))
-    return 'seated in the passenger seat of the parked vehicle';
-  return englishOrEmpty(translateKnown(state.pose, KNOWN_SCENE_PHRASES)) || physical.bodyOrientation;
+  const micro = state.sceneFamily ? getMicroLocation(state.sceneFamily, state.subScene) : undefined;
+  if (state.sceneFamily === 'car' && !micro?.isOutdoor) {
+    const id = micro?.id || state.subScene;
+    if (/car_driver_|^مقعد السائق/i.test(id))
+      return 'seated in the left driver seat of the parked left-hand-drive vehicle';
+    if (/car_front_passenger|المقعد الأمامي للراكب/i.test(id))
+      return 'seated in the front right passenger seat of the parked left-hand-drive vehicle';
+    if (/car_rear_seat|المقعد الخلفي/i.test(id))
+      return 'seated on the rear bench of the parked vehicle';
+  }
+  const known = englishOrEmpty(translateKnown(state.pose, KNOWN_SCENE_PHRASES));
+  if (known) return known;
+  if (state.sceneFamily) {
+    const pose = resolveStructuredPoseSuggestion(state.sceneFamily, state.subScene, state.pose);
+    const addon = englishOrEmpty(pose.promptAddon);
+    if (addon) return addon;
+    // Preserve unfamiliar labels rather than silently replacing the selected action.
+    return [physical.bodyOrientation, pose.physics, state.pose].filter(Boolean).join('; ');
+  }
+  return physical.bodyOrientation || state.pose;
 };
+
+function describeActivity(activity: string): string {
+  if (!activity.trim()) return '';
+  const definition = getActivityDefinition(activity);
+  const english = englishOrEmpty(definition.prompt);
+  return english || translateKnown(activity, KNOWN_SCENE_PHRASES);
+}
+
+function describeLocation(state: ResolvedScene['state']): string {
+  const known = englishOrEmpty(translateKnown(state.subScene || '', KNOWN_SCENE_PHRASES));
+  if (known) return known;
+  const micro = state.sceneFamily ? getMicroLocation(state.sceneFamily, state.subScene) : undefined;
+  // The location ID is stable and contains no stock daylight or lighting prose.
+  return micro ? micro.id.replace(/_/g, ' ') : state.subScene;
+}
 
 /** Deduplicate pose/action when both select the same movement or position. */
 function normalizeSceneLabels(prompt: string, resolved: ResolvedScene): string {
   const { state, physicalState } = resolved;
   const pose = describePosition(state, physicalState);
-  const action = englishOrEmpty(translateKnown(state.activity || '', KNOWN_SCENE_PHRASES));
-  const location = englishOrEmpty(translateKnown(state.subScene || '', KNOWN_SCENE_PHRASES));
-  const sameAction = !action || action === pose
+  const action = describeActivity(state.activity || '');
+  const location = describeLocation(state);
+  const sameAction = !action || action === pose || state.activity === state.pose
     || (state.sceneFamily === 'car' && /السائق|الراكب|driver|passenger/i.test(state.activity)
       && /السائق|الراكب|driver|passenger/i.test(state.pose));
 
@@ -153,8 +186,9 @@ function asPhotographNarrative(base: string): string {
 function appendVisibleSaudiContext(resolved: ResolvedScene): string {
   const { state, physicalState: p } = resolved;
   const environment = p.backgroundRealism;
+  const micro = state.sceneFamily ? getMicroLocation(state.sceneFamily, state.subScene) : undefined;
   const outdoors = state.sceneFamily === 'saudi-outdoor'
-    || (state.sceneFamily === 'car' && /خارج|بجانب|outside|beside|parking|car_outside|car_beside/i.test(state.subScene));
+    || (state.sceneFamily === 'car' && Boolean(micro?.isOutdoor));
   const vehicleSeen = environment.allowsVehicles && p.visibleVehicles.length > 0;
   const peopleSeen = environment.allowsHumans && p.visiblePeople.length > 0;
   const bits = [
@@ -175,6 +209,19 @@ function appendVisibleSaudiContext(resolved: ResolvedScene): string {
     ', with believable scale, grounding, depth, varied poses and lighting. They remain secondary to the subject and appear only where the selected camera view permits.';
 }
 
+/**
+ * Gemini Physical Prompt Compiler V3.
+ * Inspired by giulioco/skills nano-banana-prompt and dojocodinglabs
+ * image-prompting: subject first, coherent composition, causal lighting,
+ * scoped references, and separate sections for multiple subjects.
+ * Never add sample camera settings or style tags from those templates.
+ */
+export function structureGeminiNarrative(text: string): string {
+  return text
+    .replace(/\s+(?=He wears |Over the selected base clothing,|His expression is |He is |Setting: |Visible scene: |Inside the parked vehicle: |Beside the parked vehicle: |GROUP SELFIE MODE:|Companion \d+:|ANTI-CLONING:|Late at night,|During the (?:morning|midday|afternoon|sunset),|Same camera exposure and noise|Everyday, unstaged phone snapshot)/g, '\n\n')
+    .trim();
+}
+
 export function compileGeminiGeometryPrompt(
   basePrompt: string,
   resolved: ResolvedScene,
@@ -184,10 +231,12 @@ export function compileGeminiGeometryPrompt(
   const front = state.captureType === 'front-selfie';
   const mirror = state.captureType === 'mirror-selfie';
 
-  const base = asPhotographNarrative(normalizeSceneLabels(basePrompt, resolved));
-  // The reference-role directive is already emitted once by platformAdapter.
-  // Do not repeat identity instructions in a second paragraph.
-  void referencePlan;
+  const base = structureGeminiNarrative(asPhotographNarrative(normalizeSceneLabels(basePrompt, resolved)));
+  // The adapter handles the actual attachment directive. With a group, scope
+  // that attachment to the main subject; never let it propagate to companions.
+  const identityScope = referencePlan.hasReference && state.groupSelfieEnabled
+    ? 'The supplied identity reference applies exclusively to the main subject. Companion faces are independent identities; selected outfits, expressions, and scene geometry come from this scene, not from the reference photo.'
+    : '';
   const capture = front
     ? 'Shot on the Xiaomi 15 Ultra front camera, approximately 21mm equivalent at f/2.0, with one naturally connected phone-holding arm and the handset outside the frame.'
     : mirror
@@ -218,6 +267,7 @@ export function compileGeminiGeometryPrompt(
   // in the canonical photographic narrative. Do not state it twice.
 
   return [
+    identityScope,
     base,
     capture,
     geometry,
