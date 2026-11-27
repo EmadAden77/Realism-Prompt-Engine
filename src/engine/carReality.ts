@@ -17,11 +17,15 @@ export function isCarExteriorSubScene(subScene: string, knownOutdoor?: boolean):
 }
 
 export function carSeatView(subScene: string, pose = ''): CarView {
-  const text = subScene + ' ' + pose;
-  if (/rear_seat|المقعد الخلفي|rear seat/i.test(text)) return 'rear-passenger';
-  if (/front_passenger|الراكب|للراكب|لراكب|passenger/i.test(text)) return 'front-passenger';
-  if (/between_front_seats|بين المقعدين|front center/i.test(text)) return 'front-center';
-  return 'driver';
+  const classify = (text: string): CarView | undefined => {
+    if (/rear_seat|المقعد الخلفي|rear seat/i.test(text)) return 'rear-passenger';
+    if (/between_front_seats|بين المقعدين|front center/i.test(text)) return 'front-center';
+    if (/car_driver_|مقعد السائق|خلف المقود|driver seat/i.test(text)) return 'driver';
+    if (/front_passenger|الراكب|للراكب|لراكب|passenger/i.test(text)) return 'front-passenger';
+    return undefined;
+  };
+  // Explicit selected seat owns cabin topology. A stale pose cannot move it.
+  return classify(subScene) ?? classify(pose) ?? 'driver';
 }
 
 export function describe2017RangeRoverSport(input: {
