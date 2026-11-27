@@ -18,9 +18,10 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
-      - run: npm ci
+      - run: npm install --no-audit --no-fund
+        id: dependencies
       - run: npm run lint
       - run: npm test
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
       - run: npm run build
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
