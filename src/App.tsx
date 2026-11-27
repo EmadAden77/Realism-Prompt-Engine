@@ -624,6 +624,7 @@ export default function PhysFrameApp() {
   const [showAllBedroomActivities, setShowAllBedroomActivities] = useState(false);
   const [showPromptSheet, setShowPromptSheet] = useState(false);
   const [activeTab, setActiveTab] = useState<'chatgpt' | 'gemini' | 'negative'>('chatgpt');
+  const [superpromptFormat, setSuperpromptFormat] = useState<'text' | 'json'>('text');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [hasReference, setHasReference] = useState<boolean>(false);
   const [presets, setPresets] = useState<SavedPreset[]>([]);
@@ -2002,11 +2003,70 @@ export default function PhysFrameApp() {
   const hasCurrentEnhancement = activeTab === 'chatgpt'
     ? Boolean(currentEnhancedChatGPT)
     : activeTab === 'gemini' ? Boolean(currentEnhancedGemini) : false;
-  const currentDisplayPrompt = !angleExportReady ? '' : activeTab === 'chatgpt'
+  const currentTextPrompt = !angleExportReady ? '' : activeTab === 'chatgpt'
     ? (currentEnhancedChatGPT || chatGPTPrompt)
     : activeTab === 'gemini'
     ? (currentEnhancedGemini || geminiPrompt)
     : negativePrompt;
+
+  // Adapted from bluebagai/skills superimage-generator. The resolved scene and
+  // existing platform validator remain authoritative; no third-party code runs.
+  const superprompt = useMemo(() => {
+    if (!currentPromptPipeline || activeTab === 'negative') return null;
+    const pipeline = currentPromptPipeline;
+    const scene = pipeline.semantic;
+    const platform = pipeline.platforms[activeTab];
+    const blocks = {
+      subject: {
+        description: scene.identity,
+        body: { physique: scene.body, details: scene.skinResponse },
+        appearance: { hair: scene.hair, expression: scene.expression, eyewear: scene.glasses }
+      },
+      wardrobe: { clothing: scene.outfit, fabric_physics: scene.outfitPhysics },
+      pose_action: { description: scene.poseAndContact, ...(scene.groupSelfie ? { group: scene.groupSelfie } : {}) },
+      scene: { environment: scene.visibleEnvironment, atmosphere: scene.atmosphere },
+      lighting: { description: scene.lighting },
+      camera: {
+        technical: scene.captureMechanics,
+        imaging: scene.cameraRealism,
+        aspect_ratio: '9:16',
+        negative_constraints: platform.negativePrompt || pipeline.negative.text
+      },
+      realism_anchors: scene.styleConstraints
+    };
+    const required = [
+      ['subject.description', blocks.subject.description],
+      ['subject.body.physique', blocks.subject.body.physique],
+      ['wardrobe.clothing', blocks.wardrobe.clothing],
+      ['pose_action.description', blocks.pose_action.description],
+      ['scene.environment', blocks.scene.environment],
+      ['lighting.description', blocks.lighting.description],
+      ['camera.technical', blocks.camera.technical],
+      ['camera.negative_constraints', blocks.camera.negative_constraints]
+    ] as const;
+    const missing = required.filter(([, value]) => typeof value !== 'string' || !value.trim()).map(([key]) => key);
+    const report = pipeline.diagnostics.conflictReport;
+    const valid = angleExportReady && Boolean(platform.prompt.trim()) && missing.length === 0;
+    const document = {
+      ...(pipeline.manifest.referencePlan.hasReference ? { reference: {
+        face_identity: 'Use the original reference image as the identity authority; attach it separately.',
+        identity_lock: true,
+        instruction: 'Preserve facial proportions, natural asymmetry, hairline, beard and skin; no reconstruction or beautification.'
+      } } : {}),
+      ...blocks,
+      validated_prompt: platform.prompt,
+      instruction: 'The validated_prompt is authoritative. Use structured fields as supporting scene context only; never override its camera geometry, lighting, identity, or selected wardrobe.'
+    };
+    return {
+      valid, missing, report,
+      json: valid ? JSON.stringify(document, null, 2) : '',
+      checked: required.length - missing.length,
+      total: required.length
+    };
+  }, [currentPromptPipeline, activeTab, angleExportReady]);
+
+  const showingSuperprompt = activeTab !== 'negative' && superpromptFormat === 'json';
+  const currentDisplayPrompt = showingSuperprompt ? (superprompt?.json || '') : currentTextPrompt;
 
   return (
     <div dir="rtl" className="min-h-screen bg-[var(--bg-main)] text-[var(--text-main)] font-sans pb-32 selection:bg-[var(--accent)] selection:text-black">
@@ -4078,8 +4138,42 @@ export default function PhysFrameApp() {
                   </button>
                </div>
 
-               {/* Gemini AI Enhancement Bar */}
-               {activeTab !== 'negative' && (
+               {/* Superprompt structured scene review */}
+                {activeTab !== 'negative' && superprompt && (
+                  <div className="px-4 py-2 border-b border-white/10 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-[var(--accent)]">Superprompt Studio</span>
+                      <div className="flex gap-1 text-[11px]">
+                        <button type="button" aria-pressed={!showingSuperprompt}
+                          onClick={() => setSuperpromptFormat('text')}
+                          className={`px-2 py-1 rounded ${!showingSuperprompt ? 'bg-white/15 text-white' : 'text-[var(--text-muted)]'}`}>نص جاهز</button>
+                        <button type="button" aria-pressed={showingSuperprompt}
+                          onClick={() => setSuperpromptFormat('json')}
+                          className={`px-2 py-1 rounded ${showingSuperprompt ? 'bg-white/15 text-white' : 'text-[var(--text-muted)]'}`}>مشهد JSON</button>
+                      </div>
+                    </div>
+                    <details className="text-[11px] text-[var(--text-muted)]">
+                      <summary className="cursor-pointer">
+                        {superprompt.valid ? '✓ تحقق محلي ناجح' : '⚠ التحقق غير مكتمل'} ·
+                        الحقول {superprompt.checked}/{superprompt.total} ·
+                        أخطاء {superprompt.report.errors.length} ·
+                        تحذيرات {superprompt.report.warnings.length} ·
+                        تصحيحات {superprompt.report.corrections.length}
+                      </summary>
+                      <div className="max-h-28 overflow-y-auto space-y-1 pt-2">
+                        {superprompt.missing.map(key => <p key={key}>حقل ناقص: {key}</p>)}
+                        {[...superprompt.report.errors, ...superprompt.report.warnings, ...superprompt.report.corrections].map((item, index) =>
+                          <p key={`${item.ruleId}-${index}`}>{item.severity}: {item.message}</p>
+                        )}
+                        <p>التحقق يخص بنية المشهد والنص الأساسي المحلي، ولا يضمن نتيجة مولد الصور.</p>
+                      </div>
+                    </details>
+                    {showingSuperprompt && <p className="text-[10px] text-[var(--text-muted)]">مواصفات المشهد المنظمة؛ النص المعتمد داخل validated_prompt هو المرجع النهائي. تعزيز Gemini متاح في وضع النص.</p>}
+                  </div>
+                )}
+
+                {/* Gemini AI Enhancement Bar */}
+               {activeTab !== 'negative' && !showingSuperprompt && (
                  <div className="px-4 py-2.5 bg-[#141618] border-b border-white/5 flex items-center justify-between">
                    <div className="flex items-center gap-2">
                      <span className="text-[11px] text-[var(--text-muted)]">معالجة الدقة الفائقة:</span>
@@ -4133,7 +4227,7 @@ export default function PhysFrameApp() {
                     className="flex-1 py-3 bg-[var(--accent)] hover:bg-[#d6b783] text-black rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md active:scale-98"
                   >
                     <Copy className="w-4 h-4" />
-                    <span>نسخ البرومبت الكامل</span>
+                    <span>{showingSuperprompt ? 'نسخ مواصفات JSON' : 'نسخ البرومبت الكامل'}</span>
                   </button>
 
                   <button
