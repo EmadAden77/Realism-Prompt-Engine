@@ -1,4 +1,4 @@
-import { buildSmartSceneOptions, isLightingCompatible, smartDependentPatch } from './smartSceneOptions';
+import { buildSmartSceneOptions, isLightingCompatible, smartDependentPatch, contextOptionBlock } from './smartSceneOptions';
 import type { BackgroundViewGeometry } from './backgroundRealism';
 import { OUTFITS } from '../data/clothingOutfits';
 
@@ -86,3 +86,19 @@ assert(JSON.stringify(patch) === JSON.stringify(smartDependentPatch(input)),
   'Changing the same location must not make random hidden changes');
 
 console.log('✅ SMART SCENE CONTROL REGRESSION TESTS PASSED');
+
+console.log('▶ V4: hard vehicle-seat and activity-pose compatibility');
+const carPassenger = { familyId: 'car' as const, subScene: 'المقعد الأمامي للراكب', captureType: 'front-selfie' as const };
+assert(Boolean(contextOptionBlock(carPassenger, 'جالس في مقعد السائق', 'pose')), 'Passenger must not occupy the driver seat');
+assert(Boolean(contextOptionBlock(carPassenger, 'ممسك المقود', 'activity')), 'Passenger cannot hold the steering wheel');
+assert(!contextOptionBlock(carPassenger, 'جالس في مقعد الراكب', 'pose'), 'Correct passenger seat remains available');
+const rear = {...carPassenger, subScene: 'المقعد الخلفي'};
+assert(Boolean(contextOptionBlock(rear, 'جالس في مقعد الراكب', 'pose')), 'Rear seat must not become front passenger');
+const outdoor = {...carPassenger, subScene: 'بجانب السيارة والباب مغلق'};
+assert(Boolean(contextOptionBlock(outdoor, 'جالس في مقعد السائق', 'pose')), 'Exterior must not silently become a cabin');
+assert(!contextOptionBlock(outdoor, 'واقف بثبات', 'pose'), 'Exterior standing remains valid');
+const bedroom = {...carPassenger, familyId: 'bedroom' as const, subScene: 'حافة السرير'};
+assert(Boolean(contextOptionBlock(bedroom, 'واقف بثبات', 'pose', 'جالس على حافة السرير')), 'Seated activity must not conflict with standing pose');
+const emptyLight = smartDependentPatch({...input, allowedLighting: ['شمس الظهر']});
+assert(emptyLight.lightingMode === '', 'No incompatible fallback lighting may be invented');
+console.log('✅ V4 CONTEXT CHECKS PASSED');
