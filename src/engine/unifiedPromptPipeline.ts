@@ -145,7 +145,7 @@ const reconcileSharedNegative = (
  * framing, illumination, contact, focus, motion and visible objects.
  */
 export function compileUgcPhonePhotoStyle(state: SceneState): string {
-  if (state.realismStyle !== 'raw-candid' && state.realismStyle !== 'anti-ai-raw') return '';
+  if (state.realismStyle !== 'candid-snap' && state.realismStyle !== 'anti-ai-raw') return '';
   const handheld = state.captureType === 'front-selfie'
     ? 'Keep the selected handheld framing and the natural perspective of the phone; the capturing handset stays outside the image.'
     : state.captureType === 'mirror-selfie'
