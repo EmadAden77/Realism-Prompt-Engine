@@ -262,12 +262,27 @@ export function widenFramingForGroup(current: Framing, size: GroupSelfieSize): F
   return framingRank[current] >= framingRank[required] ? current : required;
 }
 
-function resolveArrangement(familyId: SceneFamilyId, microLoc: MicroLocation | undefined, size: GroupSelfieSize): string {
+/** Seat names are vehicle-relative (LHD), never image-relative. */
+export function groupSeatSlots(microLoc: MicroLocation | undefined, subScene: string, size: GroupSelfieSize): string[] | null {
+  if (microLoc?.isOutdoor) return null;
+  const location = microLoc?.id || subScene;
+  const rear = /car_rear_seat|المقعد الخلفي/i.test(location);
+  const passenger = /car_front_passenger|المقعد الأمامي للراكب/i.test(location);
+  const driver = /car_driver_|مقعد السائق/i.test(location);
+  if (rear) return ['rear left seat', 'rear right seat', 'rear center seat'].slice(0, size);
+  if (passenger) return ['front right passenger seat', 'front left driver seat', 'rear left seat'].slice(0, size);
+  if (driver) return ['front left driver seat', 'front right passenger seat', 'rear right seat'].slice(0, size);
+  // A console-centered camera does not prove the phone holder's seat.
+  return null;
+}
+
+function resolveArrangement(familyId: SceneFamilyId, microLoc: MicroLocation | undefined, size: GroupSelfieSize, subScene: string): string {
   const zone = microLoc?.zone;
   if (familyId === 'car' && !microLoc?.isOutdoor) {
-    return size === 2
-      ? 'two-person in-cabin composition with the reference subject closest to the phone and one companion in the adjacent visible seat'
-      : 'three-person in-cabin cluster using physically occupied seats only, with no floating head between seats';
+    const seats = groupSeatSlots(microLoc, subScene, size);
+    return seats
+      ? 'parked left-hand-drive cabin; main subject occupies the ' + seats[0] + '; companions occupy ' + seats.slice(1).join(' and ') + '. Seat directions are relative to the vehicle, not the image; visible faces must clear the actual seatbacks and headrests'
+      : 'parked left-hand-drive cabin; retain the resolved main-subject seat or console-side position and assign each companion a separate available seat; never place a person on the center console or between the front seats';
   }
   if (zone === 'meeting' || zone === 'break' || zone === 'waiting' || familyId === 'living-room') {
     return size === 2
@@ -369,10 +384,7 @@ export function evaluateAntiCloning(profiles: GroupCompanionProfile[]): { passed
         penalty += same * 8;
         notes.push(`${a.id} and ${b.id} share too many visual attributes (${same}).`);
       }
-      if (Math.abs(a.heightCm - b.heightCm) < 3) {
-        penalty += 4;
-        notes.push(`${a.id} and ${b.id} are too close in height.`);
-      }
+      // Similar height alone does not imply shared identity.
     }
   }
 
@@ -387,8 +399,18 @@ export function resolveGroupSelfie(input: GroupSelfieInput): ResolvedGroupSelfie
   const resolvedSize = Math.min(requestedSize, maxByLocation) as GroupSelfieSize;
   const companionCount = resolvedSize - 1;
   const requiredFraming = getRequiredGroupFraming(resolvedSize);
-  const arrangement = resolveArrangement(input.familyId, input.microLoc, resolvedSize);
+  const arrangement = resolveArrangement(input.familyId, input.microLoc, resolvedSize, input.subScene);
   const profiles = buildProfiles(input.familyId, input.subScene, companionCount, relationship, arrangement);
+  const seats = input.familyId === 'car' ? groupSeatSlots(input.microLoc, input.subScene, resolvedSize) : null;
+  for (const [i, profile] of profiles.entries()) {
+    if (seats?.[i + 1]) {
+      profile.position = seats[i + 1] + '; seated with hips supported by that seat; no limb crossing the console or seatback';
+      profile.interaction = 'natural seated posture, hands low or supported within the occupied seat; face turns toward the capturing phone only within comfortable neck rotation';
+    } else {
+      const slot = ['one side of the main subject, at a slightly different depth', 'opposite side of the main subject, staggered in depth', 'behind the nearer companion, face visible through a separate gap', 'opposite rear side, face visible through a separate gap'][i];
+      profile.position = slot + '; adapt to actual supports and camera field of view';
+    }
+  }
   const uniqueness = evaluateAntiCloning(profiles);
 
   const recommendedDistanceCm =
@@ -421,7 +443,7 @@ export function resolveGroupSelfie(input: GroupSelfieInput): ResolvedGroupSelfie
     : '';
 
   const prompt = input.enabled
-    ? `GROUP SELFIE MODE: total people=${resolvedSize}. The reference-image subject remains the only identity-locked person and the only person holding the Xiaomi 15 Ultra front-camera phone. Relationship: ${relationshipLabel(relationship)}. Arrangement: ${arrangement}. ${clearanceInstruction} Camera distance should be about ${recommendedDistanceCm}cm, remaining within real one-arm reach.\n${cast}\nANTI-CLONING: every companion must be a genuinely different individual. Do not reuse the reference subject's face, skull shape, hairline, beard pattern, body proportions, height, or outfit. Do not reuse one companion's face on another companion. Preserve the listed differences in face geometry, height, body build, hair, facial hair, complexion, eyewear, and clothing. Faces must not look like siblings, twins, clones, face-swaps, or variations of one latent identity.`
+    ? `GROUP SELFIE MODE: total people=${resolvedSize}. The main subject alone operates the Xiaomi 15 Ultra front camera; if a reference image is attached, it applies only to that subject. Each companion has an independent identity. Relationship: ${relationshipLabel(relationship)}. Arrangement: ${arrangement}. ${clearanceInstruction} Use the resolved camera distance and field of view, remaining within real one-arm reach; keep the phone outside the direct selfie frame.\n${cast}\nANTI-CLONING: every companion must be a genuinely different individual. Do not reuse the reference subject's face, skull shape, hairline, beard pattern, body proportions, height, or outfit. Do not reuse one companion's face on another companion. Preserve the listed differences in face geometry, height, body build, hair, facial hair, complexion, eyewear, and clothing. Even in a family group, every face remains an independent individual, never a clone, face-swap or variant of the reference identity. Preserve the selected number of group members; background extras are separate. Each visible hand belongs to one anatomically connected arm. Everyone receives the same scene-supported sources with local distance, angle, shadow and occlusion differences; never add a separate fill light for a companion. Nearer faces may appear larger; do not force equal head sizes or invent hidden limbs.`
     : '';
 
   const physicsGuards = input.enabled ? [
