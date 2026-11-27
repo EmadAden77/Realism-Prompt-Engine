@@ -17,6 +17,7 @@ export interface SmartOptionInput {
   captureType: SceneCapture;
   activity: string;
   selectedOutfitId: string;
+  selectedPose?: string;
   allowedLighting: string[];
   viewGeometry?: BackgroundViewGeometry;
 }
@@ -32,6 +33,8 @@ export interface SmartOptionResult {
   availableVehicleDensities: EntityDensityOption[];
   availableDisorder: DisorderOption[];
   rationale: string;
+  blockedActivities: Record<string, string>;
+  blockedPoses: Record<string, string>;
 }
 
 const unique = <T>(items: T[]): T[] => [...new Set(items)];
@@ -60,7 +63,7 @@ function outfitScore(outfit: OutfitItem, family: SceneFamilyId, activity: string
     'car': ['smart_casual', 'casual', 'traditional', 'formal'],
     'living-room': ['home', 'casual', 'smart_casual', 'traditional'],
     'bedroom': ['home', 'casual', 'smart_casual'],
-    'gym': ['smart_casual', 'traditional']
+    'gym': ['sport', 'athlet', 'gym', 'casual', 'smart_casual']
   };
   const preference = familyPreferences[family].findIndex(c => category.includes(c));
   if (preference >= 0) score += 12 - preference * 2;
@@ -84,14 +87,73 @@ function densityChoices(cap: 'none' | 'sparse' | 'light' | 'moderate'): EntityDe
   return DENSITIES.filter(level => level === 'auto' || rank[level] <= rank[cap]);
 }
 
+/** Hard context rules, independent from aesthetic ranking. Unknown choices
+ * remain editable rather than being rejected on unsupported assumptions. */
+export function contextOptionBlock(
+  input: Pick<SmartOptionInput, 'familyId' | 'subScene' | 'captureType'>,
+  label: string,
+  kind: 'activity' | 'pose',
+  activity = ''
+): string | undefined {
+  const loc = getMicroLocation(input.familyId, input.subScene);
+  const driver = /مقعد السائق|خلف المقود|أمام المقود|ممسك المقود|مستند على المقود|متوقف عند الإشارة/i;
+  const passenger = /مقعد الراكب|الأمامي للراكب/i;
+  const rear = /المقعد الخلفي|مقعد خلفي/i;
+  const walking = /يمشي|يعبر|خطوات/;
+  const standing = /^(واقف|يقف)/;
+  const seated = /^(جالس|يجلس)/;
+  const lying = /مستلق|مستلقي/;
+  if (input.familyId === 'car' && loc) {
+    if (loc.isOutdoor && (driver.test(label) || passenger.test(label) || rear.test(label) ||
+      /داخل السيارة|المقعد|الكونسول|المقود/.test(label))) return 'هذا الخيار يتطلب وجود الشخص داخل السيارة.';
+    if (!loc.isOutdoor) {
+      if (standing.test(label) || walking.test(label) || lying.test(label))
+        return 'داخل المقصورة يلزم وضعية مدعومة بمقعد.';
+      const seat = loc.id;
+      if (seat.startsWith('car_driver_') && (passenger.test(label) || rear.test(label)))
+        return 'الموقع الحالي هو مقعد السائق الأيسر.';
+      if (seat === 'car_front_passenger' && (driver.test(label) || rear.test(label)))
+        return 'الموقع الحالي هو مقعد الراكب الأمامي الأيمن.';
+      if (seat === 'car_rear_seat' && (driver.test(label) || passenger.test(label) || /الكونسول/.test(label)))
+        return 'الموقع الحالي هو المقعد الخلفي.';
+    }
+  }
+  if (kind === 'pose') {
+    if (walking.test(activity) && (seated.test(label) || lying.test(label)))
+      return 'نشاط المشي يتطلب الوقوف والحركة، لا الجلوس أو الاستلقاء.';
+    if ((seated.test(activity) || lying.test(activity)) && walking.test(label))
+      return 'الوضعية المتحركة تتعارض مع النشاط المحدد.';
+    if (seated.test(activity) && (standing.test(label) || lying.test(label)))
+      return 'النشاط المحدد يتطلب الجلوس.';
+    if (lying.test(activity) && (standing.test(label) || seated.test(label)))
+      return 'النشاط المحدد يتطلب الاستلقاء.';
+    if (standing.test(activity) && (seated.test(label) || lying.test(label)))
+      return 'النشاط المحدد يتطلب الوقوف.';
+  }
+  return undefined;
+}
+
 export function buildSmartSceneOptions(input: SmartOptionInput): SmartOptionResult {
   const { familyId, subScene, timeOfDay, captureType, activity, viewGeometry } = input;
   const loc = getMicroLocation(familyId, subScene);
   const allActivities = getActivityOptions(familyId, subScene).map(a => a.labelAR);
   const allPoses = getPoseOptions(familyId, subScene);
   const recommended = getSceneRecommendations(familyId, subScene);
-  const recommendedActivities = unique([...recommended.activities.filter(a => allActivities.includes(a)), ...allActivities]).slice(0, 5);
-  const recommendedPoses = unique([...recommended.poses.filter(p => allPoses.includes(p)), ...allPoses]).slice(0, 5);
+  const activityCandidates = unique([...recommended.activities.filter(a => allActivities.includes(a)), ...allActivities]);
+  const poseCandidates = unique([...recommended.poses.filter(p => allPoses.includes(p)), ...allPoses]);
+  const blockedActivities: Record<string, string> = {};
+  const blockedPoses: Record<string, string> = {};
+  for (const label of activityCandidates) {
+    const reason = contextOptionBlock(input, label, 'activity');
+    if (reason) blockedActivities[label] = reason;
+  }
+  const recommendedActivities = activityCandidates.filter(a => !blockedActivities[a]).slice(0, 5);
+  const activeActivity = blockedActivities[activity] ? (recommendedActivities[0] || '') : activity;
+  for (const label of poseCandidates) {
+    const reason = contextOptionBlock(input, label, 'pose', activeActivity);
+    if (reason) blockedPoses[label] = reason;
+  }
+  const recommendedPoses = poseCandidates.filter(p => !blockedPoses[p]).slice(0, 5);
   const scoredOutfits = OUTFITS.map((outfit, index) => ({ outfit, score: outfitScore(outfit, familyId, activity), index }))
     .sort((a, b) => b.score - a.score || a.index - b.index);
   const recommendedOutfits = scoredOutfits.filter(v => v.score >= 10).slice(0, 12).map(v => v.outfit);
@@ -124,6 +186,7 @@ export function buildSmartSceneOptions(input: SmartOptionInput): SmartOptionResu
     : 'الخلفية تخضع لمجال رؤية الكاميرا';
   return {
     recommendedActivities, recommendedPoses, recommendedOutfits, recommendedGazeIds,
+    blockedActivities, blockedPoses,
     recommendedLighting, compatibleLighting,
     availableHumanDensities: densityChoices(maxHuman),
     availableVehicleDensities: densityChoices(maxVehicle),
@@ -137,9 +200,13 @@ export function smartDependentPatch(input: SmartOptionInput): {
   activity: string; pose: string; lightingMode: string;
 } {
   const plan = buildSmartSceneOptions(input);
+  const activity = plan.recommendedActivities.includes(input.activity) ? input.activity : (plan.recommendedActivities[0] || '');
+  const paired = buildSmartSceneOptions({ ...input, activity });
+  const pose = input.selectedPose && paired.recommendedPoses.includes(input.selectedPose)
+    ? input.selectedPose : (paired.recommendedPoses[0] || '');
   return {
-    activity: plan.recommendedActivities[0] || input.activity,
-    pose: plan.recommendedPoses[0] || getPoseOptions(input.familyId, input.subScene)[0] || '',
-    lightingMode: plan.recommendedLighting[0] || input.allowedLighting[0] || ''
+    activity,
+    pose,
+    lightingMode: paired.recommendedLighting[0] || ''
   };
 }
