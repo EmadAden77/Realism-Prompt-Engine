@@ -503,8 +503,26 @@ export function resolveScene(rawState: SceneState): ResolvedScene {
   // Check & Resolve 2: Seat & Body Pose vs Micro-Location Compatibility
   if (familyId === 'car') {
     if (!isOutdoor) {
+      // A selected seat remains authoritative for saved presets and random scenes,
+      // not only for choices made through the current UI.
+      const selectedSeat = carSeatView(s.subScene);
+      const wrongSeat = (label: string): boolean =>
+        (selectedSeat === 'driver' && /مقعد الراكب|المقعد الخلفي/.test(label)) ||
+        (selectedSeat === 'front-passenger' && /السائق|المقود|المقعد الخلفي/.test(label)) ||
+        (selectedSeat === 'rear-passenger' && /السائق|المقود|مقعد الراكب|الكونسول/.test(label));
+      const seatedPose = selectedSeat === 'front-passenger' ? 'جالس في مقعد الراكب'
+        : selectedSeat === 'rear-passenger' ? 'جالس في المقعد الخلفي'
+        : selectedSeat === 'front-center' ? 'جالس باسترخاء في المقعد' : 'جالس في مقعد السائق';
+      if (wrongSeat(s.pose)) {
+        issues.push({type:'contradiction',field:'pose',description:'Selected pose belongs to a different vehicle seat.',autoResolvedBy:'Retained the selected cabin location and corrected the seat pose.'});
+        s.pose = seatedPose;
+      }
+      if (wrongSeat(s.activity)) {
+        issues.push({type:'contradiction',field:'activity',description:'Selected activity requires a different vehicle seat.',autoResolvedBy:'Retained the selected seat and corrected the conflicting activity.'});
+        s.activity = 'جالس بهدوء داخل السيارة';
+      }
       // Inside car interior: must be in-seat poses
-      if (s.pose.includes('واقف') || s.pose.includes('يمشي') || s.pose.includes('السرير') || s.pose.includes('الأجهزة')) {
+      if (s.pose.includes('واقف') || s.pose.includes('يمشي') || s.pose.includes('السرير') || s.pose.includes('الأجهزة') || /مستلق/.test(s.pose)) {
         issues.push({
           type: 'physical_impossibility',
           field: 'pose',
