@@ -187,6 +187,7 @@ export function compileUltraShortPrompt(
   const screenOnly = lightOption?.model === 'phone-screen'
     || /شاشة الهاتف.*فقط|phone[- ]?screen.*only/i.test(state.lightingMode);
   const phoneFlash = /فلاش|flash/i.test(state.lightingMode) && !screenOnly;
+  const flashOnly = phoneFlash && /فقط|\bonly\b|sole/i.test(state.lightingMode);
   const interactive = resolveBedroomSelfieActivity(state);
   const hairstyle = semantic.hair.match(/Selected hairstyle:\s*([^.]*)\./i)?.[1] || '';
   const expression = semantic.expression.split(/\.\s+/)[0];
@@ -245,8 +246,10 @@ export function compileUltraShortPrompt(
       : 'Eye-level candid observer camera, no raised selfie arm or impossible perspective.';
   const lighting = screenOnly
     ? 'Only the phone screen lights face and near fingers; rapid falloff below upper chest, nearly black surroundings, no ceiling/bedside/vehicle/flash or invisible fill.'
-    : phoneFlash
-      ? 'Only the selected physical flash and credible ambient fixtures; hard near-axis highlights, coherent cast shadows and darker background.'
+    : flashOnly
+      ? 'The selected phone flash is the sole active illumination source; all other fixtures and ambient sources are off. Hard near-axis highlights and coherent cast shadows follow the actual camera and reflection geometry.'
+      : phoneFlash
+      ? 'Only the selected physical flash and scene-supported ambient fixtures; hard near-axis highlights, coherent cast shadows and darker background.'
       : lightOption
         ? compact(lightOption.detail, 178)
         : 'Light source: ' + compact(state.lightingMode, 65) + '; all highlights and shadows must trace to a real source.';
@@ -415,7 +418,9 @@ export function compileUnifiedPromptPipeline(
   // text sections with a single resolved source of truth before compilation.
   if (bedroomConstraints?.valid) {
     const instructions = bedroomConstraints.value.visualInstructions;
-    semantic.identity = bedroomConstraints.value.identityPrompt;
+    semantic.identity = resolved.state.referenceImageId
+      ? bedroomConstraints.value.identityPrompt
+      : 'Preserve a natural unretouched face; do not assume any reference-only identity details.';
     semantic.poseAndContact = instructions[2] + ' ' + instructions[3];
     semantic.captureMechanics = instructions[4];
     semantic.cameraRealism = 'Natural phone-camera noise and computational processing; no fabricated sensor measurements.';
@@ -437,6 +442,7 @@ export function compileUnifiedPromptPipeline(
     ? [
         ...bedroomConstraints.value.visualInstructions.filter(
           line => !line.includes('cloth wrinkles follow gravity')
+            && (Boolean(resolved.state.referenceImageId) || line !== bedroomConstraints.value.identityPrompt)
         ),
         `Outfit: ${canonicalBaseOutfit}. Keep every selected garment and color unchanged; fabric drapes with gravity and mattress contact.`,
         bedroomJacket
