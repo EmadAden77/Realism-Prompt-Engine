@@ -253,14 +253,9 @@ export function compileUltraShortPrompt(
   const contact = physical?.occlusions?.[0]
     ? 'Occlusion: ' + compact(physical.occlusions[0], 108) + '.'
     : '';
-  const group = state.groupSelfieEnabled
-    ? 'Group selfie of ' + (state.groupSelfieSize || 2) + ' distinct people'
-      + (state.measuredGroupSpaceWidthMeters
-        ? ' within ' + state.measuredGroupSpaceWidthMeters + 'm lateral space'
-        : '')
-      + '; natural shoulder clearance, one capturing phone.'
-      + (semantic.groupSelfie?.includes('Lateral space is constrained') ? ' Limited lateral shoulder space.' : '')
-    : '';
+  // The resolved cast is essential visual content, not optional audit prose.
+  // Export the full identity/seat/gaze plan instead of collapsing it to a count.
+  const group = state.groupSelfieEnabled ? (semantic.groupSelfie || '') : '';
   const homePeople = !state.groupSelfieEnabled
     && state.homeBackgroundPeopleMode && state.homeBackgroundPeopleMode !== 'none'
     && state.homeBackgroundCount
@@ -447,6 +442,7 @@ export function compileUnifiedPromptPipeline(
         bedroomJacket
           ? `Mandatory outerwear: ${bedroomJacket.prompt}. The jacket or vest must be visibly worn OVER the unchanged base outfit.`
           : 'No jacket, coat, parka or vest over the selected outfit.',
+        resolved.state.groupSelfieEnabled ? semantic.groupSelfie : '',
         ugcStyle,
       ].filter(Boolean).join(' ')
     : compileUltraShortPrompt(resolved.state, semantic, resolved.physicalState);
